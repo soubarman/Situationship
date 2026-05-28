@@ -1,0 +1,33 @@
+{
+  "flutter": {
+    "platforms": {
+      "android": {
+        "default": {
+          "projectId": "situation-ship",
+          "appId": "1:990817672883:android:1083950ec63b0e5b4c9ac6",
+          "fileOutput": "android/app/google-services.json"
+        }
+      },
+      "dart": {
+        "lib/firebase_options.dart": {
+          "projectId": "situation-ship",
+          "configurations": {
+            "android": "1:990817672883:android:1083950ec63b0e5b4c9ac6",
+            "web": "1:990817672883:web:b9d16252fcd56fee4c9ac6"
+          }
+        }
+      }
+    }
+  },
+  "firestore": [
+    {
+      "database": "(default)",
+      "rules": "firestore.rules",
+      "indexes": "firestore.indexes.json"
+    },
+    {
+      "database": "default",
+      "rules": "firestore.rules"
+    }
+  ]
+}

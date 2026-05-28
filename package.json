@@ -1,0 +1,9 @@
+{
+  "devDependencies": {
+    "firebase-admin": "^13.8.0",
+    "google-auth-library": "^10.6.2"
+  },
+  "dependencies": {
+    "protobufjs": "^8.2.0"
+  }
+}

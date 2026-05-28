@@ -1,0 +1,49 @@
+name: situationship
+description: Situationship - Gen Z Social & Dating Platform
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.0.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  # State Management
+  flutter_riverpod: ^2.6.1
+
+  # Navigation
+  go_router: ^14.6.2
+
+  # UI & Animations
+  flutter_animate: ^4.5.0
+  cached_network_image: ^3.4.1
+  shimmer: ^3.0.0
+
+  # Utils
+  intl: ^0.19.0
+  timeago: ^3.7.0
+
+  # Google Fonts
+  google_fonts: ^6.2.1
+
+  # Firebase
+  firebase_core: ^3.8.0
+  firebase_auth: ^5.3.4
+  cloud_firestore: ^5.5.0
+  google_sign_in: ^6.2.2
+
+  sign_in_with_apple: ^6.1.1
+  firebase_storage: ^12.3.4
+  image_picker: ^1.1.2
+  shared_preferences: ^2.5.3
+  http: ^1.2.1
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^4.0.0
+
+flutter:
+  uses-material-design: true

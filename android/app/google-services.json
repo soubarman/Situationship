@@ -1,0 +1,76 @@
+{
+  "project_info": {
+    "project_number": "990817672883",
+    "project_id": "situation-ship",
+    "storage_bucket": "situation-ship.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:990817672883:android:1083950ec63b0e5b4c9ac6",
+        "android_client_info": {
+          "package_name": "com.example.situationship"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "990817672883-gqr5iec1kdptp4t653avoa5kl6nb5t4j.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.example.situationship",
+            "certificate_hash": "04e1c1cbb9f8fb886af5f5859db8822e408d553b"
+          }
+        },
+        {
+          "client_id": "990817672883-jsr66vh56ssf27qt78u9aqipdl0ktgtf.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAw5MlPRJlJJfzkvBpQdA8viocVR5yb138"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "990817672883-87fdp9papc79alrj4sdb900heujkhpv4.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:990817672883:android:e5475c1eb904678d4c9ac6",
+        "android_client_info": {
+          "package_name": "com.situationship"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "990817672883-jsr66vh56ssf27qt78u9aqipdl0ktgtf.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAw5MlPRJlJJfzkvBpQdA8viocVR5yb138"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "990817672883-87fdp9papc79alrj4sdb900heujkhpv4.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
