@@ -1,4 +1,5 @@
 import 'dart:ui';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -229,18 +230,32 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
           width: 56,
           height: 56,
           decoration: BoxDecoration(
-            gradient: AppTheme.primaryGradient,
             borderRadius: BorderRadius.circular(18),
             boxShadow: [
               BoxShadow(
-                color: AppTheme.primaryBlue.withOpacity(0.4),
-                blurRadius: 20,
-                offset: const Offset(0, 8),
+                color: AppTheme.primaryBlue.withOpacity(0.2),
+                blurRadius: 15,
+                offset: const Offset(0, 6),
               ),
             ],
           ),
-          child: const Center(
-            child: Text('💫', style: TextStyle(fontSize: 28)),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(18),
+            child: kIsWeb
+                ? Image.network(
+                    'icons/app_icon.jpeg',
+                    fit: BoxFit.cover,
+                    errorBuilder: (context, error, stackTrace) {
+                      return Image.asset(
+                        'assets/images/app_icon.jpeg',
+                        fit: BoxFit.cover,
+                      );
+                    },
+                  )
+                : Image.asset(
+                    'assets/images/app_icon.jpeg',
+                    fit: BoxFit.cover,
+                  ),
           ),
         ),
         const SizedBox(height: 24),

@@ -793,6 +793,16 @@ class ChatsNotifier extends StateNotifier<List<ChatModel>> {
             }
           }
 
+          // If it is a confession and the current user is the receiver, hide sender identity unless revealed
+          final isConf = (data['isConfession'] ?? false) || 
+                         (data['lastMessage'] ?? '').toString().toLowerCase().contains('confession');
+          final revealSt = data['revealStatus'];
+          if (isConf && uid != data['senderId'] && revealSt != 'revealed') {
+            data['otherUserName'] = 'ANONYMOUS';
+            data['otherUserAvatar'] = 'anonymous_mask';
+            data['isConfession'] = true;
+          }
+
           validChats.add(ChatModel.fromMap(data));
         } catch (e) {
           print('Error parsing chat ${doc.id}: $e');
@@ -818,7 +828,11 @@ class ChatsNotifier extends StateNotifier<List<ChatModel>> {
   }
 
   void updateChatStatus(String chatId, String status) {
-    firestoreProvider.collection('chats').doc(chatId).update({'status': status});
+    final Map<String, dynamic> updates = {'status': status};
+    if (status == 'accepted') {
+      updates['acceptedAt'] = DateTime.now().millisecondsSinceEpoch;
+    }
+    firestoreProvider.collection('chats').doc(chatId).update(updates);
   }
 
   void markRead(String chatId) {
@@ -830,6 +844,28 @@ class ChatsNotifier extends StateNotifier<List<ChatModel>> {
       'lastMessage': message,
       'lastMessageTime': time.millisecondsSinceEpoch,
     });
+  }
+
+  Future<void> deleteChat(String chatId) async {
+    // Optimistic local state update
+    state = state.where((c) => c.id != chatId).toList();
+
+    try {
+      final db = firestoreProvider;
+      
+      // 1. Delete all messages inside subcollection
+      final messagesSnap = await db.collection('chats').doc(chatId).collection('messages').get();
+      final batch = db.batch();
+      for (var doc in messagesSnap.docs) {
+        batch.delete(doc.reference);
+      }
+      await batch.commit();
+
+      // 2. Delete the chat document
+      await db.collection('chats').doc(chatId).delete();
+    } catch (e) {
+      debugPrint('Failed to delete chat: $e');
+    }
   }
 }
 

@@ -376,11 +376,14 @@ class _UserDetailScreenState extends ConsumerState<UserDetailScreen> {
           'receiverId': targetUser.id,
           'receiverName': targetUser.name,
           'receiverAvatar': targetUser.avatarUrl,
+          'isConfession': true,
+          'revealStatus': null,
         });
       } else {
         await db.collection('chats').doc(chatId).update({
           'lastMessage': 'Received an anonymous confession! 🤫🔒',
           'lastMessageTime': FieldValue.serverTimestamp(),
+          'isConfession': true,
         });
       }
 
@@ -1297,11 +1300,12 @@ class _UserDetailScreenState extends ConsumerState<UserDetailScreen> {
     if (existingChat != null) {
       if (existingChat.status == 'accepted') {
         return _buildStatusBanner('Chat Request Accepted! 💬', AppTheme.primaryBlue, isDark, () {
-          context.push('/chat/${existingChat.id}', extra: {
-            'userId': targetUser.id,
+          context.go('/chats/${existingChat.id}', extra: {
+            'otherUserId': targetUser.id,
             'name': targetUser.name,
-            'avatar': targetUser.avatarUrl,
+            'avatarUrl': targetUser.avatarUrl,
             'isOnline': targetUser.isOnline,
+            'isConfession': existingChat.isConfession,
           });
         });
       } else if (existingChat.status == 'requested') {

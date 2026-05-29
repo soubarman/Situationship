@@ -9,10 +9,13 @@ import 'package:shimmer/shimmer.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../../core/models/chat_model.dart';
+import '../../../core/models/user_model.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/providers/app_state_provider.dart';
 import 'package:intl/intl.dart';
 import 'package:firebase_storage/firebase_storage.dart';
+import 'package:firebase_core/firebase_core.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 class ChatDetailScreen extends ConsumerStatefulWidget {
   final String chatId;
@@ -636,9 +639,34 @@ class _ChatDetailScreenState extends ConsumerState<ChatDetailScreen>
     final messages = ref.watch(chatMessagesNotifierProvider(widget.chatId));
     final currentUser = ref.watch(currentUserProvider);
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final name = widget.userData['name'] as String? ?? 'User';
-    final avatarUrl = widget.userData['avatarUrl'] as String?;
-    final isOnline = widget.userData['isOnline'] as bool? ?? false;
+
+    final chats = ref.watch(chatsProvider);
+    final chat = chats.firstWhere(
+      (c) => c.id == widget.chatId,
+      orElse: () => ChatModel(
+        id: widget.chatId,
+        otherUserId: widget.userData['otherUserId'] ?? '',
+        otherUserName: widget.userData['name'] ?? 'User',
+        otherUserAvatar: widget.userData['avatarUrl'],
+        lastMessage: '',
+        lastMessageTime: DateTime.now(),
+        isConfession: widget.userData['isConfession'] ?? false,
+      ),
+    );
+
+    final isChatConfession = chat.isConfession ||
+        chat.lastMessage.toLowerCase().contains('confession') ||
+        messages.any((m) => m.senderId == 'anonymous' || m.text.toLowerCase().contains('confession'));
+
+    final isReceiver = currentUser != null && currentUser.id != chat.requestSenderId;
+    final shouldMask = isChatConfession && isReceiver && chat.revealStatus != 'revealed';
+
+    final name = shouldMask ? 'ANONYMOUS' : chat.otherUserName;
+    final avatarUrl = shouldMask ? 'anonymous_mask' : chat.otherUserAvatar;
+    final isOnline = shouldMask ? false : chat.otherUserIsOnline;
+
+    final isPendingConfession = isChatConfession && isReceiver && chat.status == 'requested';
+    final isPendingConfessionSender = isChatConfession && !isReceiver && chat.status == 'requested';
 
     // Scroll to bottom when new messages arrive
     if (messages.isNotEmpty) {
@@ -647,9 +675,14 @@ class _ChatDetailScreenState extends ConsumerState<ChatDetailScreen>
 
     return Scaffold(
       backgroundColor: isDark ? AppTheme.darkBg : const Color(0xFFF5F7FF),
-      appBar: _buildAppBar(context, name, avatarUrl, isOnline, isDark),
+      appBar: _buildAppBar(context, chat, currentUser, isDark, name, avatarUrl, isOnline),
       body: Column(
         children: [
+          if (chat.isConfession &&
+              currentUser != null &&
+              currentUser.id == chat.requestSenderId &&
+              chat.revealStatus == 'requested')
+            _buildRevealBanner(chat.id),
           Expanded(
             child: _isLoading
                 ? _buildMessagesLoadingSkeleton(isDark)
@@ -691,7 +724,8 @@ class _ChatDetailScreenState extends ConsumerState<ChatDetailScreen>
                         );
                       }
                       final msg = messages[index];
-                      final isMe = msg.senderId == currentUser.id;
+                      final isMe = msg.senderId == currentUser?.id ||
+                          (msg.senderId == 'anonymous' && currentUser?.id == chat.requestSenderId);
                       return _MessageBubble(
                         message: msg,
                         isMe: isMe,
@@ -700,8 +734,14 @@ class _ChatDetailScreenState extends ConsumerState<ChatDetailScreen>
                     },
                   ),
           ),
-          if (_showEmoji) _buildEmojiBar(isDark),
-          _buildInputBar(context, isDark),
+          if (isPendingConfession)
+            _buildPendingConfessionBanner(context, chat, isDark)
+          else if (isPendingConfessionSender)
+            _buildPendingConfessionSenderBanner(context, isDark)
+          else ...[
+            if (_showEmoji) _buildEmojiBar(isDark),
+            _buildInputBar(context, isDark),
+          ],
         ],
       ),
     );
@@ -709,11 +749,14 @@ class _ChatDetailScreenState extends ConsumerState<ChatDetailScreen>
 
   AppBar _buildAppBar(
     BuildContext context,
+    ChatModel chat,
+    UserModel? currentUser,
+    bool isDark,
     String name,
     String? avatarUrl,
     bool isOnline,
-    bool isDark,
   ) {
+
     return AppBar(
       backgroundColor: isDark ? AppTheme.darkSurface : Colors.white,
       elevation: 0,
@@ -726,13 +769,35 @@ class _ChatDetailScreenState extends ConsumerState<ChatDetailScreen>
         children: [
           Stack(
             children: [
-              CircleAvatar(
-                radius: 20,
-                backgroundImage: NetworkImage(
-                  avatarUrl ?? 'https://ui-avatars.com/api/?name=${Uri.encodeComponent(name)}&size=100&background=6ECBF5&color=fff&rounded=true',
+              if (avatarUrl == 'anonymous_mask')
+                Container(
+                  width: 40,
+                  height: 40,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    gradient: LinearGradient(
+                      colors: isDark
+                          ? [const Color(0xFF6B21A8), const Color(0xFF4C1D95)]
+                          : [const Color(0xFFC084FC), const Color(0xFF818CF8)],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                    ),
+                  ),
+                  child: const Center(
+                    child: Text(
+                      '🎭',
+                      style: TextStyle(fontSize: 18),
+                    ),
+                  ),
+                )
+              else
+                CircleAvatar(
+                  radius: 20,
+                  backgroundImage: NetworkImage(
+                    avatarUrl ?? 'https://ui-avatars.com/api/?name=${Uri.encodeComponent(name)}&size=100&background=6ECBF5&color=fff&rounded=true',
+                  ),
                 ),
-              ),
-              if (isOnline)
+              if (isOnline && avatarUrl != 'anonymous_mask')
                 Positioned(
                   right: 0,
                   bottom: 0,
@@ -749,43 +814,690 @@ class _ChatDetailScreenState extends ConsumerState<ChatDetailScreen>
             ],
           ),
           const SizedBox(width: 10),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                name,
-                style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  name,
+                  style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+                  overflow: TextOverflow.ellipsis,
+                ),
+                Text(
+                  _isTypingLocal
+                      ? 'typing...'
+                      : chat.isConfession && avatarUrl == 'anonymous_mask'
+                          ? '🤫 Chatting anonymously'
+                          : isOnline
+                              ? 'Active now'
+                              : 'Last seen recently',
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: _isTypingLocal
+                        ? AppTheme.accentPink
+                        : chat.isConfession && avatarUrl == 'anonymous_mask'
+                            ? AppTheme.primaryBlue
+                            : isOnline
+                                ? AppTheme.success
+                                : AppTheme.textTertiary,
+                    fontWeight: (_isTypingLocal || chat.isConfession) ? FontWeight.w600 : FontWeight.w400,
+                  ),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+      actions: [
+        if (chat.isConfession) ...[
+          _buildRevealButton(chat, context, isDark),
+          PopupMenuButton<String>(
+            icon: const Icon(Icons.more_vert_rounded),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            onSelected: (value) {
+              if (value == 'delete') {
+                _showDeleteChatConfirmation(chat, context);
+              }
+            },
+            itemBuilder: (context) => [
+              const PopupMenuItem(
+                value: 'delete',
+                child: Row(
+                  children: [
+                    Icon(Icons.delete_outline_rounded, color: AppTheme.error, size: 20),
+                    SizedBox(width: 10),
+                    Text('Delete Chat', style: TextStyle(color: AppTheme.error, fontWeight: FontWeight.bold)),
+                  ],
+                ),
               ),
-              Text(
-                _isTypingLocal
-                    ? 'typing...'
-                    : isOnline
-                        ? 'Active now'
-                        : 'Last seen recently',
-                style: TextStyle(
-                  fontSize: 12,
-                  color: _isTypingLocal
-                      ? AppTheme.accentPink
-                      : isOnline
-                          ? AppTheme.success
-                          : AppTheme.textTertiary,
-                  fontWeight: _isTypingLocal ? FontWeight.w600 : FontWeight.w400,
+            ],
+          ),
+        ] else ...[
+          IconButton(
+            onPressed: () => _showCallDialog(true),
+            icon: const Icon(Icons.videocam_outlined, size: 24),
+          ),
+          IconButton(
+            onPressed: () => _showCallDialog(false),
+            icon: const Icon(Icons.call_outlined, size: 22),
+          ),
+          PopupMenuButton<String>(
+            icon: const Icon(Icons.more_vert_rounded),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            onSelected: (value) {
+              if (value == 'delete') {
+                _showDeleteChatConfirmation(chat, context);
+              }
+            },
+            itemBuilder: (context) => [
+              const PopupMenuItem(
+                value: 'delete',
+                child: Row(
+                  children: [
+                    Icon(Icons.delete_outline_rounded, color: AppTheme.error, size: 20),
+                    SizedBox(width: 10),
+                    Text('Delete Chat', style: TextStyle(color: AppTheme.error, fontWeight: FontWeight.bold)),
+                  ],
                 ),
               ),
             ],
           ),
         ],
-      ),
-      actions: [
-        IconButton(
-          onPressed: () => _showCallDialog(true),
-          icon: const Icon(Icons.videocam_outlined, size: 24),
-        ),
-        IconButton(
-          onPressed: () => _showCallDialog(false),
-          icon: const Icon(Icons.call_outlined, size: 22),
-        ),
       ],
+    );
+  }
+
+  Widget _buildRevealButton(ChatModel chat, BuildContext context, bool isDark) {
+    final acceptedTime = chat.acceptedAt ?? chat.lastMessageTime;
+    final timeDifference = DateTime.now().difference(acceptedTime);
+    final bool isRevealAllowed = timeDifference.inDays >= 2;
+
+    String getRemainingTimeStr() {
+      final totalTarget = const Duration(days: 2);
+      final remaining = totalTarget - timeDifference;
+      if (remaining.isNegative) return '0h';
+      
+      final days = remaining.inDays;
+      final hours = remaining.inHours % 24;
+      final minutes = remaining.inMinutes % 60;
+      
+      if (days > 0) {
+        return '${days}d ${hours}h';
+      } else if (hours > 0) {
+        return '${hours}h ${minutes}m';
+      } else {
+        return '${minutes}m';
+      }
+    }
+
+    final String text;
+    final IconData icon;
+    final Color color;
+
+    if (!isRevealAllowed) {
+      text = 'Reveal in ${getRemainingTimeStr()}';
+      icon = Icons.lock_outline_rounded;
+      color = AppTheme.textSecondary;
+    } else {
+      text = 'Reveal';
+      icon = Icons.lock_open_rounded;
+      color = AppTheme.success;
+    }
+
+    return Container(
+      margin: const EdgeInsets.only(right: 12, top: 10, bottom: 10),
+      child: GestureDetector(
+        onLongPress: () => _showDebugBypassDialog(chat, context),
+        child: TextButton.icon(
+          onPressed: () {
+            if (isRevealAllowed) {
+              _showRevealConfirmation(chat, context);
+            } else {
+              _showLockedRevealDialog(context, getRemainingTimeStr());
+            }
+          },
+          style: TextButton.styleFrom(
+            backgroundColor: color.withOpacity(0.12),
+            foregroundColor: color,
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+              side: BorderSide(color: color.withOpacity(0.2), width: 1),
+            ),
+          ),
+          icon: Icon(icon, size: 14),
+          label: Text(
+            text,
+            style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _showLockedRevealDialog(BuildContext context, String remainingTimeStr) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+        title: const Row(
+          children: [
+            Text('🔒 ', style: TextStyle(fontSize: 24)),
+            Text('Confession Locked', style: TextStyle(fontWeight: FontWeight.bold)),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'To protect the mystery, you must chat with each other for at least 2 days (48 hours) before you can reveal your identities!',
+              style: TextStyle(fontSize: 14, height: 1.4),
+            ),
+            const SizedBox(height: 16),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              decoration: BoxDecoration(
+                color: AppTheme.accentPurple.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.timer_outlined, color: AppTheme.accentPurple, size: 18),
+                  const SizedBox(width: 8),
+                  Text(
+                    'Time remaining: $remainingTimeStr',
+                    style: const TextStyle(
+                      fontWeight: FontWeight.bold,
+                      color: AppTheme.accentPurple,
+                      fontSize: 13,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Got it! ✨', style: TextStyle(color: AppTheme.primaryBlue, fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showDebugBypassDialog(ChatModel chat, BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+        title: const Row(
+          children: [
+            Text('⚡ ', style: TextStyle(fontSize: 24)),
+            Text('Debug Reveal Cheat', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.amber)),
+          ],
+        ),
+        content: const Text(
+          'As the developer/tester, would you like to bypass the 2-day timer and reveal identities immediately?',
+          style: TextStyle(fontSize: 14, height: 1.4),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancel', style: TextStyle(color: AppTheme.textSecondary, fontWeight: FontWeight.bold)),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.pop(ctx);
+              _executeReveal(chat.id);
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.amber,
+              foregroundColor: Colors.black,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            ),
+            child: const Text('Bypass Timer ⚡', style: TextStyle(fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showRevealConfirmation(ChatModel chat, BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+        title: const Row(
+          children: [
+            Text('🔓 ', style: TextStyle(fontSize: 24)),
+            Text('Reveal Identities?', style: TextStyle(fontWeight: FontWeight.bold)),
+          ],
+        ),
+        content: const Text(
+          'Would you like to reveal your identities and convert this chat into a normal chat with your real profiles fully visible? Both of you will instantly see each other\'s real names and photos! ✨',
+          style: TextStyle(fontSize: 14, height: 1.4),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancel', style: TextStyle(color: AppTheme.textSecondary, fontWeight: FontWeight.bold)),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.pop(ctx);
+              _executeReveal(chat.id);
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppTheme.success,
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            ),
+            child: const Text('Reveal Now', style: TextStyle(fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _executeReveal(String chatId) async {
+    try {
+      final db = FirebaseFirestore.instanceFor(
+        app: Firebase.app(),
+        databaseId: 'default',
+      );
+      await db.collection('chats').doc(chatId).update({
+        'isConfession': false,
+        'revealStatus': 'revealed',
+      });
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Row(
+              children: [
+                Text('🎉 ', style: TextStyle(fontSize: 20)),
+                Expanded(
+                  child: Text(
+                    'Identities Revealed! Chat transferred to normal messages.',
+                    style: TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                ),
+              ],
+            ),
+            backgroundColor: AppTheme.success,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to reveal identity: $e'),
+            backgroundColor: AppTheme.error,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          ),
+        );
+      }
+    }
+  }
+
+  void _showDeleteChatConfirmation(ChatModel chat, BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Row(
+          children: [
+            Icon(Icons.warning_amber_rounded, color: AppTheme.error, size: 24),
+            SizedBox(width: 8),
+            Text('Delete Chat?', style: TextStyle(fontWeight: FontWeight.w900)),
+          ],
+        ),
+        content: const Text(
+          'Are you sure you want to delete this chat? This will permanently delete all messages for both participants. This action cannot be undone.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancel', style: TextStyle(color: AppTheme.textSecondary, fontWeight: FontWeight.bold)),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              Navigator.pop(ctx); // Pop dialog
+              Navigator.pop(context); // Pop chat detail screen
+              await ref.read(chatsProvider.notifier).deleteChat(chat.id);
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppTheme.error,
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            ),
+            child: const Text('Delete Permanently', style: TextStyle(fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _submitRevealRequest(String chatId) async {
+    try {
+      final db = FirebaseFirestore.instanceFor(
+        app: Firebase.app(),
+        databaseId: 'default',
+      );
+      await db.collection('chats').doc(chatId).update({
+        'revealStatus': 'requested',
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text('Identity reveal request sent! 🤫⌛'),
+          backgroundColor: AppTheme.success,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        ),
+      );
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Failed to request reveal: $e'),
+          backgroundColor: AppTheme.error,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        ),
+      );
+    }
+  }
+
+  Widget _buildRevealBanner(String chatId) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.all(12),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      decoration: BoxDecoration(
+        color: isDark ? const Color(0xFF2E1065) : const Color(0xFFF3E8FF),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: isDark ? const Color(0xFF6B21A8).withOpacity(0.4) : const Color(0xFFE9D5FF),
+          width: 1,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.06),
+            blurRadius: 8,
+            offset: const Offset(0, 3),
+          )
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Text('🎭 ', style: TextStyle(fontSize: 18)),
+              Expanded(
+                child: Text(
+                  'Reveal Identity Requested!',
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w900,
+                    color: isDark ? const Color(0xFFE9D5FF) : const Color(0xFF5B21B6),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Text(
+            'The recipient has requested you to reveal your identity. Would you like to accept and let them know who you are?',
+            style: TextStyle(
+              fontSize: 12,
+              height: 1.4,
+              color: isDark ? const Color(0xFFD8B4FE) : const Color(0xFF6D28D9),
+            ),
+          ),
+          const SizedBox(height: 12),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.end,
+            children: [
+              TextButton(
+                onPressed: () => _handleRevealResponse(chatId, false),
+                style: TextButton.styleFrom(
+                  foregroundColor: AppTheme.error,
+                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                ),
+                child: const Text('Decline', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+              ),
+              const SizedBox(width: 8),
+              ElevatedButton.icon(
+                onPressed: () => _handleRevealResponse(chatId, true),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF7C3AED),
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  elevation: 0,
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                ),
+                icon: const Icon(Icons.lock_open_rounded, size: 14),
+                label: const Text('Accept & Reveal', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _handleRevealResponse(String chatId, bool accept) async {
+    try {
+      final db = FirebaseFirestore.instanceFor(
+        app: Firebase.app(),
+        databaseId: 'default',
+      );
+      await db.collection('chats').doc(chatId).update({
+        'revealStatus': accept ? 'revealed' : 'declined',
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(accept ? 'You have revealed your identity! 🔓' : 'Identity reveal declined.'),
+          backgroundColor: accept ? AppTheme.success : AppTheme.textSecondary,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        ),
+      );
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Failed to update reveal status: $e'),
+          backgroundColor: AppTheme.error,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        ),
+      );
+    }
+  }
+
+  Widget _buildPendingConfessionBanner(BuildContext context, ChatModel chat, bool isDark) {
+    return Container(
+      padding: EdgeInsets.fromLTRB(
+        20,
+        16,
+        20,
+        16 + MediaQuery.of(context).viewInsets.bottom,
+      ),
+      decoration: BoxDecoration(
+        color: isDark ? AppTheme.darkSurface : Colors.white,
+        borderRadius: const BorderRadius.only(
+          topLeft: Radius.circular(30),
+          topRight: Radius.circular(30),
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.08),
+            blurRadius: 20,
+            offset: const Offset(0, -5),
+          ),
+        ],
+      ),
+      child: SafeArea(
+        top: false,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 40,
+              height: 4,
+              margin: const EdgeInsets.only(bottom: 16),
+              decoration: BoxDecoration(
+                color: isDark ? Colors.white24 : Colors.black12,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: AppTheme.accentPurple.withOpacity(0.12),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Text('🤫', style: TextStyle(fontSize: 22)),
+                ),
+                const SizedBox(width: 14),
+                const Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Anonymous Confession',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                      SizedBox(height: 3),
+                      Text(
+                        'Accept this secret confession to start chatting!',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: AppTheme.textSecondary,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 20),
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton(
+                    onPressed: () {
+                      ref.read(chatsProvider.notifier).deleteChat(chat.id);
+                    },
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: AppTheme.error,
+                      side: BorderSide(color: AppTheme.error.withOpacity(0.3)),
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                    ),
+                    child: const Text(
+                      'Decline',
+                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Container(
+                    decoration: BoxDecoration(
+                      gradient: AppTheme.primaryGradient,
+                      borderRadius: BorderRadius.circular(16),
+                      boxShadow: [
+                        BoxShadow(
+                          color: AppTheme.primaryBlue.withOpacity(0.3),
+                          blurRadius: 12,
+                          offset: const Offset(0, 4),
+                        ),
+                      ],
+                    ),
+                    child: ElevatedButton(
+                      onPressed: () {
+                        ref.read(chatsProvider.notifier).updateChatStatus(chat.id, 'accepted');
+                      },
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.transparent,
+                        foregroundColor: Colors.white,
+                        shadowColor: Colors.transparent,
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                      ),
+                      child: const Text(
+                        'Accept & Reply',
+                        style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildPendingConfessionSenderBanner(BuildContext context, bool isDark) {
+    return Container(
+      padding: EdgeInsets.fromLTRB(
+        20,
+        20,
+        20,
+        20 + MediaQuery.of(context).viewInsets.bottom,
+      ),
+      decoration: BoxDecoration(
+        color: isDark ? AppTheme.darkSurface : Colors.white,
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.06),
+            blurRadius: 12,
+            offset: const Offset(0, -3),
+          ),
+        ],
+      ),
+      child: SafeArea(
+        top: false,
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const SizedBox(
+              width: 16,
+              height: 16,
+              child: CircularProgressIndicator(strokeWidth: 2, color: AppTheme.primaryBlue),
+            ),
+            const SizedBox(width: 12),
+            Text(
+              'Waiting for them to accept your confession... ⏳',
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w700,
+                color: AppTheme.textSecondary,
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 
@@ -1506,12 +2218,34 @@ class _MessageBubble extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.end,
         children: [
           if (!isMe) ...[
-            CircleAvatar(
-              radius: 14,
-              backgroundImage: NetworkImage(
-                otherAvatarUrl ?? 'https://ui-avatars.com/api/?name=User&size=100&background=6ECBF5&color=fff&rounded=true',
+            if (otherAvatarUrl == 'anonymous_mask' || message.senderId == 'anonymous')
+              Container(
+                width: 28,
+                height: 28,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  gradient: LinearGradient(
+                    colors: isDark
+                        ? [const Color(0xFF6B21A8), const Color(0xFF4C1D95)]
+                        : [const Color(0xFFC084FC), const Color(0xFF818CF8)],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  ),
+                ),
+                child: const Center(
+                  child: Text(
+                    '🎭',
+                    style: TextStyle(fontSize: 12),
+                  ),
+                ),
+              )
+            else
+              CircleAvatar(
+                radius: 14,
+                backgroundImage: NetworkImage(
+                  otherAvatarUrl ?? 'https://ui-avatars.com/api/?name=User&size=100&background=6ECBF5&color=fff&rounded=true',
+                ),
               ),
-            ),
             const SizedBox(width: 8),
           ],
           Flexible(
@@ -1629,12 +2363,34 @@ class _TypingIndicator extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.end,
         children: [
-          CircleAvatar(
-            radius: 14,
-            backgroundImage: NetworkImage(
-              avatarUrl ?? 'https://ui-avatars.com/api/?name=User&size=100&background=6ECBF5&color=fff&rounded=true',
+          if (avatarUrl == 'anonymous_mask')
+            Container(
+              width: 28,
+              height: 28,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                gradient: LinearGradient(
+                  colors: isDark
+                      ? [const Color(0xFF6B21A8), const Color(0xFF4C1D95)]
+                      : [const Color(0xFFC084FC), const Color(0xFF818CF8)],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
+              ),
+              child: const Center(
+                child: Text(
+                  '🎭',
+                  style: TextStyle(fontSize: 12),
+                ),
+              ),
+            )
+          else
+            CircleAvatar(
+              radius: 14,
+              backgroundImage: NetworkImage(
+                avatarUrl ?? 'https://ui-avatars.com/api/?name=User&size=100&background=6ECBF5&color=fff&rounded=true',
+              ),
             ),
-          ),
           const SizedBox(width: 8),
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),

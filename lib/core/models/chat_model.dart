@@ -68,6 +68,9 @@ class ChatModel {
   final String status; // 'requested', 'accepted', 'blocked'
   final String? requestSenderId;
   final List<String> participants;
+  final bool isConfession;
+  final String? revealStatus; // null, 'requested', 'revealed', 'declined'
+  final DateTime? acceptedAt;
 
   const ChatModel({
     required this.id,
@@ -83,6 +86,9 @@ class ChatModel {
     this.status = 'accepted',
     this.requestSenderId,
     this.participants = const [],
+    this.isConfession = false,
+    this.revealStatus,
+    this.acceptedAt,
   });
 
   ChatModel copyWith({
@@ -99,6 +105,9 @@ class ChatModel {
     String? status,
     String? requestSenderId,
     List<String>? participants,
+    bool? isConfession,
+    String? revealStatus,
+    DateTime? acceptedAt,
   }) {
     return ChatModel(
       id: id ?? this.id,
@@ -114,6 +123,9 @@ class ChatModel {
       status: status ?? this.status,
       requestSenderId: requestSenderId ?? this.requestSenderId,
       participants: participants ?? this.participants,
+      isConfession: isConfession ?? this.isConfession,
+      revealStatus: revealStatus ?? this.revealStatus,
+      acceptedAt: acceptedAt ?? this.acceptedAt,
     );
   }
 
@@ -139,6 +151,9 @@ class ChatModel {
       status: map['status'] ?? 'accepted',
       requestSenderId: map['requestSenderId'],
       participants: List<String>.from(map['participants'] ?? []),
+      isConfession: map['isConfession'] ?? false,
+      revealStatus: map['revealStatus'],
+      acceptedAt: map['acceptedAt'] != null ? parseTime(map['acceptedAt']) : null,
     );
   }
 
@@ -157,6 +172,9 @@ class ChatModel {
       'status': status,
       'requestSenderId': requestSenderId,
       'participants': participants,
+      'isConfession': isConfession,
+      'revealStatus': revealStatus,
+      'acceptedAt': acceptedAt?.millisecondsSinceEpoch,
     };
   }
 }

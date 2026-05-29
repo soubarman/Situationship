@@ -1,8 +1,9 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/theme/app_theme.dart';
-import '../../../core/utils/seeder.dart';
+import 'dart:math' as math;
 
 class SplashScreen extends ConsumerStatefulWidget {
   const SplashScreen({super.key});
@@ -14,9 +15,8 @@ class SplashScreen extends ConsumerStatefulWidget {
 class _SplashScreenState extends ConsumerState<SplashScreen>
     with SingleTickerProviderStateMixin {
   late AnimationController _controller;
-  late Animation<double> _fadeAnimation;
   late Animation<double> _scaleAnimation;
-  late Animation<double> _slideAnimation;
+  late Animation<double> _fadeAnimation;
 
   @override
   void initState() {
@@ -26,40 +26,34 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
       duration: const Duration(milliseconds: 1800),
     );
 
-    // NOTE: Seeder permanently disabled — it was deleting real user data.
-    // DataSeeder.clearOldDemoData();
-    
     _fadeAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
       CurvedAnimation(
         parent: _controller,
-        curve: const Interval(0.0, 0.6, curve: Curves.easeOut),
+        curve: const Interval(0.0, 0.5, curve: Curves.easeOut),
       ),
     );
 
-    _scaleAnimation = Tween<double>(begin: 0.6, end: 1.0).animate(
+    _scaleAnimation = Tween<double>(begin: 0.5, end: 1.0).animate(
       CurvedAnimation(
         parent: _controller,
-        curve: const Interval(0.0, 0.6, curve: Curves.elasticOut),
-      ),
-    );
-
-    _slideAnimation = Tween<double>(begin: 30, end: 0).animate(
-      CurvedAnimation(
-        parent: _controller,
-        curve: const Interval(0.3, 0.8, curve: Curves.easeOut),
+        curve: const Interval(0.0, 0.7, curve: Curves.elasticOut),
       ),
     );
 
     _controller.forward();
 
+    // Replay floating effect after entrance is finished
+    _controller.addStatusListener((status) {
+      if (status == AnimationStatus.completed) {
+        _controller.repeat(reverse: true);
+      }
+    });
+
     // The router's `redirect` watches the Firebase auth stream.
     // Once Firebase resolves the auth state it will automatically
     // navigate to /feed (if logged in) or /login (if not).
-    // We only need a small delay for the animation to show.
-    Future.delayed(const Duration(seconds: 2), () {
+    Future.delayed(const Duration(milliseconds: 4500), () {
       if (mounted) {
-        // Navigate to login only if the router hasn't already redirected.
-        // (GoRouter will override this if the user is already authenticated.)
         context.go('/login');
       }
     });
@@ -73,6 +67,7 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Scaffold(
       body: Container(
         decoration: const BoxDecoration(
@@ -80,11 +75,10 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
             colors: [
-              Color(0xFFB8EDFF),
-              Color(0xFFB8FFE8),
-              Color(0xFFE8BBFF),
+              Color(0xFFF1F5F9), // Soft slate white
+              Color(0xFFFDF4FF), // Very soft lavender/pink
+              Color(0xFFFAE8FF), // Pastel violet
             ],
-            stops: [0.0, 0.5, 1.0],
           ),
         ),
         child: SafeArea(
@@ -92,25 +86,20 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
             child: AnimatedBuilder(
               animation: _controller,
               builder: (context, child) {
-                return Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    FadeTransition(
-                      opacity: _fadeAnimation,
-                      child: ScaleTransition(
-                        scale: _scaleAnimation,
-                        child: _buildLogo(),
-                      ),
+                // Entrance animation combines scale + translation (for float)
+                final translationY = _controller.status == AnimationStatus.forward
+                    ? (1.0 - _fadeAnimation.value) * 60.0
+                    : math.sin(_controller.value * math.pi * 2) * 8.0;
+
+                return Opacity(
+                  opacity: _fadeAnimation.value,
+                  child: Transform.translate(
+                    offset: Offset(0, translationY),
+                    child: Transform.scale(
+                      scale: _scaleAnimation.value,
+                      child: _buildLogoCard(isDark),
                     ),
-                    const SizedBox(height: 32),
-                    Opacity(
-                      opacity: _fadeAnimation.value,
-                      child: Transform.translate(
-                        offset: Offset(0, _slideAnimation.value),
-                        child: _buildTagline(),
-                      ),
-                    ),
-                  ],
+                  ),
                 );
               },
             ),
@@ -120,66 +109,61 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
     );
   }
 
-  Widget _buildLogo() {
+  Widget _buildLogoCard(bool isDark) {
     return Column(
+      mainAxisSize: MainAxisSize.min,
       children: [
+        // Neumorphic/Popping Container for logo
         Container(
-          width: 100,
-          height: 100,
+          width: 320,
+          height: 320,
           decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(30),
+            borderRadius: BorderRadius.circular(56),
             boxShadow: [
+              // Soft Ambient Dark Glow (Pastel Purple)
               BoxShadow(
-                color: AppTheme.primaryBlue.withOpacity(0.3),
+                color: const Color(0xFFE8BBFF).withOpacity(0.55),
+                blurRadius: 50,
+                spreadRadius: 6,
+                offset: const Offset(10, 16),
+              ),
+              // Soft Ambient Light Glow (Pure White)
+              BoxShadow(
+                color: Colors.white.withOpacity(0.85),
                 blurRadius: 40,
-                offset: const Offset(0, 10),
+                spreadRadius: 4,
+                offset: const Offset(-10, -10),
               ),
             ],
           ),
-          child: const Center(
-            child: Text(
-              '💫',
-              style: TextStyle(fontSize: 48),
-            ),
-          ),
-        ),
-        const SizedBox(height: 20),
-        ShaderMask(
-          shaderCallback: (bounds) => AppTheme.primaryGradient.createShader(bounds),
-          child: const Text(
-            'Situationship',
-            style: TextStyle(
-              fontSize: 48,
-              fontWeight: FontWeight.w800,
-              color: Colors.white,
-              letterSpacing: -1,
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildTagline() {
-    return Column(
-      children: [
-        Text(
-          'Vibe. Match. Connect. 🔥',
-          style: TextStyle(
-            fontSize: 16,
-            fontWeight: FontWeight.w500,
-            color: AppTheme.textPrimary.withOpacity(0.7),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(56),
+            child: kIsWeb
+                ? Image.network(
+                    'icons/logo.jpeg',
+                    fit: BoxFit.cover,
+                    errorBuilder: (context, error, stackTrace) {
+                      return Image.asset(
+                        'assets/images/logo.jpeg',
+                        fit: BoxFit.cover,
+                      );
+                    },
+                  )
+                : Image.asset(
+                    'assets/images/logo.jpeg',
+                    fit: BoxFit.cover,
+                  ),
           ),
         ),
         const SizedBox(height: 48),
+        // Minimalist Premium Spinner
         SizedBox(
-          width: 40,
-          height: 40,
+          width: 24,
+          height: 24,
           child: CircularProgressIndicator(
-            strokeWidth: 3,
+            strokeWidth: 2.5,
             valueColor: AlwaysStoppedAnimation<Color>(
-              AppTheme.primaryBlue.withOpacity(0.6),
+              AppTheme.primaryBlue.withOpacity(0.4),
             ),
           ),
         ),

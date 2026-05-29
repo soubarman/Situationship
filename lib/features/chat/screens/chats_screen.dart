@@ -19,7 +19,7 @@ class _ChatsScreenState extends ConsumerState<ChatsScreen> with SingleTickerProv
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 2, vsync: this);
+    _tabController = TabController(length: 3, vsync: this);
   }
 
   @override
@@ -34,8 +34,9 @@ class _ChatsScreenState extends ConsumerState<ChatsScreen> with SingleTickerProv
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
     // Filter chats
-    final acceptedChats = chats.where((c) => c.status == 'accepted').toList();
-    final requestedChats = chats.where((c) => c.status == 'requested').toList();
+    final acceptedChats = chats.where((c) => c.status == 'accepted' && !c.isConfession).toList();
+    final requestedChats = chats.where((c) => c.status == 'requested' && !c.isConfession).toList();
+    final confessionChats = chats.where((c) => c.isConfession).toList();
 
     return Scaffold(
       body: RefreshIndicator(
@@ -70,6 +71,7 @@ class _ChatsScreenState extends ConsumerState<ChatsScreen> with SingleTickerProv
                   tabs: const [
                     Tab(text: 'Messages'),
                     Tab(text: 'Requests'),
+                    Tab(text: 'Confessions'),
                   ],
                 ),
               ),
@@ -80,6 +82,7 @@ class _ChatsScreenState extends ConsumerState<ChatsScreen> with SingleTickerProv
             children: [
               _buildChatList(acceptedChats, isDark, ref),
               _buildChatList(requestedChats, isDark, ref, isRequest: true),
+              _buildConfessionsList(confessionChats, isDark, ref),
             ],
           ),
         ),
@@ -253,17 +256,87 @@ class _ChatsScreenState extends ConsumerState<ChatsScreen> with SingleTickerProv
       ),
     );
   }
+
+  Widget _buildConfessionsList(List<ChatModel> chats, bool isDark, WidgetRef ref) {
+    if (chats.isEmpty) {
+      return Center(
+        child: SingleChildScrollView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Container(
+                width: 80,
+                height: 80,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: AppTheme.primaryBlue.withOpacity(0.1),
+                ),
+                child: const Center(
+                  child: Text(
+                    '🎭',
+                    style: TextStyle(fontSize: 40),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 20),
+              const Text(
+                'Secret Inbox',
+                style: TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+              const SizedBox(height: 10),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 40),
+                child: Text(
+                  'Chat anonymously. You can request them to reveal their identity!',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: 14,
+                    color: AppTheme.textSecondary,
+                    height: 1.4,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    final activeChats = chats.where((c) => !c.isExpired).toList();
+    final expiredChats = chats.where((c) => c.isExpired).toList();
+
+    return ListView(
+      padding: EdgeInsets.zero,
+      children: [
+        if (activeChats.isNotEmpty) ...[
+          _sectionHeader('Secret Messages', context),
+          ...activeChats.map((chat) => _ChatTile(chat: chat, isConfessionView: true)),
+        ],
+        if (expiredChats.isNotEmpty) ...[
+          _sectionHeader('Expired Secret Messages', context),
+          ...expiredChats.map((chat) => _ChatTile(chat: chat, isExpired: true, isConfessionView: true)),
+        ],
+        const SizedBox(height: 100),
+      ],
+    );
+  }
 }
 
 class _ChatTile extends ConsumerWidget {
   final ChatModel chat;
   final bool isExpired;
   final bool isRequest;
+  final bool isConfessionView;
 
   const _ChatTile({
     required this.chat,
     this.isExpired = false,
     this.isRequest = false,
+    this.isConfessionView = false,
   });
 
   @override
@@ -304,13 +377,42 @@ class _ChatTile extends ConsumerWidget {
             children: [
               Stack(
                 children: [
-                  CircleAvatar(
-                    radius: 26,
-                    backgroundImage: NetworkImage(
-                      chat.otherUserAvatar ?? 'https://ui-avatars.com/api/?name=${Uri.encodeComponent(chat.otherUserName)}',
+                  if (chat.otherUserAvatar == 'anonymous_mask')
+                    Container(
+                      width: 52,
+                      height: 52,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        gradient: LinearGradient(
+                          colors: isDark
+                              ? [const Color(0xFF6B21A8), const Color(0xFF4C1D95)]
+                              : [const Color(0xFFC084FC), const Color(0xFF818CF8)],
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                        ),
+                        boxShadow: [
+                          BoxShadow(
+                            color: const Color(0xFF8B5CF6).withOpacity(0.2),
+                            blurRadius: 8,
+                            offset: const Offset(0, 3),
+                          )
+                        ],
+                      ),
+                      child: const Center(
+                        child: Text(
+                          '🎭',
+                          style: TextStyle(fontSize: 22),
+                        ),
+                      ),
+                    )
+                  else
+                    CircleAvatar(
+                      radius: 26,
+                      backgroundImage: NetworkImage(
+                        chat.otherUserAvatar ?? 'https://ui-avatars.com/api/?name=${Uri.encodeComponent(chat.otherUserName)}',
+                      ),
                     ),
-                  ),
-                  if (chat.otherUserIsOnline && !isExpired)
+                  if (chat.otherUserIsOnline && !isExpired && chat.otherUserAvatar != 'anonymous_mask')
                     Positioned(
                       right: 1,
                       bottom: 1,
@@ -337,6 +439,17 @@ class _ChatTile extends ConsumerWidget {
                           chat.otherUserName,
                           style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 15),
                         ),
+                        if (isConfessionView && chat.unreadCount > 0) ...[
+                          const SizedBox(width: 6),
+                          Container(
+                            width: 8,
+                            height: 8,
+                            decoration: const BoxDecoration(
+                              color: Colors.redAccent,
+                              shape: BoxShape.circle,
+                            ),
+                          ),
+                        ],
                         const Spacer(),
                         if (!isRequest)
                           Text(
@@ -353,17 +466,55 @@ class _ChatTile extends ConsumerWidget {
                     Row(
                       children: [
                         Expanded(
-                          child: Text(
-                            isRequest 
-                                ? (isSentByMe ? "Waiting for response..." : "Wants to start a conversation with you") 
-                                : chat.lastMessage,
-                            style: TextStyle(
-                              fontSize: 13,
-                              color: chat.unreadCount > 0 ? Theme.of(context).textTheme.bodyLarge?.color : AppTheme.textTertiary,
-                              fontWeight: chat.unreadCount > 0 ? FontWeight.w500 : FontWeight.w400,
-                            ),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                isRequest 
+                                    ? (isSentByMe ? "Waiting for response..." : "Wants to start a conversation with you") 
+                                    : chat.lastMessage,
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  color: chat.unreadCount > 0 ? Theme.of(context).textTheme.bodyLarge?.color : AppTheme.textTertiary,
+                                  fontWeight: chat.unreadCount > 0 ? FontWeight.w500 : FontWeight.w400,
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                              if (isConfessionView) ...[
+                                const SizedBox(height: 6),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                  decoration: BoxDecoration(
+                                    color: AppTheme.primaryBlue.withOpacity(0.08),
+                                    borderRadius: BorderRadius.circular(10),
+                                    border: Border.all(
+                                      color: AppTheme.primaryBlue.withOpacity(0.15),
+                                      width: 1,
+                                    ),
+                                  ),
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Icon(
+                                        Icons.chat_bubble_outline_rounded,
+                                        size: 11,
+                                        color: AppTheme.primaryBlue,
+                                      ),
+                                      const SizedBox(width: 5),
+                                      Text(
+                                        'Tap to chat securely',
+                                        style: TextStyle(
+                                          fontSize: 10,
+                                          fontWeight: FontWeight.w800,
+                                          color: AppTheme.primaryBlue,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            ],
                           ),
                         ),
                         if (isRequest && !isSentByMe) ...[
@@ -382,7 +533,7 @@ class _ChatTile extends ConsumerWidget {
                             ),
                             child: const Text('Accept', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700)),
                           ),
-                        ] else if (chat.unreadCount > 0) ...[
+                        ] else if (chat.unreadCount > 0 && !isConfessionView) ...[
                           const SizedBox(width: 8),
                           Container(
                             width: 20,
