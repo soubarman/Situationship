@@ -1,4 +1,4 @@
-# 💫 Mindate — Gen Z Social + Dating Platform
+# 💫 Situationship — Gen Z Social + Dating Platform
 
 > **Vibe. Match. Connect.** — A premium Flutter app combining Instagram-style feeds, Tinder-style swiping, and real-time chat.
 
