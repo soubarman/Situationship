@@ -12,6 +12,7 @@ import '../../features/match/screens/match_screen.dart';
 import '../../features/match/screens/match_success_screen.dart';
 import '../../features/match/screens/community_detail_screen.dart';
 import '../../features/match/screens/create_community_screen.dart';
+import '../../features/match/screens/communities_screen.dart';
 import '../../features/chat/screens/chats_screen.dart';
 import '../../features/chat/screens/chat_detail_screen.dart';
 import '../../features/profile/screens/profile_screen.dart';
@@ -36,7 +37,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       if (authState.isLoading) return '/splash';
 
       final isLoggedIn = authState.asData?.value != null;
-      final isProtected = ['/feed', '/match', '/chats', '/profile', '/search', '/create-post', '/story'].any(
+      final isProtected = ['/feed', '/match', '/chats', '/profile', '/communities', '/search', '/create-post', '/story'].any(
         (r) => state.matchedLocation.startsWith(r),
       );
       final isCompletingProfile = state.matchedLocation == '/complete-profile';
@@ -149,6 +150,11 @@ final appRouterProvider = Provider<GoRouter>((ref) {
                 builder: (context, state) => const EditProfileScreen(),
               ),
             ],
+          ),
+          GoRoute(
+            path: '/communities',
+            name: 'communities',
+            builder: (context, state) => const CommunitiesScreen(),
           ),
         ],
       ),

@@ -765,28 +765,80 @@ class _SettingsSheet extends StatelessWidget {
           ),
           const Text('Settings ⚙️', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800)),
           const SizedBox(height: 20),
-          // Theme toggle
+          // Theme selection container
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+            padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
               color: isDark ? AppTheme.darkCard : const Color(0xFFF3F6FF),
-              borderRadius: BorderRadius.circular(16),
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(
+                color: isDark ? AppTheme.darkBorder : Colors.black.withOpacity(0.04),
+              ),
             ),
-            child: Row(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Icon(
-                  themeMode == ThemeMode.dark ? Icons.dark_mode_rounded : Icons.light_mode_rounded,
-                  color: AppTheme.primaryBlue,
+                Row(
+                  children: [
+                    Icon(
+                      themeMode == ThemeMode.dark
+                          ? Icons.dark_mode_rounded
+                          : (themeMode == ThemeMode.light
+                              ? Icons.light_mode_rounded
+                              : Icons.settings_suggest_rounded),
+                      color: AppTheme.primaryBlue,
+                      size: 20,
+                    ),
+                    const SizedBox(width: 10),
+                    const Text(
+                      'Appearance',
+                      style: TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: -0.2,
+                      ),
+                    ),
+                  ],
                 ),
-                const SizedBox(width: 12),
-                const Expanded(child: Text('Dark Mode', style: TextStyle(fontWeight: FontWeight.w600))),
-                Switch(
-                  value: themeMode == ThemeMode.dark,
-                  activeColor: AppTheme.primaryBlue,
-                  onChanged: (val) {
-                    ref.read(themeModeProvider.notifier).state =
-                        val ? ThemeMode.dark : ThemeMode.light;
-                  },
+                const SizedBox(height: 14),
+                Row(
+                  children: [
+                    Expanded(
+                      child: _buildThemeOption(
+                        context,
+                        ref,
+                        mode: ThemeMode.light,
+                        label: 'Light',
+                        icon: Icons.light_mode_rounded,
+                        isSelected: themeMode == ThemeMode.light,
+                        isDark: isDark,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: _buildThemeOption(
+                        context,
+                        ref,
+                        mode: ThemeMode.dark,
+                        label: 'Dark',
+                        icon: Icons.dark_mode_rounded,
+                        isSelected: themeMode == ThemeMode.dark,
+                        isDark: isDark,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: _buildThemeOption(
+                        context,
+                        ref,
+                        mode: ThemeMode.system,
+                        label: 'System',
+                        icon: Icons.settings_suggest_rounded,
+                        isSelected: themeMode == ThemeMode.system,
+                        isDark: isDark,
+                      ),
+                    ),
+                  ],
                 ),
               ],
             ),
@@ -871,6 +923,57 @@ class _SettingsSheet extends StatelessWidget {
           ),
           const SizedBox(height: 8),
         ],
+      ),
+    );
+  }
+
+  Widget _buildThemeOption(
+    BuildContext context,
+    WidgetRef ref, {
+    required ThemeMode mode,
+    required String label,
+    required IconData icon,
+    required bool isSelected,
+    required bool isDark,
+  }) {
+    final activeColor = AppTheme.primaryBlue;
+    return GestureDetector(
+      onTap: () {
+        ref.read(themeModeProvider.notifier).setThemeMode(mode);
+      },
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        padding: const EdgeInsets.symmetric(vertical: 12),
+        decoration: BoxDecoration(
+          color: isSelected
+              ? activeColor.withOpacity(0.12)
+              : (isDark ? Colors.white.withOpacity(0.04) : Colors.white),
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(
+            color: isSelected
+                ? activeColor
+                : (isDark ? AppTheme.darkBorder : Colors.black.withOpacity(0.08)),
+            width: isSelected ? 1.8 : 1.0,
+          ),
+        ),
+        child: Column(
+          children: [
+            Icon(
+              icon,
+              size: 20,
+              color: isSelected ? activeColor : (isDark ? Colors.white60 : Colors.black54),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: isSelected ? FontWeight.w800 : FontWeight.w600,
+                color: isSelected ? activeColor : (isDark ? Colors.white60 : Colors.black54),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

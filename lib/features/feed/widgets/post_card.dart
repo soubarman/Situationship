@@ -143,38 +143,71 @@ class _PostCardState extends ConsumerState<PostCard>
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
       decoration: BoxDecoration(
-        color: isDark
-            ? AppTheme.darkSurface.withOpacity(0.85)
-            : Colors.white.withOpacity(0.92),
         borderRadius: BorderRadius.circular(28),
-        border: Border.all(
-          color: isDark ? Colors.white.withOpacity(0.08) : Colors.black.withOpacity(0.05),
-          width: 1.0,
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(isDark ? 0.25 : 0.04),
-            blurRadius: 18,
-            offset: const Offset(0, 10),
-          ),
-        ],
-      ),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(28),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            _buildHeader(isDark, displayName, displayAvatar),
-            if (widget.post.caption.isNotEmpty && widget.post.caption != widget.post.mood)
-              _buildCaption(isDark),
-            if (widget.post.imageUrl != null) _buildImage(),
-            if (widget.post.imageUrl == null && widget.post.mood != null &&
-                (widget.post.caption.isEmpty || widget.post.caption == widget.post.mood))
-              _buildMoodHero(isDark),
-            _buildActions(isDark),
-            if (widget.post.commentCount > 0)
-              _buildRecentComment(isDark),
+        // Neon-tinted gradient border for premium glass look
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            Colors.white.withOpacity(isDark ? 0.18 : 0.55),
+            Colors.white.withOpacity(isDark ? 0.04 : 0.18),
           ],
+        ),
+      ),
+      child: Container(
+        margin: const EdgeInsets.all(1.0), // 1px gradient border
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(27),
+          boxShadow: [
+            BoxShadow(
+              color: (isDark ? const Color(0xFF6C63FF) : const Color(0xFF3B82F6)).withOpacity(0.10),
+              blurRadius: 24,
+              offset: const Offset(0, 8),
+            ),
+            BoxShadow(
+              color: Colors.black.withOpacity(isDark ? 0.30 : 0.08),
+              blurRadius: 16,
+              offset: const Offset(0, 4),
+            ),
+          ],
+        ),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(27),
+          child: BackdropFilter(
+            filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
+            child: Container(
+              decoration: BoxDecoration(
+                // Glassmorphic tint — transparent enough to show orbs through
+                color: isDark
+                    ? const Color(0xFF1A1035).withOpacity(0.55)
+                    : Colors.white.withOpacity(0.45),
+                borderRadius: BorderRadius.circular(27),
+                border: Border.all(
+                  color: isDark
+                      ? Colors.white.withOpacity(0.10)
+                      : Colors.white.withOpacity(0.70),
+                  width: 1.0,
+                ),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _buildHeader(isDark, displayName, displayAvatar),
+                  if (widget.post.mood != null && widget.post.imageUrl != null)
+                    _buildMoodBadge(isDark),
+                  if (widget.post.caption.isNotEmpty && widget.post.caption != widget.post.mood)
+                    _buildCaption(isDark),
+                  if (widget.post.imageUrl != null) _buildImage(),
+                  if (widget.post.imageUrl == null && widget.post.mood != null &&
+                      (widget.post.caption.isEmpty || widget.post.caption == widget.post.mood))
+                    _buildMoodHero(isDark),
+                  _buildActions(isDark),
+                  if (widget.post.commentCount > 0)
+                    _buildRecentComment(isDark),
+                ],
+              ),
+            ),
+          ),
         ),
       ),
     );
@@ -230,7 +263,7 @@ class _PostCardState extends ConsumerState<PostCard>
                                 style: TextStyle(
                                   fontWeight: FontWeight.w800,
                                   fontSize: 15,
-                                  color: isDark ? Colors.white : Colors.black87,
+                                  color: isDark ? Colors.white : const Color(0xFF1A1035),
                                   letterSpacing: -0.2,
                                 ),
                                 overflow: TextOverflow.ellipsis,
@@ -508,7 +541,12 @@ class _PostCardState extends ConsumerState<PostCard>
           ),
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16),
-          child: Divider(height: 1, color: isDark ? Colors.white10 : Colors.black.withOpacity(0.06)),
+          child: Divider(
+            height: 1,
+            color: isDark
+                ? Colors.white.withOpacity(0.10)
+                : Colors.black.withOpacity(0.08),
+          ),
         ),
         // Buttons Row
         Padding(
@@ -555,7 +593,8 @@ class _PostCardState extends ConsumerState<PostCard>
                       reactionColor = AppTheme.primaryBlue;
                       reactionLabel = 'Like';
                     } else {
-                      reactionWidget = Icon(Icons.thumb_up_alt_outlined, size: 18, color: isDark ? Colors.white70 : Colors.black54);
+                      reactionWidget = Icon(Icons.thumb_up_alt_outlined, size: 18,
+                          color: isDark ? Colors.white70 : const Color(0xFF1A1035).withOpacity(0.60));
                     }
 
                     return InkWell(

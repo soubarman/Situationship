@@ -1,25 +1,45 @@
+import 'dart:ui';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/models/user_model.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/providers/app_state_provider.dart';
+import '../../../core/utils/location_helper.dart';
 
-class SwipeCard extends StatelessWidget {
+class SwipeCard extends ConsumerWidget {
   final UserModel user;
   final bool isBackground;
+  final double? deviceLat;
+  final double? deviceLon;
 
   const SwipeCard({
     super.key,
     required this.user,
     required this.isBackground,
+    this.deviceLat,
+    this.deviceLon,
   });
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final currentUser = ref.watch(currentUserProvider);
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    final distance = LocationHelper.getDistanceKm(
+      lat1: deviceLat,
+      lon1: deviceLon,
+      loc1: currentUser.location,
+      loc2: user.location,
+      id1: currentUser.id,
+      id2: user.id,
+    );
+
     return Container(
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(28),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(isBackground ? 0.1 : 0.2),
+            color: Colors.black.withOpacity(isBackground ? 0.08 : 0.18),
             blurRadius: 30,
             offset: const Offset(0, 16),
           ),
@@ -62,11 +82,11 @@ class SwipeCard extends StatelessWidget {
                 gradient: LinearGradient(
                   begin: Alignment.topCenter,
                   end: Alignment.bottomCenter,
-                  stops: [0.0, 0.4, 1.0],
+                  stops: [0.0, 0.45, 1.0],
                   colors: [
                     Colors.transparent,
                     Colors.transparent,
-                    Color(0xEE000000),
+                    Color(0xDD000000),
                   ],
                 ),
               ),
@@ -79,7 +99,7 @@ class SwipeCard extends StatelessWidget {
                 right: 16,
                 child: Row(
                   children: [
-                    _buildTag('📍 ${user.location ?? "Nearby"}'),
+                    _buildTag('📍 $distance km', isDark),
                     const Spacer(),
                     if (user.isVerified) _buildVerifiedBadge(),
                     if (user.isOnline)
@@ -87,8 +107,14 @@ class SwipeCard extends StatelessWidget {
                         padding: const EdgeInsets.symmetric(
                             horizontal: 10, vertical: 5),
                         decoration: BoxDecoration(
-                          color: AppTheme.success.withOpacity(0.9),
+                          color: AppTheme.primaryGreen.withOpacity(0.85),
                           borderRadius: BorderRadius.circular(50),
+                          boxShadow: [
+                            BoxShadow(
+                              color: AppTheme.primaryGreen.withOpacity(0.3),
+                              blurRadius: 8,
+                            ),
+                          ],
                         ),
                         child: Row(
                           mainAxisSize: MainAxisSize.min,
@@ -107,7 +133,7 @@ class SwipeCard extends StatelessWidget {
                               style: TextStyle(
                                 color: Colors.white,
                                 fontSize: 11,
-                                fontWeight: FontWeight.w600,
+                                fontWeight: FontWeight.w700,
                               ),
                             ),
                           ],
@@ -153,7 +179,7 @@ class SwipeCard extends StatelessWidget {
                     end: Alignment.bottomCenter,
                     colors: [
                       Colors.transparent,
-                      Color(0xCC000000),
+                      Color(0xBB000000),
                       Color(0xFF000000),
                     ],
                   ),
@@ -165,66 +191,58 @@ class SwipeCard extends StatelessWidget {
                     Row(
                       crossAxisAlignment: CrossAxisAlignment.end,
                       children: [
-                        Text(
-                          user.name,
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 34,
-                            fontWeight: FontWeight.w900,
-                            letterSpacing: -1,
+                        Expanded(
+                          child: Text(
+                            user.name,
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 30,
+                              fontWeight: FontWeight.w900,
+                              letterSpacing: -1,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
                           ),
                         ),
                         const SizedBox(width: 8),
                         Padding(
-                          padding: const EdgeInsets.only(bottom: 6),
+                          padding: const EdgeInsets.only(bottom: 4),
                           child: Text(
                             '${user.age}',
                             style: TextStyle(
                               color: Colors.white.withOpacity(0.9),
-                              fontSize: 22,
+                              fontSize: 20,
                               fontWeight: FontWeight.w300,
                             ),
                           ),
                         ),
                       ],
                     ),
-                    const SizedBox(height: 4),
-                    if (user.bio != null)
+                    const SizedBox(height: 6),
+                    if (user.bio != null && user.bio!.trim().isNotEmpty)
                       Padding(
                         padding: const EdgeInsets.only(bottom: 16),
                         child: Text(
                           user.bio!,
                           style: TextStyle(
                             color: Colors.white.withOpacity(0.85),
-                            fontSize: 14,
-                            height: 1.5,
+                            fontSize: 13.5,
+                            height: 1.4,
                             fontWeight: FontWeight.w400,
                           ),
                           maxLines: 2,
                           overflow: TextOverflow.ellipsis,
                         ),
                       ),
-                    ClipRRect(
-                      borderRadius: BorderRadius.circular(20),
-                      child: Container(
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          color: Colors.white.withOpacity(0.1),
-                          border: Border.all(
-                            color: Colors.white.withOpacity(0.15),
-                            width: 1,
-                          ),
-                        ),
-                        child: Wrap(
-                          spacing: 8,
-                          runSpacing: 8,
-                          children: user.interests
-                              .take(4)
-                              .map((interest) =>
-                                  _InterestChip(label: interest))
-                              .toList(),
-                        ),
-                      ),
+                    // Glassmorphic interest wrap
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: user.interests
+                          .take(3)
+                          .map((interest) =>
+                              _InterestChip(label: interest))
+                          .toList(),
                     ),
                   ],
                 ),
@@ -236,20 +254,29 @@ class SwipeCard extends StatelessWidget {
     );
   }
 
-  Widget _buildTag(String text) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-      decoration: BoxDecoration(
-        color: Colors.black.withOpacity(0.45),
-        borderRadius: BorderRadius.circular(50),
-        border: Border.all(color: Colors.white.withOpacity(0.2)),
-      ),
-      child: Text(
-        text,
-        style: const TextStyle(
-          color: Colors.white,
-          fontSize: 12,
-          fontWeight: FontWeight.w500,
+  Widget _buildTag(String text, bool isDark) {
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(50),
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+          decoration: BoxDecoration(
+            color: (isDark ? Colors.black : Colors.white).withOpacity(0.25),
+            borderRadius: BorderRadius.circular(50),
+            border: Border.all(
+              color: (isDark ? Colors.white : Colors.black).withOpacity(0.15),
+              width: 0.8,
+            ),
+          ),
+          child: Text(
+            text,
+            style: TextStyle(
+              color: isDark ? Colors.white : Colors.black87,
+              fontSize: 12,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
         ),
       ),
     );
@@ -262,6 +289,12 @@ class SwipeCard extends StatelessWidget {
       decoration: BoxDecoration(
         gradient: AppTheme.primaryGradient,
         borderRadius: BorderRadius.circular(50),
+        boxShadow: [
+          BoxShadow(
+            color: AppTheme.primaryBlue.withOpacity(0.3),
+            blurRadius: 8,
+          ),
+        ],
       ),
       child: const Row(
         mainAxisSize: MainAxisSize.min,
@@ -273,7 +306,7 @@ class SwipeCard extends StatelessWidget {
             style: TextStyle(
               color: Colors.white,
               fontSize: 11,
-              fontWeight: FontWeight.w600,
+              fontWeight: FontWeight.w700,
             ),
           ),
         ],
@@ -288,19 +321,28 @@ class _InterestChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
-      decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.2),
-        borderRadius: BorderRadius.circular(50),
-        border: Border.all(color: Colors.white.withOpacity(0.3)),
-      ),
-      child: Text(
-        label,
-        style: const TextStyle(
-          color: Colors.white,
-          fontSize: 12,
-          fontWeight: FontWeight.w500,
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(16),
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 6, sigmaY: 6),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+          decoration: BoxDecoration(
+            color: Colors.white.withOpacity(0.16),
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: Colors.white.withOpacity(0.22),
+              width: 0.8,
+            ),
+          ),
+          child: Text(
+            label,
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 12,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
         ),
       ),
     );

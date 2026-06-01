@@ -13,10 +13,10 @@ class MainShell extends ConsumerWidget {
   const MainShell({super.key, required this.child});
 
   static const List<_NavItem> _items = [
-    _NavItem(icon: Icons.home_rounded,        activeIcon: Icons.home_rounded,         label: 'Home',    path: '/feed'),
-    _NavItem(icon: Icons.favorite_border,     activeIcon: Icons.favorite_rounded,     label: 'Match',   path: '/match'),
-    _NavItem(icon: Icons.chat_bubble_outline, activeIcon: Icons.chat_bubble_rounded,  label: 'Chats',   path: '/chats'),
-    _NavItem(icon: Icons.person_outline,      activeIcon: Icons.person_rounded,       label: 'Profile', path: '/profile'),
+    _NavItem(icon: Icons.home_rounded,        activeIcon: Icons.home_rounded,         label: 'Home',        path: '/feed'),
+    _NavItem(icon: Icons.favorite_border,     activeIcon: Icons.favorite_rounded,     label: 'Match',       path: '/match'),
+    _NavItem(icon: Icons.chat_bubble_outline, activeIcon: Icons.chat_bubble_rounded,  label: 'Chats',       path: '/chats'),
+    _NavItem(icon: Icons.people_outline,      activeIcon: Icons.people_rounded,       label: 'Clubs',       path: '/communities'),
   ];
 
   @override
@@ -27,7 +27,7 @@ class MainShell extends ConsumerWidget {
     int currentIndex = 0;
     if (location.startsWith('/match'))   currentIndex = 1;
     else if (location.startsWith('/chats'))   currentIndex = 2;
-    else if (location.startsWith('/profile')) currentIndex = 3;
+    else if (location.startsWith('/communities')) currentIndex = 3;
 
     final safeBottom = MediaQuery.of(context).padding.bottom;
 

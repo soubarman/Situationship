@@ -1,3 +1,4 @@
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -5,6 +6,7 @@ import '../../../core/models/chat_model.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/providers/app_state_provider.dart';
 import 'package:timeago/timeago.dart' as timeago;
+import '../../../shared/widgets/background_orbs.dart';
 
 class ChatsScreen extends ConsumerStatefulWidget {
   const ChatsScreen({super.key});
@@ -39,53 +41,63 @@ class _ChatsScreenState extends ConsumerState<ChatsScreen> with SingleTickerProv
     final confessionChats = chats.where((c) => c.isConfession).toList();
 
     return Scaffold(
-      body: RefreshIndicator(
-        onRefresh: () async {
-          // Chats provider already listens to Firestore, so just trigger a refresh
-          await Future.delayed(const Duration(milliseconds: 500));
-        },
-        color: AppTheme.primaryBlue,
-        child: NestedScrollView(
-          headerSliverBuilder: (context, innerBoxIsScrolled) => [
-            _buildAppBar(context, isDark),
-            SliverToBoxAdapter(
-              child: Container(
-                margin: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
-                height: 48,
-                decoration: BoxDecoration(
-                  color: isDark ? AppTheme.darkCard : Colors.grey[100],
-                  borderRadius: BorderRadius.circular(16),
-                ),
-                child: TabBar(
-                  controller: _tabController,
-                  indicatorSize: TabBarIndicatorSize.tab,
-                  dividerColor: Colors.transparent,
-                  indicator: BoxDecoration(
-                    borderRadius: BorderRadius.circular(14),
-                    gradient: AppTheme.primaryGradient,
+      backgroundColor: isDark ? AppTheme.darkBg : const Color(0xFFF8FAFC),
+      body: Stack(
+        children: [
+          const BackgroundOrbs(),
+          RefreshIndicator(
+            onRefresh: () async {
+              // Chats provider already listens to Firestore, so just trigger a refresh
+              await Future.delayed(const Duration(milliseconds: 500));
+            },
+            color: AppTheme.primaryBlue,
+            child: NestedScrollView(
+              headerSliverBuilder: (context, innerBoxIsScrolled) => [
+                _buildAppBar(context, isDark),
+                SliverToBoxAdapter(
+                  child: Container(
+                    margin: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+                    height: 48,
+                    decoration: BoxDecoration(
+                      color: isDark ? AppTheme.darkCard.withOpacity(0.8) : Colors.white.withOpacity(0.8),
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(
+                        color: isDark ? Colors.white.withOpacity(0.08) : Colors.black.withOpacity(0.04),
+                        width: 0.8,
+                      ),
+                    ),
+                    child: TabBar(
+                      controller: _tabController,
+                      indicatorSize: TabBarIndicatorSize.tab,
+                      dividerColor: Colors.transparent,
+                      indicator: BoxDecoration(
+                        borderRadius: BorderRadius.circular(14),
+                        gradient: AppTheme.primaryGradient,
+                      ),
+                      labelColor: Colors.white,
+                      unselectedLabelColor: AppTheme.textSecondary,
+                      labelStyle: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14),
+                      unselectedLabelStyle: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
+                      tabs: const [
+                        Tab(text: 'Messages'),
+                        Tab(text: 'Requests'),
+                        Tab(text: 'Confessions'),
+                      ],
+                    ),
                   ),
-                  labelColor: Colors.white,
-                  unselectedLabelColor: AppTheme.textSecondary,
-                  labelStyle: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14),
-                  unselectedLabelStyle: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
-                  tabs: const [
-                    Tab(text: 'Messages'),
-                    Tab(text: 'Requests'),
-                    Tab(text: 'Confessions'),
-                  ],
                 ),
+              ],
+              body: TabBarView(
+                controller: _tabController,
+                children: [
+                  _buildChatList(acceptedChats, isDark, ref),
+                  _buildChatList(requestedChats, isDark, ref, isRequest: true),
+                  _buildConfessionsList(confessionChats, isDark, ref),
+                ],
               ),
             ),
-          ],
-          body: TabBarView(
-            controller: _tabController,
-            children: [
-              _buildChatList(acceptedChats, isDark, ref),
-              _buildChatList(requestedChats, isDark, ref, isRequest: true),
-              _buildConfessionsList(confessionChats, isDark, ref),
-            ],
           ),
-        ),
+        ],
       ),
     );
   }
@@ -146,7 +158,9 @@ class _ChatsScreenState extends ConsumerState<ChatsScreen> with SingleTickerProv
     return SliverAppBar(
       floating: true,
       snap: true,
-      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+      elevation: 0,
+      scrolledUnderElevation: 0,
+      backgroundColor: Colors.transparent,
       title: const Text(
         'Chats',
         style: TextStyle(fontSize: 28, fontWeight: FontWeight.w900, letterSpacing: -0.5),
@@ -154,20 +168,27 @@ class _ChatsScreenState extends ConsumerState<ChatsScreen> with SingleTickerProv
       actions: [
         IconButton(
           onPressed: () {},
-          icon: Container(
-            padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(
-              color: isDark ? AppTheme.darkCard : Colors.white,
-              borderRadius: BorderRadius.circular(12),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.06),
-                  blurRadius: 8,
-                  offset: const Offset(0, 2),
+          icon: ClipRRect(
+            borderRadius: BorderRadius.circular(12),
+            child: BackdropFilter(
+              filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
+              child: Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: isDark ? Colors.white.withOpacity(0.08) : Colors.white.withOpacity(0.4),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: isDark ? Colors.white.withOpacity(0.12) : Colors.black.withOpacity(0.05),
+                    width: 0.8,
+                  ),
                 ),
-              ],
+                child: Icon(
+                  Icons.search_rounded,
+                  size: 20,
+                  color: isDark ? Colors.white70 : Colors.black54,
+                ),
+              ),
             ),
-            child: const Icon(Icons.search_rounded, size: 20),
           ),
         ),
         const SizedBox(width: 16),

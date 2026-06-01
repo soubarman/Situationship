@@ -566,8 +566,7 @@ class MatchQueueNotifier extends StateNotifier<List<UserModel>> {
     required double minAge,
     required double maxAge,
   }) {
-    // Filter current loaded users (for real filtering, use server-side queries)
-    state = state.where((u) => u.age >= minAge && u.age <= maxAge).toList();
+    // Dynamic reactive UI handles filtering in real-time to preserve loaded queue data
   }
 
   bool get hasMore => _ref.read(discoveryProvider).valueOrNull?.isNotEmpty ?? false;
@@ -1067,6 +1066,7 @@ final socialProvider = StateNotifierProvider<SocialNotifier, bool>((ref) {
 final filterMinAgeProvider = StateProvider<double>((ref) => 18);
 final filterMaxAgeProvider = StateProvider<double>((ref) => 35);
 final filterMaxDistanceProvider = StateProvider<double>((ref) => 50);
+final filterMatchIrrespectiveProvider = StateProvider<bool>((ref) => false);
 
 // ─── Communities Provider ────────────────────────────────────────────────────
 

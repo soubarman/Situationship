@@ -4,12 +4,15 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:geolocator/geolocator.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/providers/app_state_provider.dart';
 import '../../../core/models/user_model.dart';
 import '../../../core/models/chat_model.dart';
 import '../../../core/models/post_model.dart';
 import '../../feed/widgets/post_card.dart';
+import '../../../core/utils/location_helper.dart';
+
 class UserDetailScreen extends ConsumerStatefulWidget {
   final String userId;
   const UserDetailScreen({super.key, required this.userId});
@@ -27,6 +30,44 @@ class _UserDetailScreenState extends ConsumerState<UserDetailScreen> {
   final _confessionController = TextEditingController();
   bool _isSendingConfession = false;
   int? _overriddenCoins;
+
+  double? _deviceLat;
+  double? _deviceLon;
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchDeviceLocation();
+  }
+
+  Future<void> _fetchDeviceLocation() async {
+    try {
+      bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
+      if (!serviceEnabled) return;
+
+      LocationPermission permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+        if (permission == LocationPermission.denied) return;
+      }
+
+      if (permission == LocationPermission.deniedForever) return;
+
+      final position = await Geolocator.getCurrentPosition(
+        desiredAccuracy: LocationAccuracy.low,
+        timeLimit: const Duration(seconds: 4),
+      );
+
+      if (mounted) {
+        setState(() {
+          _deviceLat = position.latitude;
+          _deviceLon = position.longitude;
+        });
+      }
+    } catch (e) {
+      debugPrint('Failed to get location in details: $e');
+    }
+  }
 
   @override
   void dispose() {
@@ -937,6 +978,15 @@ class _UserDetailScreenState extends ConsumerState<UserDetailScreen> {
   }
 
   Widget _buildMainProfileImage(UserModel user, UserModel currentUser, bool isDark, BuildContext context) {
+    final distance = LocationHelper.getDistanceKm(
+      lat1: _deviceLat,
+      lon1: _deviceLon,
+      loc1: currentUser.location,
+      loc2: user.location,
+      id1: currentUser.id,
+      id2: user.id,
+    );
+
     return Container(
       width: double.infinity,
       height: 440,
@@ -1076,7 +1126,7 @@ class _UserDetailScreenState extends ConsumerState<UserDetailScreen> {
                   ],
                 ),
                 const SizedBox(height: 20),
-                _buildOverlayTag('📍 5 miles away', Colors.white.withOpacity(0.2), isLocation: true),
+                _buildOverlayTag('📍 $distance km away', Colors.white.withOpacity(0.2), isLocation: true),
               ],
             ),
           ),

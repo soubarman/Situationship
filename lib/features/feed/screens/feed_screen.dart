@@ -15,6 +15,7 @@ import '../widgets/quick_post_box.dart';
 import '../../../core/models/user_model.dart';
 import '../../../core/models/notification_model.dart';
 import '../../../core/providers/firestore_provider.dart';
+import '../../../shared/widgets/background_orbs.dart';
 
 class FeedScreen extends ConsumerStatefulWidget {
   const FeedScreen({super.key});
@@ -34,106 +35,112 @@ class _FeedScreenState extends ConsumerState<FeedScreen> {
     final currentUser = ref.watch(currentUserProvider);
 
     return Scaffold(
-      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
-      body: RefreshIndicator(
-        onRefresh: () async {
-          await ref.read(postsPaginationProvider.notifier).refresh();
-        },
-        color: AppTheme.primaryBlue,
-        child: CustomScrollView(
-          slivers: [
-            _buildAppBar(context, isDark, currentUser, ref),
-            const SliverToBoxAdapter(child: StoriesRow()),
-            const SliverToBoxAdapter(child: QuickPostBox()),
-
-            // ── Feed filter chips ──────────────────────────────────────────
-            SliverToBoxAdapter(
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(20, 16, 20, 10),
-                child: SingleChildScrollView(
-                  scrollDirection: Axis.horizontal,
-                  physics: const BouncingScrollPhysics(),
-                  child: Row(
-                    children: [
-                      _TabChip(label: 'All',         isSelected: activeFilter == 'all',         onTap: () => ref.read(feedFilterProvider.notifier).state = 'all'),
-                      const SizedBox(width: 8),
-                      _TabChip(label: 'Following',   isSelected: activeFilter == 'following',   onTap: () => ref.read(feedFilterProvider.notifier).state = 'following'),
-                      const SizedBox(width: 8),
-                      _TabChip(label: 'Trending',    isSelected: activeFilter == 'trending',    onTap: () => ref.read(feedFilterProvider.notifier).state = 'trending'),
-                      const SizedBox(width: 8),
-                      _TabChip(label: 'Communities', isSelected: activeFilter == 'communities', onTap: () => ref.read(feedFilterProvider.notifier).state = 'communities'),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-
-            // ── Firestore error banner ─────────────────────────────────────
-            if (postsStream.hasError)
-              SliverToBoxAdapter(
-                child: Container(
-                  margin: const EdgeInsets.all(16),
-                  padding: const EdgeInsets.all(14),
-                  decoration: BoxDecoration(
-                    color: AppTheme.error.withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(14),
-                    border: Border.all(color: AppTheme.error.withOpacity(0.4)),
-                  ),
-                  child: Row(
-                    children: [
-                      Icon(Icons.lock_outline_rounded, color: AppTheme.error, size: 20),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: Text(
-                          '🔒 Firestore permission denied — fix your security rules in Firebase Console.',
-                          style: TextStyle(color: AppTheme.error, fontSize: 12, height: 1.4),
-                        ),
+      backgroundColor: isDark ? AppTheme.darkBg : const Color(0xFFF8FAFC),
+      body: Stack(
+        children: [
+          const BackgroundOrbs(),
+          RefreshIndicator(
+            onRefresh: () async {
+              await ref.read(postsPaginationProvider.notifier).refresh();
+            },
+            color: AppTheme.primaryBlue,
+            child: CustomScrollView(
+              physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
+              slivers: [
+                _buildAppBar(context, isDark, currentUser, ref),
+                const SliverToBoxAdapter(child: StoriesRow()),
+                const SliverToBoxAdapter(child: QuickPostBox()),
+    
+                // ── Feed filter chips ──────────────────────────────────────────
+                SliverToBoxAdapter(
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(20, 16, 20, 10),
+                    child: SingleChildScrollView(
+                      scrollDirection: Axis.horizontal,
+                      physics: const BouncingScrollPhysics(),
+                      child: Row(
+                        children: [
+                          _TabChip(label: 'All',         isSelected: activeFilter == 'all',         onTap: () => ref.read(feedFilterProvider.notifier).state = 'all'),
+                          const SizedBox(width: 8),
+                          _TabChip(label: 'Following',   isSelected: activeFilter == 'following',   onTap: () => ref.read(feedFilterProvider.notifier).state = 'following'),
+                          const SizedBox(width: 8),
+                          _TabChip(label: 'Trending',    isSelected: activeFilter == 'trending',    onTap: () => ref.read(feedFilterProvider.notifier).state = 'trending'),
+                          const SizedBox(width: 8),
+                          _TabChip(label: 'Communities', isSelected: activeFilter == 'communities', onTap: () => ref.read(feedFilterProvider.notifier).state = 'communities'),
+                        ],
                       ),
-                    ],
+                    ),
                   ),
                 ),
-              ),
-
-            // ── Posts ──────────────────────────────────────────────────────
-            if (isLoading)
-              SliverList(
-                delegate: SliverChildBuilderDelegate(
-                  (context, index) => _PostShimmer(isDark: isDark),
-                  childCount: 3,
-                ),
-              )
-            else ...[
-              SliverList(
-                delegate: SliverChildBuilderDelegate(
-                  (context, index) {
-                    final post = posts[index];
-                    return PostCard(
-                      key: ValueKey(post.id),
-                      post: post,
-                      onLike: () {
-                        ref.read(postsProvider.notifier).toggleLike(post.id, currentUser.id);
+    
+                // ── Firestore error banner ─────────────────────────────────────
+                if (postsStream.hasError)
+                  SliverToBoxAdapter(
+                    child: Container(
+                      margin: const EdgeInsets.all(16),
+                      padding: const EdgeInsets.all(14),
+                      decoration: BoxDecoration(
+                        color: AppTheme.error.withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(color: AppTheme.error.withOpacity(0.4)),
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(Icons.lock_outline_rounded, color: AppTheme.error, size: 20),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Text(
+                              '🔒 Firestore permission denied — fix your security rules in Firebase Console.',
+                              style: TextStyle(color: AppTheme.error, fontSize: 12, height: 1.4),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+    
+                // ── Posts ──────────────────────────────────────────────────────
+                if (isLoading)
+                  SliverList(
+                    delegate: SliverChildBuilderDelegate(
+                      (context, index) => _PostShimmer(isDark: isDark),
+                      childCount: 3,
+                    ),
+                  )
+                else ...[
+                  SliverList(
+                    delegate: SliverChildBuilderDelegate(
+                      (context, index) {
+                        final post = posts[index];
+                        return PostCard(
+                          key: ValueKey(post.id),
+                          post: post,
+                          onLike: () {
+                            ref.read(postsProvider.notifier).toggleLike(post.id, currentUser.id);
+                          },
+                        );
                       },
-                    );
-                  },
-                  childCount: posts.length,
-                ),
-              ),
-              if (posts.isEmpty && !postsStream.hasError)
-                SliverFillRemaining(
-                  hasScrollBody: false,
-                  child: EmptyStateWidget(
-                    emoji: '✨',
-                    title: 'Nothing here yet!',
-                    message: 'The vibe is just getting started. Pull down to refresh or create the first post! 🚀',
-                    onAction: () => context.push('/create-post'),
-                    actionLabel: 'Start the Vibe 🔥',
+                      childCount: posts.length,
+                    ),
                   ),
-                ),
-            ],
-
-            const SliverPadding(padding: EdgeInsets.only(bottom: 120)),
-          ],
-        ),
+                  if (posts.isEmpty && !postsStream.hasError)
+                    SliverFillRemaining(
+                      hasScrollBody: false,
+                      child: EmptyStateWidget(
+                        emoji: '✨',
+                        title: 'Nothing here yet!',
+                        message: 'The vibe is just getting started. Pull down to refresh or create the first post! 🚀',
+                        onAction: () => context.push('/create-post'),
+                        actionLabel: 'Start the Vibe 🔥',
+                      ),
+                    ),
+                ],
+    
+                const SliverPadding(padding: EdgeInsets.only(bottom: 120)),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -146,9 +153,7 @@ class _FeedScreenState extends ConsumerState<FeedScreen> {
       snap: true,
       elevation: 0,
       scrolledUnderElevation: 0,
-      backgroundColor: isDark
-          ? AppTheme.darkBg.withOpacity(0.92)
-          : AppTheme.lightBg.withOpacity(0.92),
+      backgroundColor: Colors.transparent,
       title: ShaderMask(
         shaderCallback: (bounds) => AppTheme.primaryGradient.createShader(bounds),
         child: const Text(
@@ -277,33 +282,37 @@ class _FeedScreenState extends ConsumerState<FeedScreen> {
   // ─── Coin Badge ────────────────────────────────────────────────────────────
 
   Widget _buildCoinBadge(int coins, bool isDark) {
-    return Container(
-      margin: const EdgeInsets.symmetric(vertical: 12),
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-      decoration: BoxDecoration(
-        color: isDark
-            ? Colors.white.withOpacity(0.08)
-            : Colors.white.withOpacity(0.85),
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 12),
+      child: ClipRRect(
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: Colors.amber.withOpacity(0.55), width: 1.0),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.amber.withOpacity(0.12),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
+        child: BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+            decoration: BoxDecoration(
+              color: isDark
+                  ? Colors.white.withOpacity(0.08)
+                  : Colors.white.withOpacity(0.4),
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(
+                color: Colors.amber.withOpacity(isDark ? 0.4 : 0.45),
+                width: 1.0,
+              ),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Text('🪙', style: TextStyle(fontSize: 13)),
+                const SizedBox(width: 4),
+                Text(
+                  '$coins',
+                  style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 12, color: Colors.amber),
+                ),
+              ],
+            ),
           ),
-        ],
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          const Text('🪙', style: TextStyle(fontSize: 13)),
-          const SizedBox(width: 4),
-          Text(
-            '$coins',
-            style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 12, color: Colors.amber),
-          ),
-        ],
+        ),
       ),
     );
   }
@@ -595,20 +604,23 @@ class _GlassIcon extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(8),
-      decoration: BoxDecoration(
-        color: isDark ? Colors.white.withOpacity(0.08) : Colors.white.withOpacity(0.9),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: isDark ? Colors.white.withOpacity(0.1) : Colors.black.withOpacity(0.06),
-          width: 0.8,
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(12),
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
+        child: Container(
+          padding: const EdgeInsets.all(8),
+          decoration: BoxDecoration(
+            color: isDark ? Colors.white.withOpacity(0.08) : Colors.white.withOpacity(0.4),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: isDark ? Colors.white.withOpacity(0.12) : Colors.black.withOpacity(0.05),
+              width: 0.8,
+            ),
+          ),
+          child: Icon(icon, size: 20, color: color),
         ),
-        boxShadow: [
-          BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 8, offset: const Offset(0, 2)),
-        ],
       ),
-      child: Icon(icon, size: 20, color: color),
     );
   }
 }
