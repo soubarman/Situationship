@@ -154,16 +154,13 @@ class _FeedScreenState extends ConsumerState<FeedScreen> {
       elevation: 0,
       scrolledUnderElevation: 0,
       backgroundColor: Colors.transparent,
-      title: ShaderMask(
-        shaderCallback: (bounds) => AppTheme.primaryGradient.createShader(bounds),
-        child: const Text(
-          'Situationship',
-          style: TextStyle(
-            fontSize: 26,
-            fontWeight: FontWeight.w800,
-            color: Colors.white,
-            letterSpacing: -0.6,
-          ),
+      title: const Text(
+        'Situationship',
+        style: TextStyle(
+          fontSize: 26,
+          fontWeight: FontWeight.w800,
+          color: Colors.white,
+          letterSpacing: -0.6,
         ),
       ),
       actions: [

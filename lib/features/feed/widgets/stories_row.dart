@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/providers/app_state_provider.dart';
@@ -104,7 +105,7 @@ class StoriesRow extends ConsumerWidget {
                       radius: 32,
                       backgroundColor: isDark ? AppTheme.darkCard : const Color(0xFFF3F6FF),
                       backgroundImage: (user.avatarUrl != null) 
-                          ? NetworkImage(user.avatarUrl!) 
+                          ? CachedNetworkImageProvider(user.avatarUrl!, maxWidth: 150, maxHeight: 150) 
                           : null,
                       child: (user.avatarUrl == null) 
                           ? Text('✨', style: TextStyle(fontSize: 24, color: isDark ? Colors.white30 : Colors.black26))
@@ -236,7 +237,7 @@ class _StoryItemState extends ConsumerState<_StoryItem> with SingleTickerProvide
                   padding: const EdgeInsets.all(2),
                   child: CircleAvatar(
                     radius: 30,
-                    backgroundImage: NetworkImage(displayAvatar),
+                    backgroundImage: CachedNetworkImageProvider(displayAvatar, maxWidth: 150, maxHeight: 150),
                   ),
                 ),
               ),
