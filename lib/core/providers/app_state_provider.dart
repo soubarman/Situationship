@@ -64,6 +64,11 @@ final userDataStreamProvider = StreamProvider<UserModel?>((ref) {
 });
 
 final otherUserProvider = StreamProvider.family<UserModel?, String>((ref, userId) {
+  final authState = ref.watch(authStateChangesProvider);
+  if (authState.value == null) {
+    return Stream.value(null);
+  }
+
   return firestoreProvider.collection('users').doc(userId).snapshots().map((doc) {
     if (!doc.exists) return null;
     return UserModel.fromMap(doc.data()!);
@@ -94,6 +99,11 @@ final currentUserProvider = Provider<UserModel>((ref) {
 const int _postsPageSize = 20;
 
 final postsStreamProvider = StreamProvider<List<PostModel>>((ref) {
+  final authState = ref.watch(authStateChangesProvider);
+  if (authState.value == null) {
+    return Stream.value([]);
+  }
+
   return firestoreProvider
       .collection('posts')
       .orderBy('createdAt', descending: true)
@@ -361,6 +371,11 @@ final postsProvider = StateNotifierProvider<PostsNotifier, List<PostModel>>(
 const int _storiesPageSize = 20;
 
 final storiesStreamProvider = StreamProvider<List<Map<String, dynamic>>>((ref) {
+  final authState = ref.watch(authStateChangesProvider);
+  if (authState.value == null) {
+    return Stream.value([]);
+  }
+
   return firestoreProvider
       .collection('stories')
       .where('expiresAt', isGreaterThan: DateTime.now().millisecondsSinceEpoch)
@@ -1086,6 +1101,11 @@ Future<void> seedDefaultCommunities() async {
 }
 
 final communitiesProvider = StreamProvider<List<CommunityModel>>((ref) {
+  final authState = ref.watch(authStateChangesProvider);
+  if (authState.value == null) {
+    return Stream.value([]);
+  }
+
   final db = firestoreProvider;
 
   // Seed communities once (fire-and-forget) without blocking the stream
@@ -1109,6 +1129,11 @@ final communitiesProvider = StreamProvider<List<CommunityModel>>((ref) {
 });
 
 final communityPostsStreamProvider = StreamProvider.family<List<PostModel>, String>((ref, communityId) {
+  final authState = ref.watch(authStateChangesProvider);
+  if (authState.value == null) {
+    return Stream.value([]);
+  }
+
   return firestoreProvider
       .collection('posts')
       .where('communityId', isEqualTo: communityId)
@@ -1121,6 +1146,11 @@ final communityPostsStreamProvider = StreamProvider.family<List<PostModel>, Stri
 });
 
 final communityMessagesStreamProvider = StreamProvider.family<List<Map<String, dynamic>>, String>((ref, communityId) {
+  final authState = ref.watch(authStateChangesProvider);
+  if (authState.value == null) {
+    return Stream.value([]);
+  }
+
   return firestoreProvider
       .collection('communities')
       .doc(communityId)
@@ -1160,6 +1190,10 @@ Future<void> sendCommunityMessage({
 
 final notificationsStreamProvider = StreamProvider<List<NotificationModel>>((ref) {
   final authState = ref.watch(authStateChangesProvider);
+  if (authState.value == null) {
+    return Stream.value([]);
+  }
+
   final uid = authState.asData?.value?.uid;
   if (uid == null) return Stream.value([]);
 
