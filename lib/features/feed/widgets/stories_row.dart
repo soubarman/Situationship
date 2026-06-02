@@ -172,25 +172,10 @@ class _StoryItem extends ConsumerStatefulWidget {
   ConsumerState<_StoryItem> createState() => _StoryItemState();
 }
 
-class _StoryItemState extends ConsumerState<_StoryItem> with SingleTickerProviderStateMixin {
-  late AnimationController _pulseController;
-  late Animation<double> _pulseAnim;
-
-  @override
-  void initState() {
-    super.initState();
-    _pulseController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 1500),
-    )..repeat(reverse: true);
-    _pulseAnim = Tween<double>(begin: 1.0, end: 1.08).animate(
-      CurvedAnimation(parent: _pulseController, curve: Curves.easeInOut),
-    );
-  }
+class _StoryItemState extends ConsumerState<_StoryItem> {
 
   @override
   void dispose() {
-    _pulseController.dispose();
     super.dispose();
   }
 
@@ -207,38 +192,35 @@ class _StoryItemState extends ConsumerState<_StoryItem> with SingleTickerProvide
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       child: Column(
         children: [
-          ScaleTransition(
-            scale: _pulseAnim,
-            child: GestureDetector(
-              onTap: () => context.push(
-                '/story/view/${widget.userId}',
-                extra: {'userName': displayName, 'userAvatar': displayAvatar},
+          GestureDetector(
+            onTap: () => context.push(
+              '/story/view/${widget.userId}',
+              extra: {'userName': displayName, 'userAvatar': displayAvatar},
+            ),
+            child: Container(
+              width: 68,
+              height: 68,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                gradient: AppTheme.primaryGradient,
+                boxShadow: [
+                  BoxShadow(
+                    color: AppTheme.primaryBlue.withOpacity(0.3),
+                    blurRadius: 10,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
               ),
+              padding: const EdgeInsets.all(2.5),
               child: Container(
-                width: 68,
-                height: 68,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  gradient: AppTheme.primaryGradient,
-                  boxShadow: [
-                    BoxShadow(
-                      color: AppTheme.primaryBlue.withOpacity(0.3),
-                      blurRadius: 10,
-                      offset: const Offset(0, 4),
-                    ),
-                  ],
+                  color: widget.isDark ? AppTheme.darkBg : Colors.white,
                 ),
-                padding: const EdgeInsets.all(2.5),
-                child: Container(
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: widget.isDark ? AppTheme.darkBg : Colors.white,
-                  ),
-                  padding: const EdgeInsets.all(2),
-                  child: CircleAvatar(
-                    radius: 30,
-                    backgroundImage: CachedNetworkImageProvider(displayAvatar, maxWidth: 150, maxHeight: 150),
-                  ),
+                padding: const EdgeInsets.all(2),
+                child: CircleAvatar(
+                  radius: 30,
+                  backgroundImage: CachedNetworkImageProvider(displayAvatar, maxWidth: 150, maxHeight: 150),
                 ),
               ),
             ),

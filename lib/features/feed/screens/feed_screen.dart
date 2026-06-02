@@ -45,6 +45,7 @@ class _FeedScreenState extends ConsumerState<FeedScreen> {
             },
             color: AppTheme.primaryBlue,
             child: CustomScrollView(
+              cacheExtent: 2000,
               physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
               slivers: [
                 _buildAppBar(context, isDark, currentUser, ref),
@@ -121,6 +122,7 @@ class _FeedScreenState extends ConsumerState<FeedScreen> {
                         );
                       },
                       childCount: posts.length,
+                      addRepaintBoundaries: false,
                     ),
                   ),
                   if (posts.isEmpty && !postsStream.hasError)
