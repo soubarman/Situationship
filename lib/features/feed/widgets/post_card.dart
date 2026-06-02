@@ -181,44 +181,38 @@ class _PostCardState extends ConsumerState<PostCard>
               ),
             ],
           ),
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(27),
-            child: BackdropFilter(
-              filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
-              child: Container(
-                decoration: BoxDecoration(
-                  color: isDark
-                      ? const Color(0xFF1A1035).withOpacity(0.55)
-                      : Colors.white.withOpacity(0.45),
-                  borderRadius: BorderRadius.circular(27),
-                  border: Border.all(
-                    color: isDark
-                        ? Colors.white.withOpacity(0.10)
-                        : Colors.white.withOpacity(0.70),
-                    width: 1.0,
-                  ),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    _buildHeader(isDark, displayName, displayAvatar),
-                    if (widget.post.mood != null && widget.post.imageUrl != null)
-                      _buildMoodBadge(isDark),
-                    if (widget.post.caption.isNotEmpty &&
-                        widget.post.caption != widget.post.mood)
-                      _buildCaption(isDark),
-                    if (widget.post.imageUrl != null) _buildImage(),
-                    if (widget.post.imageUrl == null &&
-                        widget.post.mood != null &&
-                        (widget.post.caption.isEmpty ||
-                            widget.post.caption == widget.post.mood))
-                      _buildMoodHero(isDark),
-                    _buildActions(isDark),
-                    if (widget.post.commentCount > 0)
-                      _buildRecentComment(isDark),
-                  ],
-                ),
+          child: Container(
+            decoration: BoxDecoration(
+              color: isDark
+                  ? const Color(0xFF1A1035).withOpacity(0.55)
+                  : Colors.white.withOpacity(0.45),
+              borderRadius: BorderRadius.circular(27),
+              border: Border.all(
+                color: isDark
+                    ? Colors.white.withOpacity(0.10)
+                    : Colors.white.withOpacity(0.70),
+                width: 1.0,
               ),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _buildHeader(isDark, displayName, displayAvatar),
+                if (widget.post.mood != null && widget.post.imageUrl != null)
+                  _buildMoodBadge(isDark),
+                if (widget.post.caption.isNotEmpty &&
+                    widget.post.caption != widget.post.mood)
+                  _buildCaption(isDark),
+                if (widget.post.imageUrl != null) _buildImage(),
+                if (widget.post.imageUrl == null &&
+                    widget.post.mood != null &&
+                    (widget.post.caption.isEmpty ||
+                        widget.post.caption == widget.post.mood))
+                  _buildMoodHero(isDark),
+                _buildActions(isDark),
+                if (widget.post.commentCount > 0)
+                  _buildRecentComment(isDark),
+              ],
             ),
           ),
         ),
