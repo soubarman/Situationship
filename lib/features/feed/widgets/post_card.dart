@@ -143,81 +143,48 @@ class _PostCardState extends ConsumerState<PostCard>
 
     // RepaintBoundary isolates each card — a like/reaction on one card
     // won't trigger a repaint of every other visible card.
-    // BackgroundOrbs is also in a RepaintBoundary, so BackdropFilter here
-    // samples a cached GPU layer rather than recompositing live — glass
-    // look preserved with meaningfully better scroll performance.
-    return RepaintBoundary(
-      child: Container(
-        margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
         decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(28),
-          // Neon-tinted gradient border for premium glass look
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [
-              Colors.white.withOpacity(isDark ? 0.18 : 0.55),
-              Colors.white.withOpacity(isDark ? 0.04 : 0.18),
-            ],
+          color: isDark
+              ? const Color(0xFF1A1035).withOpacity(0.55)
+              : Colors.white.withOpacity(0.45),
+          borderRadius: BorderRadius.circular(24),
+          border: Border.all(
+            color: isDark
+                ? Colors.white.withOpacity(0.15)
+                : Colors.white.withOpacity(0.60),
+            width: 1.2,
           ),
-        ),
-        child: Container(
-          margin: const EdgeInsets.all(1.0),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(27),
-            boxShadow: [
-              BoxShadow(
-                color: (isDark
-                        ? const Color(0xFF6C63FF)
-                        : const Color(0xFF3B82F6))
-                    .withOpacity(0.10),
-                blurRadius: 24,
-                offset: const Offset(0, 8),
-              ),
-              BoxShadow(
-                color: Colors.black.withOpacity(isDark ? 0.30 : 0.08),
-                blurRadius: 16,
-                offset: const Offset(0, 4),
-              ),
-            ],
-          ),
-          child: Container(
-            decoration: BoxDecoration(
-              color: isDark
-                  ? const Color(0xFF1A1035).withOpacity(0.55)
-                  : Colors.white.withOpacity(0.45),
-              borderRadius: BorderRadius.circular(27),
-              border: Border.all(
-                color: isDark
-                    ? Colors.white.withOpacity(0.10)
-                    : Colors.white.withOpacity(0.70),
-                width: 1.0,
-              ),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(isDark ? 0.20 : 0.06),
+              blurRadius: 12,
+              offset: const Offset(0, 4),
             ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                _buildHeader(isDark, displayName, displayAvatar),
-                if (widget.post.mood != null && widget.post.imageUrl != null)
-                  _buildMoodBadge(isDark),
-                if (widget.post.caption.isNotEmpty &&
-                    widget.post.caption != widget.post.mood)
-                  _buildCaption(isDark),
-                if (widget.post.imageUrl != null) _buildImage(),
-                if (widget.post.imageUrl == null &&
-                    widget.post.mood != null &&
-                    (widget.post.caption.isEmpty ||
-                        widget.post.caption == widget.post.mood))
-                  _buildMoodHero(isDark),
-                _buildActions(isDark),
-                if (widget.post.commentCount > 0)
-                  _buildRecentComment(isDark),
-              ],
-            ),
-          ),
+          ],
         ),
-      ),
-    );
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _buildHeader(isDark, displayName, displayAvatar),
+            if (widget.post.mood != null && widget.post.imageUrl != null)
+              _buildMoodBadge(isDark),
+            if (widget.post.caption.isNotEmpty &&
+                widget.post.caption != widget.post.mood)
+              _buildCaption(isDark),
+            if (widget.post.imageUrl != null) _buildImage(),
+            if (widget.post.imageUrl == null &&
+                widget.post.mood != null &&
+                (widget.post.caption.isEmpty ||
+                    widget.post.caption == widget.post.mood))
+              _buildMoodHero(isDark),
+            _buildActions(isDark),
+            if (widget.post.commentCount > 0)
+              _buildRecentComment(isDark),
+          ],
+        ),
+      );
   }
 
   Widget _buildHeader(bool isDark, String displayName, String displayAvatar) {
