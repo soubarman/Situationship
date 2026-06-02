@@ -121,10 +121,6 @@ class _FeedScreenState extends ConsumerState<FeedScreen> {
                         );
                       },
                       childCount: posts.length,
-                      // RepaintBoundary is handled inside PostCard itself.
-                      // Disabling the automatic one avoids double-wrapping.
-                      addRepaintBoundaries: false,
-                      addAutomaticKeepAlives: false,
                     ),
                   ),
                   if (posts.isEmpty && !postsStream.hasError)
