@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'dart:ui';
+import 'package:cached_network_image/cached_network_image.dart';
 import '../../../core/models/post_model.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/constants/app_constants.dart';
@@ -243,12 +244,14 @@ class _PostCardState extends ConsumerState<PostCard>
               ),
               child: ClipRRect(
                 borderRadius: BorderRadius.circular(14),
-                child: Image.network(
-                  displayAvatar,
+                child: CachedNetworkImage(
+                  imageUrl: displayAvatar,
                   width: 44,
                   height: 44,
                   fit: BoxFit.cover,
-                  errorBuilder: (context, _, __) => Container(
+                  memCacheWidth: 132, // 3x physical pixels
+                  memCacheHeight: 132,
+                  errorWidget: (context, url, error) => Container(
                     width: 44,
                     height: 44,
                     color: isDark ? Colors.white10 : Colors.black12,
@@ -402,18 +405,16 @@ class _PostCardState extends ConsumerState<PostCard>
                 child: AspectRatio(
                   aspectRatio: 1,
                   child: widget.post.imageUrl != null
-                      ? Image.network(
-                          widget.post.imageUrl!,
+                      ? CachedNetworkImage(
+                          imageUrl: widget.post.imageUrl!,
                           fit: BoxFit.cover,
-                          loadingBuilder: (context, child, progress) {
-                            if (progress == null) return child;
+                          memCacheWidth: 900, // Reasonable max width for feed images
+                          progressIndicatorBuilder: (context, url, progress) {
                             return Container(
                               color: Theme.of(context).colorScheme.surfaceContainerHighest,
                               child: Center(
                                 child: CircularProgressIndicator(
-                                  value: progress.expectedTotalBytes != null
-                                      ? progress.cumulativeBytesLoaded / progress.expectedTotalBytes!
-                                      : null,
+                                  value: progress.progress,
                                   strokeWidth: 2,
                                   color: AppTheme.primaryBlue,
                                 ),
@@ -745,7 +746,7 @@ class _PostCardState extends ConsumerState<PostCard>
                   children: [
                     CircleAvatar(
                       radius: 15,
-                      backgroundImage: NetworkImage(
+                      backgroundImage: CachedNetworkImageProvider(
                         comment.userAvatar ?? 'https://i.pravatar.cc/100?u=${comment.userId}',
                       ),
                       backgroundColor: isDark ? Colors.white10 : Colors.black12,
@@ -783,9 +784,11 @@ class _PostCardState extends ConsumerState<PostCard>
                                   constraints: const BoxConstraints(maxWidth: 80, maxHeight: 80),
                                   child: ClipRRect(
                                     borderRadius: BorderRadius.circular(10),
-                                    child: Image.network(
-                                      comment.text,
+                                    child: CachedNetworkImage(
+                                      imageUrl: comment.text,
                                       fit: BoxFit.cover,
+                                      memCacheWidth: 240,
+                                      memCacheHeight: 240,
                                     ),
                                   ),
                                 )

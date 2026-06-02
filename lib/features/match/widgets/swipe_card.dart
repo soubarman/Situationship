@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/models/user_model.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/providers/app_state_provider.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import '../../../core/utils/location_helper.dart';
 
 class SwipeCard extends ConsumerWidget {
@@ -51,11 +52,11 @@ class SwipeCard extends ConsumerWidget {
           fit: StackFit.expand,
           children: [
             // Profile image
-            Image.network(
-              user.avatarUrl ?? 'https://i.pravatar.cc/400?u=${user.id}',
+            CachedNetworkImage(
+              imageUrl: user.avatarUrl ?? 'https://i.pravatar.cc/400?u=${user.id}',
               fit: BoxFit.cover,
-              loadingBuilder: (context, child, progress) {
-                if (progress == null) return child;
+              memCacheWidth: 900,
+              progressIndicatorBuilder: (context, url, progress) {
                 return Container(
                   decoration: BoxDecoration(
                     gradient: LinearGradient(
@@ -67,8 +68,9 @@ class SwipeCard extends ConsumerWidget {
                       ],
                     ),
                   ),
-                  child: const Center(
+                  child: Center(
                     child: CircularProgressIndicator(
+                      value: progress.progress,
                       color: Colors.white,
                       strokeWidth: 2,
                     ),

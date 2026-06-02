@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import '../../../core/models/user_model.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/providers/app_state_provider.dart';
@@ -455,12 +456,13 @@ class _LikedMeCardState extends ConsumerState<_LikedMeCard> {
                           imageFilter:
                               ImageFilter.blur(sigmaX: 14, sigmaY: 14),
                           child: user.avatarUrl != null
-                              ? Image.network(
-                                  user.avatarUrl!,
+                              ? CachedNetworkImage(
+                                  imageUrl: user.avatarUrl!,
                                   width: 62,
                                   height: 62,
                                   fit: BoxFit.cover,
-                                  errorBuilder: (_, __, ___) =>
+                                  memCacheWidth: 186,
+                                  errorWidget: (_, __, ___) =>
                                       _blurFallback(isDark),
                                 )
                               : _blurFallback(isDark),
@@ -683,12 +685,13 @@ class _LikedMeCardState extends ConsumerState<_LikedMeCard> {
                           child: ClipRRect(
                             borderRadius: BorderRadius.circular(16),
                             child: user.avatarUrl != null
-                                ? Image.network(
-                                    user.avatarUrl!,
+                                ? CachedNetworkImage(
+                                    imageUrl: user.avatarUrl!,
                                     width: 62,
                                     height: 62,
                                     fit: BoxFit.cover,
-                                    errorBuilder: (_, __, ___) =>
+                                    memCacheWidth: 186,
+                                    errorWidget: (_, __, ___) =>
                                         _blurFallback(isDark),
                                   )
                                 : _blurFallback(isDark),
