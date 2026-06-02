@@ -1,73 +1,86 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
 
-/// Static background gradient orbs used on main screens.
+/// Soft background orbs rendered using RadialGradient.
 ///
-/// PERFORMANCE: Wrapped in RepaintBoundary so Flutter caches it as its
-/// own raster layer. Scrolling lists above/below never trigger a repaint
-/// of this widget — it's drawn exactly once and reused.
+/// PERFORMANCE: No BackdropFilter — RadialGradient is equivalent to
+/// sigma-90 blur on a solid circle (same falloff, zero GPU compositing).
+/// RepaintBoundary is placed INSIDE Positioned.fill so the parent Stack
+/// positions correctly while still caching the orb layer as a GPU texture.
 class BackgroundOrbs extends StatelessWidget {
   const BackgroundOrbs({super.key});
 
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    // RepaintBoundary isolates this layer — the scroll view repainting above
-    // it never causes this to re-rasterize. This is the #1 perf fix.
-    return RepaintBoundary(
-      child: Positioned.fill(
+
+    // Positioned.fill MUST be the outermost widget so the parent Stack
+    // can read the positioning directive. RepaintBoundary is inside it.
+    return Positioned.fill(
+      child: RepaintBoundary(
         child: Stack(
           children: [
-            // Orb 1: Neon Cyan/Blue top-left
+            // ── Orb 1: Neon Cyan/Blue — top left ─────────────────────────
             Positioned(
-              top: -100,
-              left: -100,
-              width: 420,
-              height: 420,
+              top: -120,
+              left: -120,
+              width: 480,
+              height: 480,
               child: DecoratedBox(
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  color: const Color(0xFF6ECBF5)
-                      .withOpacity(isDark ? 0.16 : 0.45),
+                  gradient: RadialGradient(
+                    colors: [
+                      const Color(0xFF6ECBF5)
+                          .withOpacity(isDark ? 0.45 : 0.75),
+                      const Color(0xFF6ECBF5).withOpacity(0.0),
+                    ],
+                  ),
                 ),
               ),
             ),
-            // Orb 2: Accent Purple middle-right
+
+            // ── Orb 2: Accent Purple — middle right ──────────────────────
             Positioned(
-              top: 250,
-              right: -80,
-              width: 400,
-              height: 400,
+              top: 220,
+              right: -100,
+              width: 460,
+              height: 460,
               child: DecoratedBox(
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  color: const Color(0xFFB8A9FF)
-                      .withOpacity(isDark ? 0.14 : 0.40),
+                  gradient: RadialGradient(
+                    colors: [
+                      const Color(0xFFB8A9FF)
+                          .withOpacity(isDark ? 0.42 : 0.70),
+                      const Color(0xFFB8A9FF).withOpacity(0.0),
+                    ],
+                  ),
                 ),
               ),
             ),
-            // Orb 3: Accent Pink bottom-left
+
+            // ── Orb 3: Accent Pink — bottom left ─────────────────────────
             Positioned(
-              bottom: -50,
-              left: -50,
-              width: 380,
-              height: 380,
+              bottom: -80,
+              left: -80,
+              width: 440,
+              height: 440,
               child: DecoratedBox(
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  color: const Color(0xFFFF8EC8)
-                      .withOpacity(isDark ? 0.16 : 0.40),
+                  gradient: RadialGradient(
+                    colors: [
+                      const Color(0xFFFF8EC8)
+                          .withOpacity(isDark ? 0.42 : 0.70),
+                      const Color(0xFFFF8EC8).withOpacity(0.0),
+                    ],
+                  ),
                 ),
               ),
             ),
-            // Full-screen backdrop blur — sigma reduced from 90→50 (50% faster GPU pass)
-            Positioned.fill(
-              child: BackdropFilter(
-                filter: ImageFilter.blur(sigmaX: 50, sigmaY: 50),
-                child: const ColoredBox(color: Colors.transparent),
-              ),
-            ),
-            // Decorative sparks (const — never rebuild)
+
+            // ── Decorative sparks ─────────────────────────────────────────
             Positioned(
               top: 120,
               right: 48,

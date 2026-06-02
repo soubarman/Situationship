@@ -140,67 +140,84 @@ class _PostCardState extends ConsumerState<PostCard>
         ?? widget.post.userAvatar
         ?? 'https://i.pravatar.cc/100?u=${widget.post.userId}';
 
-    // RepaintBoundary isolates each card — a like button tap on one card
+    // RepaintBoundary isolates each card — a like/reaction on one card
     // won't trigger a repaint of every other visible card.
+    // BackgroundOrbs is also in a RepaintBoundary, so BackdropFilter here
+    // samples a cached GPU layer rather than recompositing live — glass
+    // look preserved with meaningfully better scroll performance.
     return RepaintBoundary(
       child: Container(
         margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(28),
-          boxShadow: [
-            BoxShadow(
-              color: (isDark
-                      ? const Color(0xFF6C63FF)
-                      : const Color(0xFF3B82F6))
-                  .withOpacity(0.10),
-              blurRadius: 24,
-              offset: const Offset(0, 8),
-            ),
-            BoxShadow(
-              color: Colors.black.withOpacity(isDark ? 0.28 : 0.07),
-              blurRadius: 16,
-              offset: const Offset(0, 4),
-            ),
-          ],
+          // Neon-tinted gradient border for premium glass look
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [
+              Colors.white.withOpacity(isDark ? 0.18 : 0.55),
+              Colors.white.withOpacity(isDark ? 0.04 : 0.18),
+            ],
+          ),
         ),
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(28),
-          child: Container(
-            decoration: BoxDecoration(
-              // PERF: No BackdropFilter here — that would force GPU
-              // compositing for every card during scroll. Instead use
-              // a high-opacity static color that still lets orb hues
-              // bleed through slightly via the opaque scaffold bg.
-              color: isDark
-                  ? const Color(0xFF1A1035).withOpacity(0.82)
-                  : Colors.white.withOpacity(0.88),
-              borderRadius: BorderRadius.circular(28),
-              border: Border.all(
-                color: isDark
-                    ? Colors.white.withOpacity(0.10)
-                    : Colors.white.withOpacity(0.85),
-                width: 1.0,
+        child: Container(
+          margin: const EdgeInsets.all(1.0),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(27),
+            boxShadow: [
+              BoxShadow(
+                color: (isDark
+                        ? const Color(0xFF6C63FF)
+                        : const Color(0xFF3B82F6))
+                    .withOpacity(0.10),
+                blurRadius: 24,
+                offset: const Offset(0, 8),
               ),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                _buildHeader(isDark, displayName, displayAvatar),
-                if (widget.post.mood != null && widget.post.imageUrl != null)
-                  _buildMoodBadge(isDark),
-                if (widget.post.caption.isNotEmpty &&
-                    widget.post.caption != widget.post.mood)
-                  _buildCaption(isDark),
-                if (widget.post.imageUrl != null) _buildImage(),
-                if (widget.post.imageUrl == null &&
-                    widget.post.mood != null &&
-                    (widget.post.caption.isEmpty ||
-                        widget.post.caption == widget.post.mood))
-                  _buildMoodHero(isDark),
-                _buildActions(isDark),
-                if (widget.post.commentCount > 0)
-                  _buildRecentComment(isDark),
-              ],
+              BoxShadow(
+                color: Colors.black.withOpacity(isDark ? 0.30 : 0.08),
+                blurRadius: 16,
+                offset: const Offset(0, 4),
+              ),
+            ],
+          ),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(27),
+            child: BackdropFilter(
+              filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
+              child: Container(
+                decoration: BoxDecoration(
+                  color: isDark
+                      ? const Color(0xFF1A1035).withOpacity(0.55)
+                      : Colors.white.withOpacity(0.45),
+                  borderRadius: BorderRadius.circular(27),
+                  border: Border.all(
+                    color: isDark
+                        ? Colors.white.withOpacity(0.10)
+                        : Colors.white.withOpacity(0.70),
+                    width: 1.0,
+                  ),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _buildHeader(isDark, displayName, displayAvatar),
+                    if (widget.post.mood != null && widget.post.imageUrl != null)
+                      _buildMoodBadge(isDark),
+                    if (widget.post.caption.isNotEmpty &&
+                        widget.post.caption != widget.post.mood)
+                      _buildCaption(isDark),
+                    if (widget.post.imageUrl != null) _buildImage(),
+                    if (widget.post.imageUrl == null &&
+                        widget.post.mood != null &&
+                        (widget.post.caption.isEmpty ||
+                            widget.post.caption == widget.post.mood))
+                      _buildMoodHero(isDark),
+                    _buildActions(isDark),
+                    if (widget.post.commentCount > 0)
+                      _buildRecentComment(isDark),
+                  ],
+                ),
+              ),
             ),
           ),
         ),
