@@ -370,7 +370,6 @@ class _PostCardState extends ConsumerState<PostCard>
                           imageUrl: widget.post.imageUrl!,
                           fit: BoxFit.cover,
                           memCacheWidth: 600, // Reasonable max width for feed images
-                          memCacheHeight: 600,
                           progressIndicatorBuilder: (context, url, progress) {
                             return Container(
                               color: Theme.of(context).colorScheme.surfaceContainerHighest,

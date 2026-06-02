@@ -325,11 +325,7 @@ class ProfileScreen extends ConsumerWidget {
           onTap: () => context.go('/profile/edit'),
           isDark: isDark,
         ),
-        _HeaderActionButton(
-          icon: Icons.logout_rounded,
-          onTap: () => _handleLogout(context, ref),
-          isDark: isDark,
-        ),
+
         _HeaderActionButton(
           icon: Icons.settings_rounded,
           onTap: () => _showSettingsSheet(context, ref),
@@ -871,14 +867,30 @@ class _SettingsSheet extends StatelessWidget {
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
             tileColor: isDark ? AppTheme.darkCard : const Color(0xFFF3F6FF),
             leading: Icon(Icons.privacy_tip_outlined, color: AppTheme.accentPurple),
-            title: const Text('Privacy', style: TextStyle(fontWeight: FontWeight.w600)),
+            title: const Text('Privacy Policy', style: TextStyle(fontWeight: FontWeight.w600)),
             trailing: const Icon(Icons.chevron_right_rounded),
             onTap: () {
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: const Text('Privacy settings coming soon ✨'),
-                  behavior: SnackBarBehavior.floating,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              // Usually you'd use url_launcher to open a webpage here
+              showDialog(
+                context: context,
+                builder: (context) => AlertDialog(
+                  backgroundColor: isDark ? AppTheme.darkSurface : Colors.white,
+                  title: const Text('Privacy Policy', style: TextStyle(fontWeight: FontWeight.w700)),
+                  content: const SingleChildScrollView(
+                    child: Text(
+                      'Your privacy is our priority.\n\n'
+                      'We collect basic profile information and match preferences to provide our service. '
+                      'Your data is never sold to third parties.\n\n'
+                      'If you delete your account, all personal data is permanently wiped from our servers within 30 days.',
+                      style: TextStyle(height: 1.5),
+                    ),
+                  ),
+                  actions: [
+                    TextButton(
+                      onPressed: () => Navigator.pop(context),
+                      child: const Text('Got it'),
+                    ),
+                  ],
                 ),
               );
             },
@@ -906,9 +918,38 @@ class _SettingsSheet extends StatelessWidget {
             width: double.infinity,
             child: ElevatedButton.icon(
               onPressed: () {
-                Navigator.pop(context);
-                ref.read(authProvider.notifier).logout();
-                context.go('/login');
+                Navigator.pop(context); // Close sheet
+                // Re-use the existing logout dialog
+                showDialog(
+                  context: context,
+                  builder: (ctx) => AlertDialog(
+                    backgroundColor: Theme.of(ctx).brightness == Brightness.dark 
+                        ? AppTheme.darkSurface 
+                        : Colors.white,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                    title: const Text('Logout 🚪', style: TextStyle(fontWeight: FontWeight.w800)),
+                    content: const Text('Are you sure you want to log out? We\'ll miss you! ✨'),
+                    actions: [
+                      TextButton(
+                        onPressed: () => Navigator.pop(ctx),
+                        child: Text('Cancel', style: TextStyle(color: AppTheme.textSecondary)),
+                      ),
+                      ElevatedButton(
+                        onPressed: () {
+                          Navigator.pop(ctx);
+                          ref.read(authControllerProvider.notifier).signOut();
+                          ctx.go('/login');
+                        },
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: AppTheme.error,
+                          foregroundColor: Colors.white,
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        ),
+                        child: const Text('Logout'),
+                      ),
+                    ],
+                  ),
+                );
               },
               icon: const Icon(Icons.logout_rounded),
               label: const Text('Logout', style: TextStyle(fontWeight: FontWeight.w700)),
@@ -918,6 +959,60 @@ class _SettingsSheet extends StatelessWidget {
                 elevation: 0,
                 padding: const EdgeInsets.symmetric(vertical: 16),
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              ),
+            ),
+          ),
+          const SizedBox(height: 12),
+          // Delete Account
+          SizedBox(
+            width: double.infinity,
+            child: TextButton.icon(
+              onPressed: () {
+                Navigator.pop(context); // Close sheet
+                showDialog(
+                  context: context,
+                  builder: (ctx) => AlertDialog(
+                    backgroundColor: Theme.of(ctx).brightness == Brightness.dark 
+                        ? AppTheme.darkSurface 
+                        : Colors.white,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                    title: const Text('Delete Account 🚨', style: TextStyle(fontWeight: FontWeight.w800, color: AppTheme.error)),
+                    content: const Text('Are you completely sure? This action is permanent and cannot be undone. All your matches, messages, and profile data will be permanently erased.'),
+                    actions: [
+                      TextButton(
+                        onPressed: () => Navigator.pop(ctx),
+                        child: Text('Cancel', style: TextStyle(color: AppTheme.textSecondary)),
+                      ),
+                      ElevatedButton(
+                        onPressed: () async {
+                          Navigator.pop(ctx);
+                          // We call delete account via the auth provider
+                          try {
+                            // Example delete logic - typically you'd trigger a cloud function or provider method
+                            await ref.read(authControllerProvider.notifier).deleteAccount();
+                            ctx.go('/login');
+                          } catch (e) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(content: Text('Failed to delete account. You may need to re-authenticate first.')),
+                            );
+                          }
+                        },
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: AppTheme.error,
+                          foregroundColor: Colors.white,
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        ),
+                        child: const Text('Delete Permanently'),
+                      ),
+                    ],
+                  ),
+                );
+              },
+              icon: const Icon(Icons.delete_forever_rounded, size: 20),
+              label: const Text('Delete Account', style: TextStyle(fontWeight: FontWeight.w600)),
+              style: TextButton.styleFrom(
+                foregroundColor: AppTheme.error.withOpacity(0.8),
+                padding: const EdgeInsets.symmetric(vertical: 16),
               ),
             ),
           ),

@@ -224,6 +224,26 @@ class AuthController extends StateNotifier<AsyncValue<User?>> {
     }
   }
 
+  // ── Delete Account ──────────────────────────────────────────────────────────
+
+  Future<void> deleteAccount() async {
+    final user = _auth.currentUser;
+    if (user != null) {
+      state = const AsyncValue.loading();
+      try {
+        await _db.collection('users').doc(user.uid).delete();
+        await user.delete();
+        state = const AsyncValue.data(null);
+      } on FirebaseAuthException catch (e) {
+        state = AsyncValue.data(user);
+        throw _mapFirebaseError(e);
+      } catch (e) {
+        state = AsyncValue.data(user);
+        throw Exception('Failed to delete account');
+      }
+    }
+  }
+
   // ── Sign Out ────────────────────────────────────────────────────────────────
 
   Future<void> signOut() async {
