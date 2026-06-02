@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'core/router/app_router.dart';
 import 'package:firebase_core/firebase_core.dart';
@@ -12,12 +13,32 @@ import 'core/models/user_model.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // ── Lock orientation (avoids expensive relayout on rotation) ───────────────
+  await SystemChrome.setPreferredOrientations([
+    DeviceOrientation.portraitUp,
+    DeviceOrientation.portraitDown,
+  ]);
+
+  // ── Edge-to-edge + transparent system bars ─────────────────────────────────
+  // Transparent bars eliminate colour-mismatch jank at screen edges and allow
+  // the neon orb gradient to extend behind the status / nav bars.
+  SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
+    statusBarColor: Colors.transparent,
+    statusBarIconBrightness: Brightness.light,
+    systemNavigationBarColor: Colors.transparent,
+    systemNavigationBarDividerColor: Colors.transparent,
+  ));
+  SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
+
   await Firebase.initializeApp(
     options: DefaultFirebaseOptions.currentPlatform,
   );
 
-  // Enable Firestore offline caching — data loads instantly from cache on repeat visits.
-  FirebaseFirestore.instanceFor(app: Firebase.app(), databaseId: 'default').settings = const Settings(
+  // ── Firestore offline cache ─────────────────────────────────────────────────
+  // Data loads instantly from cache on repeat visits — no loading spinner jank.
+  FirebaseFirestore.instanceFor(app: Firebase.app(), databaseId: 'default')
+      .settings = const Settings(
     persistenceEnabled: true,
     cacheSizeBytes: Settings.CACHE_SIZE_UNLIMITED,
   );
@@ -44,6 +65,15 @@ class SituationshipApp extends ConsumerWidget {
       darkTheme: AppTheme.darkTheme,
       themeMode: themeMode,
       routerConfig: router,
+      // Lock text scale factor — prevents mid-session font-size jank
+      builder: (context, child) => MediaQuery(
+        data: MediaQuery.of(context).copyWith(
+          textScaler: TextScaler.linear(
+            MediaQuery.of(context).textScaleFactor.clamp(0.85, 1.15),
+          ),
+        ),
+        child: child!,
+      ),
     );
   }
 }
