@@ -14,8 +14,7 @@ import '../../../core/providers/firestore_provider.dart';
 import '../../../core/models/comment_model.dart';
 import '../screens/comments_screen.dart';
 import '../screens/edit_post_screen.dart';
-import 'package:zoom_pinch_overlay/zoom_pinch_overlay.dart';
-
+import '../../../core/widgets/full_screen_image_viewer.dart';
 class PostCard extends ConsumerStatefulWidget {
   final PostModel post;
   final VoidCallback onLike;
@@ -367,25 +366,36 @@ class _PostCardState extends ConsumerState<PostCard>
                 child: AspectRatio(
                   aspectRatio: 1,
                   child: widget.post.imageUrl != null
-                      ? ZoomOverlay(
-                          minScale: 0.5,
-                          maxScale: 4.0,
-                          child: CachedNetworkImage(
-                            imageUrl: widget.post.imageUrl!,
-                            fit: BoxFit.cover,
-                            memCacheWidth: 600, // Reasonable max width for feed images
-                            progressIndicatorBuilder: (context, url, progress) {
-                              return Container(
-                                color: Theme.of(context).colorScheme.surfaceContainerHighest,
-                                child: Center(
-                                  child: CircularProgressIndicator(
-                                    value: progress.progress,
-                                    strokeWidth: 2,
-                                    color: AppTheme.primaryBlue,
-                                  ),
+                      ? GestureDetector(
+                          onTap: () {
+                            Navigator.of(context).push(
+                              MaterialPageRoute(
+                                builder: (context) => FullScreenImageViewer(
+                                  imageUrl: widget.post.imageUrl!,
+                                  heroTag: '${widget.post.id}_image',
                                 ),
-                              );
-                            },
+                              ),
+                            );
+                          },
+                          child: Hero(
+                            tag: '${widget.post.id}_image',
+                            child: CachedNetworkImage(
+                              imageUrl: widget.post.imageUrl!,
+                              fit: BoxFit.cover,
+                              memCacheWidth: 600, // Reasonable max width for feed images
+                              progressIndicatorBuilder: (context, url, progress) {
+                                return Container(
+                                  color: Theme.of(context).colorScheme.surfaceContainerHighest,
+                                  child: Center(
+                                    child: CircularProgressIndicator(
+                                      value: progress.progress,
+                                      strokeWidth: 2,
+                                      color: AppTheme.primaryBlue,
+                                    ),
+                                  ),
+                                );
+                              },
+                            ),
                           ),
                         )
                       : Container(
