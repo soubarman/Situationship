@@ -1350,7 +1350,7 @@ class _UserDetailScreenState extends ConsumerState<UserDetailScreen> {
     if (existingChat != null) {
       if (existingChat.status == 'accepted') {
         return _buildStatusBanner('Chat Request Accepted! 💬', AppTheme.primaryBlue, isDark, () {
-          context.go('/chats/${existingChat.id}', extra: {
+          context.push('/chats/${existingChat.id}', extra: {
             'otherUserId': targetUser.id,
             'name': targetUser.name,
             'avatarUrl': targetUser.avatarUrl,

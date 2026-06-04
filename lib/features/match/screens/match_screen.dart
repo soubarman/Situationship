@@ -164,17 +164,6 @@ class _MatchScreenState extends ConsumerState<MatchScreen>
                                   _deviceLat == null)
                                 _buildLocationAlertBanner(),
 
-                              // Nearby Souls Section
-                              _buildSectionHeaderWithIcon(
-                                icon: Icons.location_on,
-                                iconColor: const Color(0xFFFF7A59),
-                                title: 'Nearby Souls',
-                                titleColor: const Color(0xFF6B4EE6),
-                              ),
-                              _buildNearbyList(nearbyUsers),
-
-                              const SizedBox(height: 10),
-
                               // Swipe to Match Section
                               _buildSectionHeaderWithIcon(
                                 icon: Icons.explore_rounded,
@@ -212,6 +201,17 @@ class _MatchScreenState extends ConsumerState<MatchScreen>
                                   }
                                 },
                               ),
+
+                              const SizedBox(height: 24),
+
+                              // Nearby Souls Section
+                              _buildSectionHeaderWithIcon(
+                                icon: Icons.location_on,
+                                iconColor: const Color(0xFFFF7A59),
+                                title: 'Nearby Souls',
+                                titleColor: const Color(0xFF6B4EE6),
+                              ),
+                              _buildNearbyList(nearbyUsers),
                               const SizedBox(height: 100),
                             ],
                           ),
@@ -449,10 +449,10 @@ class _MatchScreenState extends ConsumerState<MatchScreen>
   }
 
   Widget _buildNearbyList(List<UserModel> users) {
-    if (users.isEmpty) return const SizedBox(height: 240, child: Center(child: Text('No users nearby')));
+    if (users.isEmpty) return const SizedBox(height: 140, child: Center(child: Text('No users nearby')));
     
     return SizedBox(
-      height: 260,
+      height: 160,
       child: ListView.builder(
         padding: const EdgeInsets.symmetric(horizontal: 14),
         scrollDirection: Axis.horizontal,
@@ -710,7 +710,7 @@ class _NearbyCard extends ConsumerWidget {
     return GestureDetector(
       onTap: () => context.push('/profile/view/${user.id}'),
       child: Container(
-        width: 180,
+        width: 110,
         margin: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(28),
@@ -761,7 +761,7 @@ class _NearbyCard extends ConsumerWidget {
                       '${user.name}, ${user.age}',
                       style: const TextStyle(
                         color: Colors.white,
-                        fontSize: 18,
+                        fontSize: 14,
                         fontWeight: FontWeight.w900,
                         letterSpacing: -0.5,
                       ),
@@ -783,7 +783,7 @@ class _NearbyCard extends ConsumerWidget {
                           const SizedBox(width: 3),
                           Text(
                             '$distance km',
-                            style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w700),
+                            style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.w700),
                           ),
                         ],
                       ),

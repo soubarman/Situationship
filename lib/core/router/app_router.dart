@@ -140,21 +140,21 @@ final appRouterProvider = Provider<GoRouter>((ref) {
             ],
           ),
           GoRoute(
-            path: '/profile',
-            name: 'profile',
-            builder: (context, state) => const ProfileScreen(),
-            routes: [
-              GoRoute(
-                path: 'edit',
-                name: 'edit-profile',
-                builder: (context, state) => const EditProfileScreen(),
-              ),
-            ],
-          ),
-          GoRoute(
             path: '/communities',
             name: 'communities',
             builder: (context, state) => const CommunitiesScreen(),
+          ),
+        ],
+      ),
+      GoRoute(
+        path: '/profile',
+        name: 'profile',
+        builder: (context, state) => const ProfileScreen(),
+        routes: [
+          GoRoute(
+            path: 'edit',
+            name: 'edit-profile',
+            builder: (context, state) => const EditProfileScreen(),
           ),
         ],
       ),

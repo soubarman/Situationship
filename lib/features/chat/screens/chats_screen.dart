@@ -212,7 +212,7 @@ class _ChatsScreenState extends ConsumerState<ChatsScreen> with SingleTickerProv
             child: GestureDetector(
               onTap: () {
                 ref.read(chatsProvider.notifier).markRead(chat.id);
-                context.go('/chats/${chat.id}', extra: {
+                context.push('/chats/${chat.id}', extra: {
                   'name': chat.otherUserName,
                   'avatarUrl': chat.otherUserAvatar,
                   'isOnline': chat.otherUserIsOnline,
@@ -370,7 +370,7 @@ class _ChatTile extends ConsumerWidget {
     return GestureDetector(
       onTap: (isExpired || isRequest)
           ? null
-          : () => context.go(
+          : () => context.push(
                 '/chats/${chat.id}',
                 extra: {
                   'name': chat.otherUserName,

@@ -17,6 +17,9 @@ import '../../../core/models/notification_model.dart';
 import '../../../core/providers/firestore_provider.dart';
 import '../../../shared/widgets/background_orbs.dart';
 
+// false = All Stories, true = Following Only
+final storiesFilterProvider = StateProvider<bool>((ref) => false);
+
 class FeedScreen extends ConsumerStatefulWidget {
   const FeedScreen({super.key});
 
@@ -215,6 +218,7 @@ class _FeedScreenState extends ConsumerState<FeedScreen> {
             );
           },
         ),
+
         IconButton(
           onPressed: () => context.push('/search'),
           icon: _GlassIcon(
@@ -227,7 +231,7 @@ class _FeedScreenState extends ConsumerState<FeedScreen> {
         Padding(
           padding: const EdgeInsets.only(right: 16),
           child: GestureDetector(
-            onTap: () => context.go('/profile'),
+            onTap: () => context.push('/profile'),
             child: Stack(
               children: [
                 Container(

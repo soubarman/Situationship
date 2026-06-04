@@ -31,9 +31,16 @@ class MainShell extends ConsumerWidget {
 
     final safeBottom = MediaQuery.of(context).padding.bottom;
 
-    return Scaffold(
-      extendBody: true,
-      body: child,
+    return PopScope(
+      canPop: currentIndex == 0,
+      onPopInvokedWithResult: (didPop, result) {
+        if (!didPop && currentIndex != 0) {
+          context.go('/feed');
+        }
+      },
+      child: Scaffold(
+        extendBody: true,
+        body: child,
       bottomNavigationBar: Padding(
         padding: EdgeInsets.fromLTRB(20, 0, 20, 16 + safeBottom),
         child: ClipRRect(
@@ -87,6 +94,7 @@ class MainShell extends ConsumerWidget {
               ),
             ),
           ),
+        ),
         ),
       ),
     );

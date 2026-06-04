@@ -1,3 +1,4 @@
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -6,6 +7,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/providers/app_state_provider.dart';
 import '../../../core/models/user_model.dart';
+import '../screens/feed_screen.dart';
 
 class StoriesRow extends ConsumerWidget {
   const StoriesRow({super.key});
@@ -24,31 +26,89 @@ class StoriesRow extends ConsumerWidget {
             uniqueUsers[s['userId']] = s;
           }
           final currentUserId = FirebaseAuth.instance.currentUser?.uid;
+          final currentUser = ref.watch(currentUserProvider);
+          final isFollowingOnly = ref.watch(storiesFilterProvider);
           
           // Separate other users stories from current user's
           final otherUsersStories = uniqueUsers.values
-              .where((s) => s['userId'] != currentUserId)
+              .where((s) {
+                if (s['userId'] == currentUserId) return false;
+                if (isFollowingOnly && !currentUser.following.contains(s['userId'])) return false;
+                return true;
+              })
               .toList();
 
-          return ListView.builder(
-            scrollDirection: Axis.horizontal,
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            itemCount: otherUsersStories.length + 1,
-            itemBuilder: (context, index) {
-              if (index == 0) {
-                final currentUser = ref.watch(currentUserProvider);
-                final hasStory = currentUserId != null && uniqueUsers.containsKey(currentUserId);
-                return _buildAddStory(context, isDark, currentUser, hasStory);
-              }
-              
-              final story = otherUsersStories[index - 1];
-              return _StoryItem(
-                userId: story['userId'],
-                userName: story['userName'],
-                avatarUrl: story['userAvatar'],
-                isDark: isDark,
-              );
-            },
+          return Stack(
+            children: [
+              ListView.builder(
+                scrollDirection: Axis.horizontal,
+                padding: const EdgeInsets.only(left: 16, right: 80), // extra padding for the filter button
+                itemCount: otherUsersStories.length + 1,
+                itemBuilder: (context, index) {
+                  if (index == 0) {
+                    final hasStory = currentUserId != null && uniqueUsers.containsKey(currentUserId);
+                    return _buildAddStory(context, isDark, currentUser, hasStory);
+                  }
+                  
+                  final story = otherUsersStories[index - 1];
+                  return _StoryItem(
+                    userId: story['userId'],
+                    userName: story['userName'],
+                    avatarUrl: story['userAvatar'],
+                    isDark: isDark,
+                  );
+                },
+              ),
+              Positioned(
+                right: 16,
+                top: 20,
+                child: GestureDetector(
+                  onTap: () => ref.read(storiesFilterProvider.notifier).state = !isFollowingOnly,
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(20),
+                    child: BackdropFilter(
+                      filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                        decoration: BoxDecoration(
+                          color: isDark ? Colors.white.withOpacity(0.08) : Colors.white.withOpacity(0.4),
+                          borderRadius: BorderRadius.circular(20),
+                          border: Border.all(
+                            color: isDark ? Colors.white.withOpacity(0.12) : Colors.black.withOpacity(0.05),
+                            width: 0.8,
+                          ),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withOpacity(0.05),
+                              blurRadius: 10,
+                              offset: const Offset(0, 4),
+                            )
+                          ]
+                        ),
+                        child: Row(
+                          children: [
+                            Icon(
+                              isFollowingOnly ? Icons.group_rounded : Icons.public_rounded,
+                              size: 16,
+                              color: isFollowingOnly ? AppTheme.primaryBlue : (isDark ? Colors.white70 : Colors.black54),
+                            ),
+                            const SizedBox(width: 4),
+                            Text(
+                              isFollowingOnly ? 'Following' : 'All',
+                              style: TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.bold,
+                                color: isFollowingOnly ? AppTheme.primaryBlue : (isDark ? Colors.white70 : Colors.black54),
+                              ),
+                            )
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ],
           );
         },
         loading: () => const Center(child: CircularProgressIndicator()),

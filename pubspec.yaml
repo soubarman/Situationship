@@ -40,7 +40,7 @@ dependencies:
   shared_preferences: ^2.5.3
   http: ^1.2.1
   geolocator: ^14.0.2
-
+  zoom_pinch_overlay: ^1.4.3
 dev_dependencies:
   flutter_test:
     sdk: flutter

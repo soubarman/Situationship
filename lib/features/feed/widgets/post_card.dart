@@ -14,6 +14,7 @@ import '../../../core/providers/firestore_provider.dart';
 import '../../../core/models/comment_model.dart';
 import '../screens/comments_screen.dart';
 import '../screens/edit_post_screen.dart';
+import 'package:zoom_pinch_overlay/zoom_pinch_overlay.dart';
 
 class PostCard extends ConsumerStatefulWidget {
   final PostModel post;
@@ -366,22 +367,26 @@ class _PostCardState extends ConsumerState<PostCard>
                 child: AspectRatio(
                   aspectRatio: 1,
                   child: widget.post.imageUrl != null
-                      ? CachedNetworkImage(
-                          imageUrl: widget.post.imageUrl!,
-                          fit: BoxFit.cover,
-                          memCacheWidth: 600, // Reasonable max width for feed images
-                          progressIndicatorBuilder: (context, url, progress) {
-                            return Container(
-                              color: Theme.of(context).colorScheme.surfaceContainerHighest,
-                              child: Center(
-                                child: CircularProgressIndicator(
-                                  value: progress.progress,
-                                  strokeWidth: 2,
-                                  color: AppTheme.primaryBlue,
+                      ? ZoomOverlay(
+                          minScale: 0.5,
+                          maxScale: 4.0,
+                          child: CachedNetworkImage(
+                            imageUrl: widget.post.imageUrl!,
+                            fit: BoxFit.cover,
+                            memCacheWidth: 600, // Reasonable max width for feed images
+                            progressIndicatorBuilder: (context, url, progress) {
+                              return Container(
+                                color: Theme.of(context).colorScheme.surfaceContainerHighest,
+                                child: Center(
+                                  child: CircularProgressIndicator(
+                                    value: progress.progress,
+                                    strokeWidth: 2,
+                                    color: AppTheme.primaryBlue,
+                                  ),
                                 ),
-                              ),
-                            );
-                          },
+                              );
+                            },
+                          ),
                         )
                       : Container(
                           color: Theme.of(context).colorScheme.surfaceContainerHighest,
@@ -474,29 +479,45 @@ class _PostCardState extends ConsumerState<PostCard>
             padding: const EdgeInsets.fromLTRB(20, 12, 20, 8),
             child: Row(
               children: [
-                if (reactionCount > 0) ...[
-                  Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: () {
-                      final Set<String> activeEmojis = {};
-                      if (widget.post.likes.isNotEmpty) {
-                        activeEmojis.add('👍');
-                      }
-                      activeEmojis.addAll(widget.post.reactions.values);
-                      return activeEmojis.toList().take(3).map((emoji) {
-                        return Padding(
-                          padding: const EdgeInsets.only(right: 2.0),
-                          child: _buildEmojiImage(emoji, size: 16),
-                        );
-                      }).toList();
-                    }(),
+                if (reactionCount > 0)
+                  GestureDetector(
+                    onTap: () {
+                      showModalBottomSheet(
+                        context: context,
+                        useRootNavigator: true,
+                        isScrollControlled: true,
+                        backgroundColor: Colors.transparent,
+                        builder: (_) => _LikesSheet(userIds: uniqueReactors),
+                      );
+                    },
+                    behavior: HitTestBehavior.opaque,
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: () {
+                            final Set<String> activeEmojis = {};
+                            if (widget.post.likes.isNotEmpty) {
+                              activeEmojis.add('👍');
+                            }
+                            activeEmojis.addAll(widget.post.reactions.values);
+                            return activeEmojis.toList().take(3).map((emoji) {
+                              return Padding(
+                                padding: const EdgeInsets.only(right: 2.0),
+                                child: _buildEmojiImage(emoji, size: 16),
+                              );
+                            }).toList();
+                          }(),
+                        ),
+                        const SizedBox(width: 6),
+                        Text(
+                          _formatCount(reactionCount),
+                          style: TextStyle(fontSize: 13, color: isDark ? Colors.white60 : Colors.black54, fontWeight: FontWeight.bold),
+                        ),
+                      ],
+                    ),
                   ),
-                  const SizedBox(width: 6),
-                  Text(
-                    _formatCount(reactionCount),
-                    style: TextStyle(fontSize: 13, color: isDark ? Colors.white60 : Colors.black54, fontWeight: FontWeight.bold),
-                  ),
-                ],
                 const Spacer(),
                 if (widget.post.commentCount > 0)
                   Text(
@@ -1913,6 +1934,105 @@ Widget _buildEmojiImage(String emoji, {double size = 20}) {
         fontSize: size,
         fontFamilyFallback: const ['Apple Color Emoji', 'Segoe UI Emoji', 'Noto Color Emoji', 'Android Emoji'],
       ),
+    );
+  }
+}
+
+class _LikesSheet extends ConsumerWidget {
+  final Set<String> userIds;
+  
+  const _LikesSheet({required this.userIds});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    
+    return DraggableScrollableSheet(
+      initialChildSize: 0.6,
+      minChildSize: 0.4,
+      maxChildSize: 0.9,
+      builder: (_, controller) {
+        return ClipRRect(
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(32)),
+          child: BackdropFilter(
+            filter: ImageFilter.blur(sigmaX: 30, sigmaY: 30),
+            child: Container(
+              color: isDark ? AppTheme.darkBg.withOpacity(0.85) : Colors.white.withOpacity(0.9),
+              child: Column(
+                children: [
+                  // Handle
+                  Center(
+                    child: Container(
+                      margin: const EdgeInsets.only(top: 12, bottom: 16),
+                      width: 40,
+                      height: 5,
+                      decoration: BoxDecoration(
+                        color: isDark ? Colors.white30 : Colors.black26,
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                    ),
+                  ),
+                  Text(
+                    'Likes & Reactions',
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                      color: isDark ? Colors.white : Colors.black,
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  const Divider(height: 1),
+                  Expanded(
+                    child: ListView.builder(
+                      controller: controller,
+                      itemCount: userIds.length,
+                      itemBuilder: (context, index) {
+                        final userId = userIds.elementAt(index);
+                        final userAsync = ref.watch(otherUserProvider(userId));
+                        
+                        return userAsync.when(
+                          data: (user) {
+                            if (user == null) return const SizedBox.shrink();
+                            return ListTile(
+                              leading: CircleAvatar(
+                                backgroundImage: CachedNetworkImageProvider(
+                                  user.avatarUrl ?? 'https://i.pravatar.cc/100?u=$userId',
+                                ),
+                              ),
+                              title: Text(
+                                user.name,
+                                style: TextStyle(
+                                  color: isDark ? Colors.white : Colors.black,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                              subtitle: Text(
+                                '@${user.name.replaceAll(' ', '').toLowerCase()}',
+                                style: TextStyle(
+                                  color: isDark ? Colors.white60 : Colors.black54,
+                                ),
+                              ),
+                              onTap: () {
+                                Navigator.pop(context);
+                                context.push('/profile/view/$userId');
+                              },
+                            );
+                          },
+                          loading: () => const ListTile(
+                            leading: CircleAvatar(child: CircularProgressIndicator()),
+                            title: Text('Loading...'),
+                          ),
+                          error: (_, __) => const SizedBox.shrink(),
+                        );
+                      },
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
     );
   }
 }
