@@ -497,7 +497,7 @@ class _PostCardState extends ConsumerState<PostCard>
                         useRootNavigator: true,
                         isScrollControlled: true,
                         backgroundColor: Colors.transparent,
-                        builder: (_) => _LikesSheet(userIds: uniqueReactors),
+                        builder: (_) => _LikesSheet(post: widget.post),
                       );
                     },
                     behavior: HitTestBehavior.opaque,
@@ -1948,13 +1948,58 @@ Widget _buildEmojiImage(String emoji, {double size = 20}) {
   }
 }
 
-class _LikesSheet extends ConsumerWidget {
-  final Set<String> userIds;
+class _LikesSheet extends ConsumerStatefulWidget {
+  final PostModel post;
   
-  const _LikesSheet({required this.userIds});
+  const _LikesSheet({required this.post});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<_LikesSheet> createState() => _LikesSheetState();
+}
+
+class _LikesSheetState extends ConsumerState<_LikesSheet> with SingleTickerProviderStateMixin {
+  late TabController _tabController;
+  late List<String> _tabs;
+  late Map<String, List<String>> _reactionGroups;
+
+  @override
+  void initState() {
+    super.initState();
+    final allReactors = {...widget.post.likes, ...widget.post.reactions.keys}.toList();
+    
+    _reactionGroups = {'All': allReactors};
+    
+    for (var userId in allReactors) {
+      String reaction = '👍';
+      if (widget.post.reactions.containsKey(userId)) {
+         reaction = widget.post.reactions[userId]!;
+      }
+      _reactionGroups.putIfAbsent(reaction, () => []).add(userId);
+    }
+    
+    _tabs = ['All'];
+    final otherReactions = _reactionGroups.keys.where((k) => k != 'All').toList();
+    otherReactions.sort((a, b) => _reactionGroups[b]!.length.compareTo(_reactionGroups[a]!.length));
+    _tabs.addAll(otherReactions);
+    
+    _tabController = TabController(length: _tabs.length, vsync: this);
+  }
+
+  @override
+  void dispose() {
+    _tabController.dispose();
+    super.dispose();
+  }
+
+  String _getReactionForUser(String userId) {
+    if (widget.post.reactions.containsKey(userId)) {
+      return widget.post.reactions[userId]!;
+    }
+    return '👍';
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     
     return DraggableScrollableSheet(
@@ -1973,7 +2018,7 @@ class _LikesSheet extends ConsumerWidget {
                   // Handle
                   Center(
                     child: Container(
-                      margin: const EdgeInsets.only(top: 12, bottom: 16),
+                      margin: const EdgeInsets.only(top: 12, bottom: 8),
                       width: 40,
                       height: 5,
                       decoration: BoxDecoration(
@@ -1982,59 +2027,113 @@ class _LikesSheet extends ConsumerWidget {
                       ),
                     ),
                   ),
-                  Text(
-                    'Likes & Reactions',
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                      color: isDark ? Colors.white : Colors.black,
+                  if (_tabs.length > 1)
+                    TabBar(
+                      controller: _tabController,
+                      isScrollable: true,
+                      indicatorColor: AppTheme.primaryBlue,
+                      labelColor: AppTheme.primaryBlue,
+                      unselectedLabelColor: isDark ? Colors.white60 : Colors.black54,
+                      dividerColor: Colors.transparent,
+                      tabs: _tabs.map((tab) {
+                        if (tab == 'All') {
+                          return Tab(text: 'All ${_reactionGroups[tab]!.length}');
+                        }
+                        return Tab(
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              _buildEmojiImage(tab, size: 16),
+                              const SizedBox(width: 4),
+                              Text('${_reactionGroups[tab]!.length}'),
+                            ],
+                          ),
+                        );
+                      }).toList(),
+                    )
+                  else
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 8),
+                      child: Text(
+                        'Likes & Reactions',
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                          color: isDark ? Colors.white : Colors.black,
+                        ),
+                      ),
                     ),
-                  ),
-                  const SizedBox(height: 16),
                   const Divider(height: 1),
                   Expanded(
-                    child: ListView.builder(
-                      controller: controller,
-                      itemCount: userIds.length,
-                      itemBuilder: (context, index) {
-                        final userId = userIds.elementAt(index);
-                        final userAsync = ref.watch(otherUserProvider(userId));
-                        
-                        return userAsync.when(
-                          data: (user) {
-                            if (user == null) return const SizedBox.shrink();
-                            return ListTile(
-                              leading: CircleAvatar(
-                                backgroundImage: CachedNetworkImageProvider(
-                                  user.avatarUrl ?? 'https://i.pravatar.cc/100?u=$userId',
-                                ),
-                              ),
-                              title: Text(
-                                user.name,
-                                style: TextStyle(
-                                  color: isDark ? Colors.white : Colors.black,
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              ),
-                              subtitle: Text(
-                                '@${user.name.replaceAll(' ', '').toLowerCase()}',
-                                style: TextStyle(
-                                  color: isDark ? Colors.white60 : Colors.black54,
-                                ),
-                              ),
-                              onTap: () {
-                                Navigator.pop(context);
-                                context.push('/profile/view/$userId');
+                    child: TabBarView(
+                      controller: _tabController,
+                      children: _tabs.map((tab) {
+                        final userIds = _reactionGroups[tab]!;
+                        return ListView.builder(
+                          controller: controller,
+                          itemCount: userIds.length,
+                          itemBuilder: (context, index) {
+                            final userId = userIds[index];
+                            final userAsync = ref.watch(otherUserProvider(userId));
+                            final userReaction = _getReactionForUser(userId);
+                            
+                            return userAsync.when(
+                              data: (user) {
+                                if (user == null) return const SizedBox.shrink();
+                                return ListTile(
+                                  contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
+                                  leading: Stack(
+                                    children: [
+                                      CircleAvatar(
+                                        radius: 22,
+                                        backgroundImage: CachedNetworkImageProvider(
+                                          user.avatarUrl ?? 'https://i.pravatar.cc/100?u=$userId',
+                                        ),
+                                      ),
+                                      Positioned(
+                                        bottom: 0,
+                                        right: 0,
+                                        child: Container(
+                                          decoration: BoxDecoration(
+                                            color: isDark ? AppTheme.darkBg : Colors.white,
+                                            shape: BoxShape.circle,
+                                          ),
+                                          padding: const EdgeInsets.all(2),
+                                          child: _buildEmojiImage(userReaction, size: 14),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                  title: Text(
+                                    user.name,
+                                    style: TextStyle(
+                                      color: isDark ? Colors.white : Colors.black,
+                                      fontWeight: FontWeight.w600,
+                                      fontSize: 15,
+                                    ),
+                                  ),
+                                  subtitle: Text(
+                                    '@${user.name.replaceAll(' ', '').toLowerCase()}',
+                                    style: TextStyle(
+                                      color: isDark ? Colors.white60 : Colors.black54,
+                                      fontSize: 13,
+                                    ),
+                                  ),
+                                  onTap: () {
+                                    Navigator.pop(context);
+                                    context.push('/profile/view/$userId');
+                                  },
+                                );
                               },
+                              loading: () => const ListTile(
+                                leading: CircleAvatar(child: CircularProgressIndicator()),
+                                title: Text('Loading...'),
+                              ),
+                              error: (_, __) => const SizedBox.shrink(),
                             );
                           },
-                          loading: () => const ListTile(
-                            leading: CircleAvatar(child: CircularProgressIndicator()),
-                            title: Text('Loading...'),
-                          ),
-                          error: (_, __) => const SizedBox.shrink(),
                         );
-                      },
+                      }).toList(),
                     ),
                   ),
                 ],
