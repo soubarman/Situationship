@@ -618,7 +618,7 @@ class _UserDetailScreenState extends ConsumerState<UserDetailScreen> {
       margin: const EdgeInsets.symmetric(horizontal: 24),
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: isDark ? AppTheme.darkCard : Colors.white,
+        color: isDark ? Colors.white.withOpacity(0.05) : Colors.white,
         borderRadius: BorderRadius.circular(24),
         border: Border.all(
           color: AppTheme.accentPurple.withOpacity(0.3),
@@ -703,7 +703,7 @@ class _UserDetailScreenState extends ConsumerState<UserDetailScreen> {
       margin: const EdgeInsets.symmetric(horizontal: 24),
       padding: const EdgeInsets.all(22),
       decoration: BoxDecoration(
-        color: isDark ? Colors.black.withOpacity(0.3) : Colors.white.withOpacity(0.55),
+        color: isDark ? Colors.white.withOpacity(0.06) : Colors.white.withOpacity(0.55),
         borderRadius: BorderRadius.circular(28),
         border: Border.all(
           color: isDark ? Colors.white.withOpacity(0.08) : Colors.white.withOpacity(0.65),
@@ -861,7 +861,7 @@ class _UserDetailScreenState extends ConsumerState<UserDetailScreen> {
         ).firstOrNull;
 
         return Scaffold(
-          backgroundColor: Colors.transparent, // Let BackgroundOrbs show through
+          backgroundColor: isDark ? AppTheme.darkBg : const Color(0xFFF8FAFC),
           body: Stack(
             children: [
               const BackgroundOrbs(),
@@ -882,7 +882,7 @@ class _UserDetailScreenState extends ConsumerState<UserDetailScreen> {
                         filter: ImageFilter.blur(sigmaX: 16, sigmaY: 16),
                         child: Container(
                           decoration: BoxDecoration(
-                            color: isDark ? Colors.black.withOpacity(0.4) : Colors.white.withOpacity(0.45),
+                            color: isDark ? Colors.white.withOpacity(0.06) : Colors.white.withOpacity(0.45),
                             borderRadius: const BorderRadius.vertical(top: Radius.circular(32)),
                             border: Border(
                               top: BorderSide(
@@ -1461,7 +1461,7 @@ class _UserDetailScreenState extends ConsumerState<UserDetailScreen> {
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 14),
             decoration: BoxDecoration(
-              color: isDark ? Colors.black.withOpacity(0.55) : Colors.white.withOpacity(0.7),
+              color: isDark ? Colors.white.withOpacity(0.08) : Colors.white.withOpacity(0.7),
               borderRadius: BorderRadius.circular(56),
               border: Border.all(
                 color: isDark ? Colors.white.withOpacity(0.1) : Colors.white.withOpacity(0.9),
@@ -1656,7 +1656,7 @@ class _UserDetailScreenState extends ConsumerState<UserDetailScreen> {
           margin: const EdgeInsets.symmetric(horizontal: 24),
           height: 52,
           decoration: BoxDecoration(
-            color: isDark ? Colors.black.withOpacity(0.3) : Colors.black.withOpacity(0.04),
+            color: isDark ? Colors.white.withOpacity(0.04) : Colors.black.withOpacity(0.04),
             borderRadius: BorderRadius.circular(20),
             border: Border.all(
               color: isDark ? Colors.white.withOpacity(0.08) : Colors.black.withOpacity(0.02),
