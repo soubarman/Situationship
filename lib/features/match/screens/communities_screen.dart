@@ -95,6 +95,52 @@ class _CommunitiesScreenState extends ConsumerState<CommunitiesScreen> {
                               ],
                             ),
                           ),
+                          const SizedBox(width: 4),
+                          GestureDetector(
+                            onTap: () => context.push('/profile'),
+                            child: Stack(
+                              children: [
+                                Container(
+                                  width: 40,
+                                  height: 40,
+                                  decoration: BoxDecoration(
+                                    shape: BoxShape.circle,
+                                    gradient: AppTheme.primaryGradient,
+                                    border: Border.all(
+                                      color: isDark ? Colors.white24 : Colors.white,
+                                      width: 2,
+                                    ),
+                                    boxShadow: [
+                                      BoxShadow(
+                                        color: AppTheme.primaryBlue.withOpacity(0.3),
+                                        blurRadius: 10,
+                                        offset: const Offset(0, 3),
+                                      ),
+                                    ],
+                                  ),
+                                  child: ClipOval(
+                                    child: currentUser.avatarUrl != null
+                                        ? Image.network(currentUser.avatarUrl!, fit: BoxFit.cover)
+                                        : const Center(child: Text('😎', style: TextStyle(fontSize: 20))),
+                                  ),
+                                ),
+                                Positioned(
+                                  right: 0,
+                                  bottom: 0,
+                                  child: Container(
+                                    width: 12,
+                                    height: 12,
+                                    decoration: BoxDecoration(
+                                      color: AppTheme.success,
+                                      shape: BoxShape.circle,
+                                      border: Border.all(color: Colors.white, width: 2),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(width: 8),
                            GestureDetector(
                             onTap: () => context.push('/community/create'),
                             child: Container(

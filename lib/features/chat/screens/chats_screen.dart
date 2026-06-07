@@ -53,7 +53,7 @@ class _ChatsScreenState extends ConsumerState<ChatsScreen> with SingleTickerProv
             color: AppTheme.primaryBlue,
             child: NestedScrollView(
               headerSliverBuilder: (context, innerBoxIsScrolled) => [
-                _buildAppBar(context, isDark),
+                _buildAppBar(context, isDark, ref),
                 SliverToBoxAdapter(
                   child: Container(
                     margin: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
@@ -154,7 +154,9 @@ class _ChatsScreenState extends ConsumerState<ChatsScreen> with SingleTickerProv
     );
   }
 
-  Widget _buildAppBar(BuildContext context, bool isDark) {
+  Widget _buildAppBar(BuildContext context, bool isDark, WidgetRef ref) {
+    final currentUser = ref.watch(currentUserProvider);
+
     return SliverAppBar(
       floating: true,
       snap: true,
@@ -191,7 +193,54 @@ class _ChatsScreenState extends ConsumerState<ChatsScreen> with SingleTickerProv
             ),
           ),
         ),
-        const SizedBox(width: 16),
+        const SizedBox(width: 4),
+        Padding(
+          padding: const EdgeInsets.only(right: 16),
+          child: GestureDetector(
+            onTap: () => context.push('/profile'),
+            child: Stack(
+              children: [
+                Container(
+                  width: 40,
+                  height: 40,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    gradient: AppTheme.primaryGradient,
+                    border: Border.all(
+                      color: isDark ? Colors.white24 : Colors.white,
+                      width: 2,
+                    ),
+                    boxShadow: [
+                      BoxShadow(
+                        color: AppTheme.primaryBlue.withOpacity(0.3),
+                        blurRadius: 10,
+                        offset: const Offset(0, 3),
+                      ),
+                    ],
+                  ),
+                  child: ClipOval(
+                    child: currentUser.avatarUrl != null
+                        ? Image.network(currentUser.avatarUrl!, fit: BoxFit.cover)
+                        : const Center(child: Text('😎', style: TextStyle(fontSize: 20))),
+                  ),
+                ),
+                Positioned(
+                  right: 0,
+                  bottom: 0,
+                  child: Container(
+                    width: 12,
+                    height: 12,
+                    decoration: BoxDecoration(
+                      color: AppTheme.success,
+                      shape: BoxShape.circle,
+                      border: Border.all(color: Colors.white, width: 2),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
       ],
     );
   }
