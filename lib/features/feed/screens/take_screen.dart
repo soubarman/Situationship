@@ -5,6 +5,7 @@ import 'dart:typed_data';
 import 'dart:ui' as ui;
 import '../utils/ui_web_shim.dart' as ui_web;
 import '../utils/ar_interop.dart';
+import '../utils/ar_webview_camera.dart';
 import 'package:camera/camera.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
@@ -120,11 +121,15 @@ class _TakeScreenState extends ConsumerState<TakeScreen>
   String? _cameraError;
   String? _viewType;
 
-  // ── Native Camera (Android / iOS) ──
-  CameraController? _cameraController;
+  // ── Native Camera (Android / iOS via WebView AR) ──
+  CameraController? _cameraController;   // kept for backward compat but unused on Android
   bool _nativeCameraReady = false;
   bool _nativeCameraPermissionDenied = false;
   bool _nativeCameraPermissionPermanentlyDenied = false;
+  // WebView AR key — used to call captureFrame / setFilter on the WebView
+  final GlobalKey<ARWebViewCameraState> _arWebViewKey = GlobalKey<ARWebViewCameraState>();
+  bool _arWebViewReady = false;
+  bool _arWebViewRecording = false;
 
   // ── Video Recording ──
   html.MediaRecorder? _mediaRecorder;
@@ -225,7 +230,7 @@ class _TakeScreenState extends ConsumerState<TakeScreen>
 
   // ─── Native Camera Init (Android / iOS) ─────────────────────────────────────
   Future<void> _initNativeCamera() async {
-    // 1. Request permission
+    // Request camera permission first
     final status = await Permission.camera.request();
     if (status.isPermanentlyDenied) {
       if (mounted) setState(() => _nativeCameraPermissionPermanentlyDenied = true);
@@ -235,50 +240,8 @@ class _TakeScreenState extends ConsumerState<TakeScreen>
       if (mounted) setState(() => _nativeCameraPermissionDenied = true);
       return;
     }
-
-    // 2. Discover cameras
-    final cameras = await availableCameras();
-    if (cameras.isEmpty) {
-      if (mounted) setState(() => _cameraError = '📷 No cameras found on this device.');
-      return;
-    }
-
-    // Pick front camera if available, else back
-    final camDesc = cameras.firstWhere(
-      (c) => c.lensDirection == CameraLensDirection.front,
-      orElse: () => cameras.first,
-    );
-
-    // 3. Create controller
-    final controller = CameraController(
-      camDesc,
-      ResolutionPreset.high,
-      enableAudio: false,
-      imageFormatGroup: ImageFormatGroup.jpeg,
-    );
-    try {
-      await controller.initialize();
-      if (mounted) {
-        setState(() {
-          _cameraController = controller;
-          _nativeCameraReady = true;
-        });
-      }
-    } catch (e) {
-      if (mounted) setState(() => _cameraError = '📷 Camera failed to start: $e');
-    }
-  }
-
-  // ─── Native Capture (Android / iOS) ─────────────────────────────────────────
-  Future<Uint8List?> _captureNativePhoto() async {
-    if (_cameraController == null || !_cameraController!.value.isInitialized) return null;
-    try {
-      final xFile = await _cameraController!.takePicture();
-      return await xFile.readAsBytes();
-    } catch (e) {
-      debugPrint('Native capture error: $e');
-      return null;
-    }
+    // Permission granted — show the AR WebView (it handles getUserMedia internally)
+    if (mounted) setState(() => _nativeCameraReady = true);
   }
 
 
@@ -384,11 +347,9 @@ class _TakeScreenState extends ConsumerState<TakeScreen>
     _shutterAnim.forward().then((_) => _shutterAnim.reverse());
 
     if (!kIsWeb) {
-      // ── Android / iOS: use native CameraController ──
-      final bytes = await _captureNativePhoto();
-      if (bytes != null && mounted) {
-        setState(() => _capturedImageBytes = bytes);
-      }
+      // Android: trigger frame capture from the AR WebView
+      await _arWebViewKey.currentState?.captureFrame();
+      // The result comes back via onCapture callback — nothing else needed here
       return;
     }
 
@@ -874,19 +835,22 @@ class _TakeScreenState extends ConsumerState<TakeScreen>
         );
       }
 
-      // Live camera preview — fills frame like Snapchat, color filter applied
-      return ColorFiltered(
-        colorFilter: ColorFilter.matrix(AppColorFilters.get(_filter)),
-        child: SizedBox.expand(
-          child: FittedBox(
-            fit: BoxFit.cover,
-            child: SizedBox(
-              width: _cameraController!.value.previewSize!.height,
-              height: _cameraController!.value.previewSize!.width,
-              child: CameraPreview(_cameraController!),
-            ),
-          ),
-        ),
+      // Live AR WebView (fills frame, handles face mesh internally)
+      return ARWebViewCamera(
+        key: _arWebViewKey,
+        onReady: () => setState(() => _arWebViewReady = true),
+        onCapture: (bytes) {
+          setState(() => _capturedImageBytes = bytes);
+        },
+        onVideoCapture: (bytes) {
+          setState(() {
+            _capturedVideoBytes = bytes;
+            _isRecording = false;
+          });
+          // Also trigger a still capture for thumbnail
+          _arWebViewKey.currentState?.captureFrame();
+          _snack('Video recorded! Tap Post to share.');
+        },
       );
     }
 
@@ -1159,21 +1123,15 @@ class _TakeScreenState extends ConsumerState<TakeScreen>
 
   Future<void> _startVideoRecord() async {
     if (!kIsWeb) {
-      // ── Android / iOS: use CameraController ──
-      if (_cameraController == null || !_cameraController!.value.isInitialized) return;
-      try {
-        await _cameraController!.startVideoRecording();
-        setState(() {
-          _isRecording = true;
-          _recordSeconds = 0;
-        });
-        _recordTimer = Timer.periodic(const Duration(seconds: 1), (_) {
-          setState(() => _recordSeconds++);
-        });
-      } catch (e) {
-        debugPrint('Native video record error: $e');
-        _snack('Video recording failed: $e');
-      }
+      // Android: start recording in the AR WebView
+      await _arWebViewKey.currentState?.startRecording();
+      setState(() {
+        _isRecording = true;
+        _recordSeconds = 0;
+      });
+      _recordTimer = Timer.periodic(const Duration(seconds: 1), (_) {
+        setState(() => _recordSeconds++);
+      });
       return;
     }
 
@@ -1218,27 +1176,10 @@ class _TakeScreenState extends ConsumerState<TakeScreen>
     _recordTimer?.cancel();
 
     if (!kIsWeb) {
-      // ── Android / iOS: stop CameraController recording ──
-      if (_cameraController == null || !_cameraController!.value.isRecordingVideo) {
-        setState(() => _isRecording = false);
-        return;
-      }
-      try {
-        final xFile = await _cameraController!.stopVideoRecording();
-        final videoBytes = await xFile.readAsBytes();
-        // Take a still frame as thumbnail
-        final thumbBytes = await _captureNativePhoto();
-        setState(() {
-          _isRecording = false;
-          _capturedVideoBytes = videoBytes;
-          if (thumbBytes != null) _capturedImageBytes = thumbBytes;
-        });
-        _snack('Video recorded! (${_recordSeconds}s) Tap Post to share.');
-      } catch (e) {
-        debugPrint('Stop video error: $e');
-        setState(() => _isRecording = false);
-        _snack('Video recording failed.');
-      }
+      // Android: stop recording in the AR WebView
+      // The result (video bytes) comes back via onVideoCapture callback
+      await _arWebViewKey.currentState?.stopRecording();
+      // _isRecording will be set to false in the onVideoCapture callback
       return;
     }
 
@@ -1349,8 +1290,8 @@ class _TakeScreenState extends ConsumerState<TakeScreen>
   // ── Tab Content ──────────────────────────────────────────────────────────────
   Widget _buildTabContent() {
     if (_tab == 'FILTER') {
-      // Android: show Instagram color filters; Web: show AR face filters
-      return kIsWeb ? _buildARFilterBar() : _buildColorFilterBar();
+      // Both web and Android now use AR face filters
+      return _buildARFilterBar();
     }
     return const SizedBox(height: 16);
   }
@@ -1462,7 +1403,11 @@ class _TakeScreenState extends ConsumerState<TakeScreen>
                 _calOffsetY = 0.0;
                 _showCalibrator = false;
               });
-              setARFilter(f);
+              if (kIsWeb) {
+                setARFilter(f);
+              } else {
+                _arWebViewKey.currentState?.setFilter(f);
+              }
             },
             onLongPress: () {
               if (f == 'NONE') return;
@@ -1470,7 +1415,11 @@ class _TakeScreenState extends ConsumerState<TakeScreen>
                 _arFilter = f;
                 _showCalibrator = !_showCalibrator;
               });
-              setARFilter(f);
+              if (kIsWeb) {
+                setARFilter(f);
+              } else {
+                _arWebViewKey.currentState?.setFilter(f);
+              }
             },
             child: AnimatedContainer(
               duration: const Duration(milliseconds: 200),

@@ -45,6 +45,7 @@ dependencies:
   camera: ^0.11.2+1
   universal_html: ^2.3.0
   permission_handler: ^12.0.3
+  webview_flutter: ^4.13.1
 dev_dependencies:
   flutter_test:
     sdk: flutter
@@ -55,6 +56,9 @@ flutter:
   uses-material-design: true
   assets:
     - assets/images/
+    - assets/ar_webview.html
+    - assets/ar_tracker.js
+    - assets/filters/
 
 flutter_launcher_icons:
   android: true
