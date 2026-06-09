@@ -874,10 +874,19 @@ class _TakeScreenState extends ConsumerState<TakeScreen>
         );
       }
 
-      // Live camera preview
-      return ClipRRect(
-        borderRadius: BorderRadius.circular(28),
-        child: CameraPreview(_cameraController!),
+      // Live camera preview — fills frame like Snapchat, color filter applied
+      return ColorFiltered(
+        colorFilter: ColorFilter.matrix(AppColorFilters.get(_filter)),
+        child: SizedBox.expand(
+          child: FittedBox(
+            fit: BoxFit.cover,
+            child: SizedBox(
+              width: _cameraController!.value.previewSize!.height,
+              height: _cameraController!.value.previewSize!.width,
+              child: CameraPreview(_cameraController!),
+            ),
+          ),
+        ),
       );
     }
 
@@ -1149,6 +1158,26 @@ class _TakeScreenState extends ConsumerState<TakeScreen>
   }
 
   Future<void> _startVideoRecord() async {
+    if (!kIsWeb) {
+      // ── Android / iOS: use CameraController ──
+      if (_cameraController == null || !_cameraController!.value.isInitialized) return;
+      try {
+        await _cameraController!.startVideoRecording();
+        setState(() {
+          _isRecording = true;
+          _recordSeconds = 0;
+        });
+        _recordTimer = Timer.periodic(const Duration(seconds: 1), (_) {
+          setState(() => _recordSeconds++);
+        });
+      } catch (e) {
+        debugPrint('Native video record error: $e');
+        _snack('Video recording failed: $e');
+      }
+      return;
+    }
+
+    // ── Web path ──
     if (_stream == null) return;
     _videoChunks.clear();
     
@@ -1187,6 +1216,33 @@ class _TakeScreenState extends ConsumerState<TakeScreen>
 
   Future<void> _stopVideoRecord() async {
     _recordTimer?.cancel();
+
+    if (!kIsWeb) {
+      // ── Android / iOS: stop CameraController recording ──
+      if (_cameraController == null || !_cameraController!.value.isRecordingVideo) {
+        setState(() => _isRecording = false);
+        return;
+      }
+      try {
+        final xFile = await _cameraController!.stopVideoRecording();
+        final videoBytes = await xFile.readAsBytes();
+        // Take a still frame as thumbnail
+        final thumbBytes = await _captureNativePhoto();
+        setState(() {
+          _isRecording = false;
+          _capturedVideoBytes = videoBytes;
+          if (thumbBytes != null) _capturedImageBytes = thumbBytes;
+        });
+        _snack('Video recorded! (${_recordSeconds}s) Tap Post to share.');
+      } catch (e) {
+        debugPrint('Stop video error: $e');
+        setState(() => _isRecording = false);
+        _snack('Video recording failed.');
+      }
+      return;
+    }
+
+    // ── Web path ──
     if (_mediaRecorder == null) {
       setState(() => _isRecording = false);
       return;
@@ -1237,7 +1293,6 @@ class _TakeScreenState extends ConsumerState<TakeScreen>
       _capturedVideoBytes = videoBytes;
       _previewVideoUrl = videoUrl;
       _previewViewType = previewType;
-      // Use a thumbnail from current camera frame
     });
     
     // Take a photo as thumbnail for the video
@@ -1291,11 +1346,59 @@ class _TakeScreenState extends ConsumerState<TakeScreen>
     );
   }
 
-  // ── Tab Content (Filters) ────────────────────────────────────────────────────
+  // ── Tab Content ──────────────────────────────────────────────────────────────
   Widget _buildTabContent() {
-    if (_tab == 'FILTER') return _buildARFilterBar();
+    if (_tab == 'FILTER') {
+      // Android: show Instagram color filters; Web: show AR face filters
+      return kIsWeb ? _buildARFilterBar() : _buildColorFilterBar();
+    }
     return const SizedBox(height: 16);
   }
+
+  // ── Color Filter Bar (Android / iOS) ─────────────────────────────────────────
+  Widget _buildColorFilterBar() {
+    final filters = AppColorFilters.names;
+    return SizedBox(
+      height: 72,
+      child: ListView.builder(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.symmetric(horizontal: 16),
+        itemCount: filters.length,
+        itemBuilder: (ctx, i) {
+          final f = filters[i];
+          final sel = _filter == f;
+          return GestureDetector(
+            onTap: () => setState(() => _filter = f),
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 200),
+              margin: const EdgeInsets.symmetric(horizontal: 5, vertical: 8),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              decoration: BoxDecoration(
+                color: sel
+                    ? AppTheme.accentPurple
+                    : Colors.white.withOpacity(0.08),
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(
+                  color: sel
+                      ? AppTheme.accentPurple
+                      : Colors.white.withOpacity(0.15),
+                ),
+              ),
+              child: Text(
+                f,
+                style: TextStyle(
+                  color: sel ? Colors.white : Colors.white60,
+                  fontSize: 12,
+                  fontWeight: sel ? FontWeight.bold : FontWeight.normal,
+                ),
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+
 
   // ── Post Bar ─────────────────────────────────────────────────────────────────
   Widget _buildPostBar() {
