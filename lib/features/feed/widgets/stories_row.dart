@@ -42,12 +42,14 @@ class StoriesRow extends ConsumerWidget {
             children: [
               ListView.builder(
                 scrollDirection: Axis.horizontal,
-                padding: const EdgeInsets.only(left: 16, right: 80), // extra padding for the filter button
+                padding: const EdgeInsets.only(left: 16, right: 80),
                 itemCount: otherUsersStories.length + 1,
                 itemBuilder: (context, index) {
                   if (index == 0) {
-                    final hasStory = currentUserId != null && uniqueUsers.containsKey(currentUserId);
-                    return _buildAddStory(context, isDark, currentUser, hasStory);
+                    final myStory = currentUserId != null
+                        ? uniqueUsers[currentUserId]
+                        : null;
+                    return _buildAddStory(context, isDark, currentUser, myStory);
                   }
                   
                   final story = otherUsersStories[index - 1];
@@ -55,6 +57,7 @@ class StoriesRow extends ConsumerWidget {
                     userId: story['userId'],
                     userName: story['userName'],
                     avatarUrl: story['userAvatar'],
+                    storyImageUrl: story['imageUrl'],
                     isDark: isDark,
                   );
                 },
@@ -125,7 +128,7 @@ class StoriesRow extends ConsumerWidget {
     );
   }
 
-  Widget _buildAddStory(BuildContext context, bool isDark, UserModel user, bool hasStory) {
+  Widget _buildAddStory(BuildContext context, bool isDark, UserModel user, Map<String, dynamic>? myStory) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       child: Column(
@@ -134,13 +137,13 @@ class StoriesRow extends ConsumerWidget {
             children: [
               GestureDetector(
                 onTap: () {
-                  if (hasStory) {
+                  if (myStory != null) {
                     context.push(
-                      '/story/view/${user.id}',
+                      '/take/view/${user.id}',
                       extra: {'userName': user.name, 'userAvatar': user.avatarUrl},
                     );
                   } else {
-                    context.push('/story/create');
+                    context.push('/take/create');
                   }
                 },
                 child: Container(
@@ -148,13 +151,13 @@ class StoriesRow extends ConsumerWidget {
                   height: 68,
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
-                    gradient: hasStory ? AppTheme.primaryGradient : null,
-                    border: Border.all(
-                      color: hasStory ? Colors.transparent : (isDark ? Colors.white10 : Colors.black.withOpacity(0.05)),
-                      width: 1.5,
+                    gradient: myStory != null ? AppTheme.primaryGradient : const LinearGradient(
+                      colors: [Color(0xFF9B5DE5), Color(0xFFFF5069), Color(0xFFFF9B54)],
+                      begin: Alignment.topRight,
+                      end: Alignment.bottomLeft,
                     ),
                   ),
-                  padding: const EdgeInsets.all(3),
+                  padding: const EdgeInsets.all(2.5),
                   child: Container(
                     decoration: BoxDecoration(
                       shape: BoxShape.circle,
@@ -163,50 +166,57 @@ class StoriesRow extends ConsumerWidget {
                     padding: const EdgeInsets.all(2),
                     child: CircleAvatar(
                       radius: 32,
-                      backgroundColor: isDark ? AppTheme.darkCard : const Color(0xFFF3F6FF),
-                      backgroundImage: (user.avatarUrl != null) 
-                          ? CachedNetworkImageProvider(user.avatarUrl!, maxWidth: 150, maxHeight: 150) 
+                      backgroundColor: isDark ? const Color(0xFF1A1A24) : const Color(0xFFF0F0F0),
+                      backgroundImage: myStory != null && myStory['imageUrl'] != null 
+                          ? CachedNetworkImageProvider(myStory['imageUrl'])
                           : null,
-                      child: (user.avatarUrl == null) 
-                          ? Text('✨', style: TextStyle(fontSize: 24, color: isDark ? Colors.white30 : Colors.black26))
-                          : null,
-                    ),
-                  ),
-                ),
-              ),
-              Positioned(
-                bottom: 0,
-                right: 0,
-                child: GestureDetector(
-                  onTap: () => context.push('/story/create'),
-                  child: Container(
-                    width: 24,
-                    height: 24,
-                    decoration: BoxDecoration(
-                      gradient: AppTheme.primaryGradient,
-                      shape: BoxShape.circle,
-                      border: Border.all(color: isDark ? AppTheme.darkBg : Colors.white, width: 2.5),
-                      boxShadow: [
-                        BoxShadow(
-                          color: AppTheme.primaryBlue.withOpacity(0.4),
-                          blurRadius: 8,
-                          offset: const Offset(0, 2),
+                      child: myStory == null ? _BlinkingWidget(
+                        child: Icon(
+                          Icons.add_rounded,
+                          color: isDark ? Colors.white : Colors.black87,
+                          size: 32,
                         ),
-                      ],
+                      ) : null,
                     ),
-                    child: const Icon(Icons.add_rounded, size: 16, color: Colors.white),
                   ),
                 ),
               ),
+              if (myStory != null)
+                Positioned(
+                  right: 0,
+                  bottom: 0,
+                  child: GestureDetector(
+                    onTap: () => context.push('/take/create'),
+                    child: Container(
+                      width: 24,
+                      height: 24,
+                      decoration: BoxDecoration(
+                        color: AppTheme.primaryBlue,
+                        shape: BoxShape.circle,
+                        border: Border.all(
+                          color: isDark ? AppTheme.darkBg : Colors.white,
+                          width: 2,
+                        ),
+                      ),
+                      child: const Icon(
+                        Icons.add_rounded,
+                        color: Colors.white,
+                        size: 16,
+                      ),
+                    ),
+                  ),
+                ),
             ],
           ),
-          const SizedBox(height: 8),
-          Text(
-            'Your Story',
-            style: TextStyle(
-              fontSize: 11,
-              fontWeight: FontWeight.w600,
-              color: isDark ? Colors.white70 : AppTheme.textSecondary,
+          const SizedBox(height: 6),
+          const _BlinkingWidget(
+            child: Text(
+              'Add yours',
+              style: TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w700,
+                color: Color(0xFFFF8EC8),
+              ),
             ),
           ),
         ],
@@ -219,12 +229,14 @@ class _StoryItem extends ConsumerStatefulWidget {
   final String userId;
   final String userName;   // fallback snapshot
   final String? avatarUrl; // fallback snapshot
+  final String? storyImageUrl; // the actual take image
   final bool isDark;
 
   const _StoryItem({
     required this.userId,
     required this.userName,
     this.avatarUrl,
+    this.storyImageUrl,
     required this.isDark,
   });
 
@@ -301,6 +313,42 @@ class _StoryItemState extends ConsumerState<_StoryItem> {
           ),
         ],
       ),
+    );
+  }
+}
+
+
+class _BlinkingWidget extends StatefulWidget {
+  final Widget child;
+  const _BlinkingWidget({required this.child});
+
+  @override
+  State<_BlinkingWidget> createState() => _BlinkingWidgetState();
+}
+
+class _BlinkingWidgetState extends State<_BlinkingWidget> with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 800),
+    )..repeat(reverse: true);
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return FadeTransition(
+      opacity: _controller,
+      child: widget.child,
     );
   }
 }

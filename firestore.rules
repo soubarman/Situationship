@@ -52,8 +52,13 @@ service cloud.firestore {
 
     // ── Stories ────────────────────────────────────────────────────────────────
     match /stories/{storyId} {
-      allow read, create: if request.auth != null;
-      allow update, delete: if request.auth != null && resource.data.userId == request.auth.uid;
+      allow read, create, update: if request.auth != null;
+      allow delete: if request.auth != null && resource.data.userId == request.auth.uid;
+
+      match /comments/{commentId} {
+        allow read, create, update: if request.auth != null;
+        allow delete: if request.auth != null && resource.data.userId == request.auth.uid;
+      }
     }
 
     // ── Notifications ──────────────────────────────────────────────────────────

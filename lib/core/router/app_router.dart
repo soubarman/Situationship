@@ -19,8 +19,9 @@ import '../../features/profile/screens/profile_screen.dart';
 import '../../features/profile/screens/edit_profile_screen.dart';
 import '../../features/profile/screens/user_detail_screen.dart';
 import '../../features/post/screens/create_post_screen.dart';
-import '../../features/feed/screens/create_story_screen.dart';
+import '../../features/feed/screens/take_screen.dart';
 import '../../features/feed/screens/story_view_screen.dart';
+import '../../features/feed/screens/take_viewer_screen.dart';
 import '../providers/firebase_auth_provider.dart';
 import '../providers/app_state_provider.dart';
 
@@ -185,9 +186,22 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         builder: (context, state) => const CreatePostScreen(),
       ),
       GoRoute(
-        path: '/story/create',
-        name: 'create-story',
-        builder: (context, state) => const CreateStoryScreen(),
+        path: '/take/create',
+        name: 'create-take',
+        builder: (context, state) => const TakeScreen(),
+      ),
+      GoRoute(
+        path: '/take/view/:userId',
+        name: 'take-view',
+        builder: (context, state) {
+          final userId = state.pathParameters['userId']!;
+          final extra = state.extra as Map<String, dynamic>?;
+          return TakeViewerScreen(
+            initialUserId: userId,
+            initialName: extra?['userName'],
+            initialAvatar: extra?['userAvatar'],
+          );
+        },
       ),
       GoRoute(
         path: '/story/view/:userId',
@@ -195,8 +209,8 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         builder: (context, state) {
           final userId = state.pathParameters['userId']!;
           final extra = state.extra as Map<String, dynamic>?;
-          return StoryViewScreen(
-            userId: userId,
+          return TakeViewerScreen(
+            initialUserId: userId,
             initialName: extra?['userName'],
             initialAvatar: extra?['userAvatar'],
           );
