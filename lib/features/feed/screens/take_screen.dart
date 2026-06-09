@@ -5,6 +5,8 @@ import 'dart:typed_data';
 import 'dart:ui' as ui;
 import '../utils/ui_web_shim.dart' as ui_web;
 import '../utils/ar_interop.dart';
+import 'package:camera/camera.dart';
+import 'package:permission_handler/permission_handler.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
@@ -111,13 +113,19 @@ class _TakeScreenState extends ConsumerState<TakeScreen>
   String _tab = 'FILTER'; // FILTER | TEXT | STICKERS
   String _filter = 'Normal';
 
-  // ── Camera / Media state ──
+  // ── Camera / Media state (Web) ──
   html.VideoElement? _videoElement;
   html.MediaStream? _stream;
   bool _cameraReady = false;
   String? _cameraError;
   String? _viewType;
-  
+
+  // ── Native Camera (Android / iOS) ──
+  CameraController? _cameraController;
+  bool _nativeCameraReady = false;
+  bool _nativeCameraPermissionDenied = false;
+  bool _nativeCameraPermissionPermanentlyDenied = false;
+
   // ── Video Recording ──
   html.MediaRecorder? _mediaRecorder;
   final List<html.Blob> _videoChunks = [];
@@ -196,16 +204,83 @@ class _TakeScreenState extends ConsumerState<TakeScreen>
     _shutterScale = Tween<double>(begin: 1.0, end: 0.88).animate(
       CurvedAnimation(parent: _shutterAnim, curve: Curves.easeInOut),
     );
-    if (kIsWeb) _initWebCamera();
+    if (kIsWeb) {
+      _initWebCamera();
+    } else {
+      _initNativeCamera();
+    }
   }
 
   @override
   void dispose() {
-    _stopCamera();
+    if (kIsWeb) {
+      _stopCamera();
+    } else {
+      _cameraController?.dispose();
+    }
     _shutterAnim.dispose();
     _recordTimer?.cancel();
     super.dispose();
   }
+
+  // ─── Native Camera Init (Android / iOS) ─────────────────────────────────────
+  Future<void> _initNativeCamera() async {
+    // 1. Request permission
+    final status = await Permission.camera.request();
+    if (status.isPermanentlyDenied) {
+      if (mounted) setState(() => _nativeCameraPermissionPermanentlyDenied = true);
+      return;
+    }
+    if (!status.isGranted) {
+      if (mounted) setState(() => _nativeCameraPermissionDenied = true);
+      return;
+    }
+
+    // 2. Discover cameras
+    final cameras = await availableCameras();
+    if (cameras.isEmpty) {
+      if (mounted) setState(() => _cameraError = '📷 No cameras found on this device.');
+      return;
+    }
+
+    // Pick front camera if available, else back
+    final camDesc = cameras.firstWhere(
+      (c) => c.lensDirection == CameraLensDirection.front,
+      orElse: () => cameras.first,
+    );
+
+    // 3. Create controller
+    final controller = CameraController(
+      camDesc,
+      ResolutionPreset.high,
+      enableAudio: false,
+      imageFormatGroup: ImageFormatGroup.jpeg,
+    );
+    try {
+      await controller.initialize();
+      if (mounted) {
+        setState(() {
+          _cameraController = controller;
+          _nativeCameraReady = true;
+        });
+      }
+    } catch (e) {
+      if (mounted) setState(() => _cameraError = '📷 Camera failed to start: $e');
+    }
+  }
+
+  // ─── Native Capture (Android / iOS) ─────────────────────────────────────────
+  Future<Uint8List?> _captureNativePhoto() async {
+    if (_cameraController == null || !_cameraController!.value.isInitialized) return null;
+    try {
+      final xFile = await _cameraController!.takePicture();
+      return await xFile.readAsBytes();
+    } catch (e) {
+      debugPrint('Native capture error: $e');
+      return null;
+    }
+  }
+
 
   // ─── Camera Lifecycle ───────────────────────────────────────────────────────
 
@@ -306,20 +381,25 @@ class _TakeScreenState extends ConsumerState<TakeScreen>
   // ─── Photo Capture ──────────────────────────────────────────────────────────
 
   Future<void> _takePhoto() async {
-    if (_arCanvasElement == null) return;
-
     _shutterAnim.forward().then((_) => _shutterAnim.reverse());
 
-    // Capture directly from the AR Canvas, which already includes the mirrored image and AR filters
+    if (!kIsWeb) {
+      // ── Android / iOS: use native CameraController ──
+      final bytes = await _captureNativePhoto();
+      if (bytes != null && mounted) {
+        setState(() => _capturedImageBytes = bytes);
+      }
+      return;
+    }
+
+    // ── Web: capture from the AR Canvas ──
+    if (_arCanvasElement == null) return;
     final blob = await _arCanvasElement!.toBlob('image/jpeg', 0.70);
     final reader = html.FileReader();
     reader.readAsArrayBuffer(blob);
     await reader.onLoad.first;
     final bytes = Uint8List.fromList(reader.result as List<int>);
-
-    setState(() {
-      _capturedImageBytes = bytes;
-    });
+    setState(() => _capturedImageBytes = bytes);
   }
 
   Future<void> _uploadFromGallery() async {
@@ -740,6 +820,69 @@ class _TakeScreenState extends ConsumerState<TakeScreen>
   }
 
   Widget _buildBaseLayer() {
+    // ── ANDROID / iOS path ──────────────────────────────────────────────────
+    if (!kIsWeb) {
+      // Permission permanently denied → open settings
+      if (_nativeCameraPermissionPermanentlyDenied) {
+        return _buildPermissionScreen(
+          message: '📷 Camera permission was permanently denied.\n\nOpen Settings to allow camera access.',
+          actionLabel: 'Open Settings',
+          onAction: () => openAppSettings(),
+        );
+      }
+      // Permission denied (not permanent)
+      if (_nativeCameraPermissionDenied) {
+        return _buildPermissionScreen(
+          message: '📷 Camera permission is required to take photos.',
+          actionLabel: 'Grant Permission',
+          onAction: () {
+            setState(() => _nativeCameraPermissionDenied = false);
+            _initNativeCamera();
+          },
+        );
+      }
+      // Error (e.g. no cameras)
+      if (_cameraError != null) {
+        return _buildPermissionScreen(
+          message: _cameraError!,
+          actionLabel: 'Upload from Gallery',
+          onAction: _uploadFromGallery,
+        );
+      }
+      // Loading
+      if (!_nativeCameraReady || _cameraController == null) {
+        return Container(
+          color: AppTheme.darkCard,
+          child: const Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                CircularProgressIndicator(color: AppTheme.accentPurple),
+                SizedBox(height: 12),
+                Text('Starting camera...', style: TextStyle(color: Colors.white38, fontSize: 13)),
+              ],
+            ),
+          ),
+        );
+      }
+
+      // Captured photo preview
+      if (_capturedImageBytes != null) {
+        return ColorFiltered(
+          colorFilter: ColorFilter.matrix(AppColorFilters.get(_filter)),
+          child: Image.memory(_capturedImageBytes!, fit: BoxFit.cover),
+        );
+      }
+
+      // Live camera preview
+      return ClipRRect(
+        borderRadius: BorderRadius.circular(28),
+        child: CameraPreview(_cameraController!),
+      );
+    }
+
+    // ── WEB path ────────────────────────────────────────────────────────────
+
     // Live looping video preview
     if (_previewVideoUrl != null && _previewViewType != null) {
       return ColorFiltered(
@@ -756,7 +899,7 @@ class _TakeScreenState extends ConsumerState<TakeScreen>
       );
     }
 
-    // Live camera feed
+    // Web camera error
     if (_cameraError != null) {
       return Container(
         color: AppTheme.darkCard,
@@ -765,16 +908,12 @@ class _TakeScreenState extends ConsumerState<TakeScreen>
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              const Icon(Icons.camera_alt_rounded,
-                  color: Colors.white24, size: 64),
+              const Icon(Icons.camera_alt_rounded, color: Colors.white24, size: 64),
               const SizedBox(height: 16),
               Text(
                 _cameraError!,
                 textAlign: TextAlign.center,
-                style: const TextStyle(
-                    color: Colors.white60,
-                    fontSize: 14,
-                    height: 1.5),
+                style: const TextStyle(color: Colors.white60, fontSize: 14, height: 1.5),
               ),
               const SizedBox(height: 24),
               ElevatedButton.icon(
@@ -792,17 +931,14 @@ class _TakeScreenState extends ConsumerState<TakeScreen>
                 style: ElevatedButton.styleFrom(
                   backgroundColor: AppTheme.accentPurple,
                   foregroundColor: Colors.white,
-                  shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12)),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                 ),
               ),
               const SizedBox(height: 12),
               TextButton.icon(
                 onPressed: _uploadFromGallery,
-                icon: const Icon(Icons.upload_file_rounded,
-                    color: Colors.white54),
-                label: const Text('Upload from Gallery',
-                    style: TextStyle(color: Colors.white54)),
+                icon: const Icon(Icons.upload_file_rounded, color: Colors.white54),
+                label: const Text('Upload from Gallery', style: TextStyle(color: Colors.white54)),
               ),
             ],
           ),
@@ -819,8 +955,7 @@ class _TakeScreenState extends ConsumerState<TakeScreen>
             children: [
               CircularProgressIndicator(color: AppTheme.accentPurple),
               SizedBox(height: 12),
-              Text('Starting AR camera...',
-                  style: TextStyle(color: Colors.white38, fontSize: 13)),
+              Text('Starting AR camera...', style: TextStyle(color: Colors.white38, fontSize: 13)),
             ],
           ),
         ),
@@ -830,6 +965,50 @@ class _TakeScreenState extends ConsumerState<TakeScreen>
     // Render the live HTML AR Canvas element
     return HtmlElementView(viewType: _arViewType!);
   }
+
+  // ── Permission denied screen helper ──────────────────────────────────────────
+  Widget _buildPermissionScreen({
+    required String message,
+    required String actionLabel,
+    required VoidCallback onAction,
+  }) {
+    return Container(
+      color: AppTheme.darkCard,
+      child: Padding(
+        padding: const EdgeInsets.all(32.0),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Icon(Icons.camera_alt_rounded, color: Colors.white24, size: 64),
+            const SizedBox(height: 16),
+            Text(
+              message,
+              textAlign: TextAlign.center,
+              style: const TextStyle(color: Colors.white60, fontSize: 14, height: 1.6),
+            ),
+            const SizedBox(height: 24),
+            ElevatedButton.icon(
+              onPressed: onAction,
+              icon: const Icon(Icons.check_circle_outline_rounded),
+              label: Text(actionLabel),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppTheme.accentPurple,
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              ),
+            ),
+            const SizedBox(height: 12),
+            TextButton.icon(
+              onPressed: _uploadFromGallery,
+              icon: const Icon(Icons.upload_file_rounded, color: Colors.white54),
+              label: const Text('Upload from Gallery', style: TextStyle(color: Colors.white54)),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
 
   Widget _buildOverlayItem(DraggableItem item) {
     return Positioned(
