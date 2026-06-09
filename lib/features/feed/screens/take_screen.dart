@@ -4,7 +4,6 @@ import 'package:universal_html/html.dart' as html;
 import 'dart:typed_data';
 import 'dart:ui' as ui;
 import '../utils/ui_web_shim.dart' as ui_web;
-import 'package:js/js.dart';
 import '../utils/ar_interop.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
@@ -293,7 +292,11 @@ class _TakeScreenState extends ConsumerState<TakeScreen>
   }
 
   void _stopCamera() {
-    _stream?.getTracks().forEach((track) => track.stop());
+    _stream?.getTracks().forEach((track) {
+      try {
+        (track as dynamic).stop();
+      } catch (_) {}
+    });
     stopARTracker();
     _stream = null;
     _videoElement = null;
