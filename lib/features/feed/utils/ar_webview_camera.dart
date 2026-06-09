@@ -2,7 +2,6 @@
 import 'dart:convert';
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart' show rootBundle;
 import 'package:webview_flutter/webview_flutter.dart';
 import 'package:webview_flutter_android/webview_flutter_android.dart';
 
@@ -68,20 +67,9 @@ class ARWebViewCameraState extends State<ARWebViewCamera> {
       );
     }
 
-    // Load HTML from assets
-    final htmlContent = await rootBundle.loadString('assets/ar_webview.html');
-
-    // We need to serve it with a base URI so relative paths (ar_tracker.js,
-    // assets/filters/*.png) resolve correctly.  Use loadFlutterAsset for
-    // the main HTML, but inject the base tag so ar_tracker.js is found.
-    // Easiest: load as a data URI with a base URL pointing to flutter_assets.
-    await controller.loadHtmlString(
-      htmlContent,
-      // baseUrl ensures relative requests (ar_tracker.js, filters/) resolve
-      // from the flutter asset server.
-    );
-
-    // Actually, loadFlutterAsset is the correct API:
+    // Load the AR HTML from bundled assets.
+    // loadFlutterAsset serves the file via Flutter's asset server, so
+    // relative paths like ar_tracker.js and filters/ resolve correctly.
     await controller.loadFlutterAsset('assets/ar_webview.html');
 
     setState(() => _controller = controller);
