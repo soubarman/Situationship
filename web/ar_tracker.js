@@ -14,6 +14,40 @@ window.arTracker = {
     images: {},
     frameCount: 0,
 
+    // ================================================================
+    // Per-filter config: scale + offsetX + offsetY
+    // scale   → multiplier on faceW for image width
+    // offsetX → horizontal shift as fraction of faceW  (+ = right)
+    // offsetY → vertical   shift as fraction of faceH  (- = up)
+    // These are live-editable from Flutter via updateFilterConfig()
+    // ================================================================
+    filterConfigs: {
+        ThugLife:    { scale: 2.0,  noseScale: 1.0,  offsetX: 0, offsetY: 0     },
+        Dog:         { scale: 1.55, noseScale: 0.50,  offsetX: 0, offsetY: -0.42 },
+        Cat:         { scale: 1.30, noseScale: 0.45,  offsetX: 0, offsetY: -0.45 },
+        Bunny:       { scale: 1.60, noseScale: 1.0,  offsetX: 0, offsetY: 0      },
+        Devil:       { scale: 2.00, noseScale: 1.0,  offsetX: 0, offsetY: 0      },
+        Angel:       { scale: 1.20, noseScale: 1.0,  offsetX: 0, offsetY: 0      },
+        Crown:       { scale: 1.30, noseScale: 1.0,  offsetX: 0, offsetY: 0      },
+        FlowerCrown: { scale: 1.80, noseScale: 1.0,  offsetX: 0, offsetY: 0      },
+        HeartEyes:   { scale: 2.60, noseScale: 1.0,  offsetX: 0, offsetY: 0      },
+        Clown:       { scale: 1.70, noseScale: 0.45,  offsetX: 0, offsetY: 0      },
+    },
+
+    // Live-update a filter's config from Flutter (no recompile needed)
+    updateFilterConfig: function(filterName, scale, offsetX, offsetY) {
+        const key = filterName.replace(/\s/g, '');
+        if (!this.filterConfigs[key]) this.filterConfigs[key] = {};
+        this.filterConfigs[key].scale   = scale;
+        this.filterConfigs[key].offsetX = offsetX;
+        this.filterConfigs[key].offsetY = offsetY;
+    },
+
+    // Convenience: get config with fallback
+    _cfg: function(key) {
+        return this.filterConfigs[key] || { scale: 1.0, noseScale: 1.0, offsetX: 0, offsetY: 0 };
+    },
+
     // ---- Pre-load all filter image assets ----
     loadImages: function() {
         const assets = {
@@ -75,6 +109,24 @@ window.arTracker = {
         ctx.translate(cx, cy);
         ctx.rotate(angle);
         ctx.drawImage(img, -width / 2, -height / 2, width, height);
+        ctx.restore();
+    },
+
+    // ---- Core helper: crop a section of an image and draw it at (cx,cy) ----
+    // sx_frac,sy_frac,sw_frac,sh_frac are all 0..1 fractions of the source image size
+    drawCrop: function(img, sx_frac, sy_frac, sw_frac, sh_frac, cx, cy, dw, dh, angle) {
+        if (!img || !img.complete || img.naturalWidth === 0) return;
+        const ctx  = this.canvasCtx;
+        const iw   = img.naturalWidth;
+        const ih   = img.naturalHeight;
+        const sx   = Math.floor(iw * sx_frac);
+        const sy   = Math.floor(ih * sy_frac);
+        const sw   = Math.floor(iw * sw_frac);
+        const sh   = Math.floor(ih * sh_frac);
+        ctx.save();
+        ctx.translate(cx, cy);
+        ctx.rotate(angle);
+        ctx.drawImage(img, sx, sy, sw, sh, -dw / 2, -dh / 2, dw, dh);
         ctx.restore();
     },
 
@@ -143,219 +195,208 @@ window.arTracker = {
     // FILTER 1: Thug Life - Pixel glasses tracked to eyes with head tilt
     // ================================================================
     filterThugLife: function(lms, w, h) {
-        const m = this.getFaceMetrics(lms, w, h);
-        const glassesW = m.faceW * 1.1;
-        const glassesH = glassesW * 0.35;
-        this.drawOverlay(this.images.thugLife, m.midEye.x, m.midEye.y, glassesW, glassesH, m.angle);
+        const m   = this.getFaceMetrics(lms, w, h);
+        const cfg = this._cfg('ThugLife');
+        const img = this.images.thugLife;
+        const eyeDist  = Math.hypot(m.rightEye.x - m.leftEye.x, m.rightEye.y - m.leftEye.y);
+        const glassesW = eyeDist * cfg.scale;
+        const glassesH = img.complete && img.naturalWidth > 0
+            ? glassesW * (img.naturalHeight / img.naturalWidth)
+            : glassesW * 0.35;
+        const cx = m.midEye.x + m.faceW * cfg.offsetX;
+        const cy = m.midEye.y + m.faceH * cfg.offsetY;
+        this.drawOverlay(img, cx, cy, glassesW, glassesH, m.angle);
     },
 
     // ================================================================
-    // FILTER 2: Dog - Ears on top of head + nose on nose tip
+    // FILTER 2: Dog - 3 independent sections from the combined PNG:
+    //   SECTION A: Top 45% of PNG → ears above forehead
+    //   SECTION B: Center 30% of PNG (nose area) → at nose tip
+    //   SECTION C: Left/right 35% sides (whiskers) → at cheeks
     // ================================================================
     filterDog: function(lms, w, h) {
-        const m = this.getFaceMetrics(lms, w, h);
-        // Draw the whole dog filter overlay (ears + whiskers + nose from single asset)
-        const filterW = m.faceW * 1.6;
-        const filterH = filterW * 0.9;
-        // Anchor slightly above the eyes
-        this.drawOverlay(this.images.dog, m.midEye.x, m.forehead.y - filterH * 0.1, filterW, filterH, m.angle);
-        // Dog nose on nose tip
-        const ctx = this.canvasCtx;
+        const m    = this.getFaceMetrics(lms, w, h);
+        const cfg  = this._cfg('Dog');
+        const img  = this.images.dog;
         const nose = this.lm(lms, 4, w, h);
-        ctx.fillStyle = '#1a1a1a';
-        ctx.beginPath();
-        ctx.ellipse(nose.x, nose.y, m.faceW * 0.065, m.faceW * 0.045, m.angle, 0, Math.PI * 2);
-        ctx.fill();
-        // Nostrils highlight
-        ctx.fillStyle = 'rgba(255,255,255,0.5)';
-        ctx.beginPath();
-        ctx.ellipse(nose.x - m.faceW*0.02, nose.y - m.faceW*0.01, m.faceW*0.015, m.faceW*0.01, m.angle, 0, Math.PI*2);
-        ctx.fill();
-        // Whiskers
+
+        // SECTION A: Ears — driven by cfg.scale
+        const earW  = m.faceW * cfg.scale;
+        const earH  = earW * 0.48;
+        const earCY = m.forehead.y + m.faceH * cfg.offsetY;
+        const earCX = m.midEye.x   + m.faceW * cfg.offsetX;
+        this.drawCrop(img, 0, 0, 1, 0.45, earCX, earCY, earW, earH, m.angle);
+
+        // SECTION B: Nose — driven by cfg.noseScale
+        const noseW = m.faceW * cfg.noseScale;
+        const noseH = noseW * 0.75;
+        this.drawCrop(img, 0.28, 0.52, 0.44, 0.32, nose.x, nose.y, noseW, noseH, m.angle);
+
+        // SECTION C: Whiskers — proportional to noseScale
         const lCheek = this.lm(lms, 205, w, h);
         const rCheek = this.lm(lms, 425, w, h);
-        ctx.strokeStyle = 'rgba(255,255,255,0.9)';
-        ctx.lineWidth = 2;
-        for (let i = -1; i <= 1; i++) {
-            const oy = i * m.faceW * 0.045;
-            ctx.beginPath(); ctx.moveTo(lCheek.x, lCheek.y + oy); ctx.lineTo(lCheek.x - m.faceW*0.35, lCheek.y + oy - i*5); ctx.stroke();
-            ctx.beginPath(); ctx.moveTo(rCheek.x, rCheek.y + oy); ctx.lineTo(rCheek.x + m.faceW*0.35, rCheek.y + oy - i*5); ctx.stroke();
-        }
+        const wW     = m.faceW * 0.52;
+        const wH     = wW * 0.30;
+        this.drawCrop(img, 0,    0.42, 0.35, 0.26, lCheek.x - wW * 0.22, lCheek.y, wW, wH, m.angle);
+        this.drawCrop(img, 0.65, 0.42, 0.35, 0.26, rCheek.x + wW * 0.22, rCheek.y, wW, wH, m.angle);
     },
 
     // ================================================================
-    // FILTER 3: Cat - Cat ears + pink nose + thin whiskers
+    // FILTER 3: Cat - 2 independent sections from combined PNG:
+    //   SECTION A: Top 48% of PNG → ears above forehead
+    //   SECTION B: Center rows 44-78% → nose + whiskers at nose level
     // ================================================================
     filterCat: function(lms, w, h) {
-        const m = this.getFaceMetrics(lms, w, h);
-        // Cat filter asset (ears)
-        const filterW = m.faceW * 1.4;
-        const filterH = filterW * 0.8;
-        this.drawOverlay(this.images.cat, m.midEye.x, m.forehead.y - filterH * 0.1, filterW, filterH, m.angle);
-        // Pink cat nose
-        const ctx = this.canvasCtx;
+        const m    = this.getFaceMetrics(lms, w, h);
+        const cfg  = this._cfg('Cat');
+        const img  = this.images.cat;
         const nose = this.lm(lms, 4, w, h);
-        // Triangle nose
-        const ns = m.faceW * 0.04;
-        ctx.save();
-        ctx.translate(nose.x, nose.y);
-        ctx.rotate(m.angle);
-        ctx.fillStyle = '#ff9eb5';
-        ctx.beginPath();
-        ctx.moveTo(0, -ns);
-        ctx.lineTo(-ns, ns*0.5);
-        ctx.lineTo(ns, ns*0.5);
-        ctx.closePath();
-        ctx.fill();
-        ctx.restore();
-        // Thin elegant whiskers
-        const lCheek = this.lm(lms, 205, w, h);
-        const rCheek = this.lm(lms, 425, w, h);
-        ctx.strokeStyle = 'rgba(0,0,0,0.7)';
-        ctx.lineWidth = 1.5;
-        for (let i = -1; i <= 1; i++) {
-            const oy = i * m.faceW * 0.04;
-            ctx.beginPath(); ctx.moveTo(lCheek.x, lCheek.y + oy); ctx.lineTo(lCheek.x - m.faceW*0.3, lCheek.y + oy - i*8); ctx.stroke();
-            ctx.beginPath(); ctx.moveTo(rCheek.x, rCheek.y + oy); ctx.lineTo(rCheek.x + m.faceW*0.3, rCheek.y + oy - i*8); ctx.stroke();
-        }
+
+        // SECTION A: Ears
+        const earW  = m.faceW * cfg.scale;
+        const earH  = earW * 0.55;
+        const earCY = m.forehead.y + m.faceH * cfg.offsetY;
+        const earCX = m.midEye.x   + m.faceW * cfg.offsetX;
+        this.drawCrop(img, 0, 0, 1, 0.48, earCX, earCY, earW, earH, m.angle);
+
+        // SECTION B: Nose + whiskers — driven by cfg.noseScale
+        const nwW = m.faceW * cfg.noseScale;
+        const nwH = nwW * 0.38;
+        this.drawCrop(img, 0.06, 0.44, 0.88, 0.36, nose.x + m.faceW * cfg.offsetX, nose.y, nwW, nwH, m.angle);
     },
 
     // ================================================================
-    // FILTER 4: Bunny - Tall bunny ears track with head, sparkles
+    // FILTER 4: Bunny - Ears-only PNG. Anchor bottom of image to forehead.
     // ================================================================
     filterBunny: function(lms, w, h) {
-        const m = this.getFaceMetrics(lms, w, h);
-        const earW  = m.faceW * 0.9;
-        const earH  = m.faceH * 0.9;
-        // Anchor ears above forehead
-        this.drawOverlay(this.images.bunny, m.midEye.x, m.forehead.y - earH * 0.25, earW, earH, m.angle);
-        // Tiny pink bunny nose
-        const ctx = this.canvasCtx;
-        const nose = this.lm(lms, 4, w, h);
-        ctx.fillStyle = '#ffb7c5';
-        ctx.beginPath();
-        ctx.ellipse(nose.x, nose.y, m.faceW*0.04, m.faceW*0.028, m.angle, 0, Math.PI*2);
-        ctx.fill();
-        // Small sparkles around face
-        ctx.fillStyle = 'rgba(255, 200, 255, 0.8)';
-        const lEar = this.lm(lms, 234, w, h);
-        const rEar = this.lm(lms, 454, w, h);
-        this._drawSparkle(ctx, lEar.x - 20, lEar.y - 20, 8);
-        this._drawSparkle(ctx, rEar.x + 20, rEar.y - 20, 8);
-        this._drawSparkle(ctx, m.forehead.x, m.forehead.y - 30, 10);
+        const m   = this.getFaceMetrics(lms, w, h);
+        const cfg = this._cfg('Bunny');
+        const img = this.images.bunny;
+        // Virtual forehead: landmark 10 is too low for people with hair
+        const vForehead = m.forehead.y - (m.faceH * 0.15);
+        const earW = m.faceW * cfg.scale;  // 1.6x
+        const earH = img.complete && img.naturalWidth > 0
+            ? earW * (img.naturalHeight / img.naturalWidth)
+            : earW * 1.8;
+        const cx = m.midEye.x + m.faceW * cfg.offsetX;
+        // Anchor center so ears float well above actual hair line
+        const cy = vForehead - earH * 0.75;
+        this.drawOverlay(img, cx, cy, earW, earH, m.angle);
     },
 
     // ================================================================
-    // FILTER 5: Devil - Red horns above head + red tint on eyes
+    // FILTER 5: Devil - Horns-only PNG above head. Anchor bottom of image to forehead.
     // ================================================================
     filterDevil: function(lms, w, h) {
-        const m = this.getFaceMetrics(lms, w, h);
-        const hornW = m.faceW * 1.0;
-        const hornH = m.faceH * 0.5;
-        this.drawOverlay(this.images.devil, m.midEye.x, m.forehead.y - hornH * 0.3, hornW, hornH, m.angle);
-        // Red glow on eyes
-        const ctx = this.canvasCtx;
-        const leftEye  = this.lm(lms, 33, w, h);
-        const rightEye = this.lm(lms, 263, w, h);
-        const eyeR = m.faceW * 0.085;
-        const grad = (x, y) => {
-            const g = ctx.createRadialGradient(x, y, 0, x, y, eyeR*1.5);
-            g.addColorStop(0, 'rgba(255,0,0,0.6)');
-            g.addColorStop(1, 'rgba(255,0,0,0)');
-            return g;
-        };
-        ctx.fillStyle = grad(leftEye.x, leftEye.y);
-        ctx.beginPath(); ctx.ellipse(leftEye.x, leftEye.y, eyeR, eyeR*0.6, m.angle, 0, Math.PI*2); ctx.fill();
-        ctx.fillStyle = grad(rightEye.x, rightEye.y);
-        ctx.beginPath(); ctx.ellipse(rightEye.x, rightEye.y, eyeR, eyeR*0.6, m.angle, 0, Math.PI*2); ctx.fill();
+        const m   = this.getFaceMetrics(lms, w, h);
+        const cfg = this._cfg('Devil');
+        const img = this.images.devil;
+        const vForehead = m.forehead.y - (m.faceH * 0.15);
+        const hornW = m.faceW * cfg.scale;  // 2.0x
+        const hornH = img.complete && img.naturalWidth > 0
+            ? hornW * (img.naturalHeight / img.naturalWidth)
+            : hornW * 0.55;
+        const cx = m.midEye.x + m.faceW * cfg.offsetX;
+        // Bottom of horns image sits at virtual forehead
+        const cy = vForehead - hornH * 0.5;
+        this.drawOverlay(img, cx, cy, hornW, hornH, m.angle);
     },
 
     // ================================================================
-    // FILTER 6: Angel - Golden halo above head + white glow on face
+    // FILTER 6: Angel - Halo ring PNG floating above head. Image-only.
     // ================================================================
     filterAngel: function(lms, w, h) {
-        const m = this.getFaceMetrics(lms, w, h);
-        const haloW = m.faceW * 0.8;
-        const haloH = haloW * 0.4;
-        // Halo floating above head
-        this.drawOverlay(this.images.halo, m.forehead.x, m.forehead.y - haloH, haloW, haloH, m.angle);
-        // Soft divine glow over face
-        const ctx = this.canvasCtx;
-        const grad = ctx.createRadialGradient(m.midEye.x, m.midEye.y, 0, m.midEye.x, m.midEye.y, m.faceW * 0.6);
-        grad.addColorStop(0, 'rgba(255,255,210,0.15)');
-        grad.addColorStop(1, 'rgba(255,255,210,0)');
-        ctx.fillStyle = grad;
-        ctx.fillRect(0, 0, w, h);
+        const m   = this.getFaceMetrics(lms, w, h);
+        const cfg = this._cfg('Angel');
+        const img = this.images.halo;
+        const vForehead = m.forehead.y - (m.faceH * 0.15);
+        const haloW = m.faceW * cfg.scale;  // 1.2x
+        const haloH = img.complete && img.naturalWidth > 0
+            ? haloW * (img.naturalHeight / img.naturalWidth)
+            : haloW * 0.45;
+        const cx = m.midEye.x + m.faceW * cfg.offsetX;
+        // Halo floats above virtual forehead
+        const cy = vForehead - haloH * 0.6;
+        this.drawOverlay(img, cx, cy, haloW, haloH, m.angle);
     },
 
     // ================================================================
-    // FILTER 7: Crown - Gold crown tracks with head
+    // FILTER 7: Crown - Crown PNG sits on top of forehead. Image-only.
     // ================================================================
     filterCrown: function(lms, w, h) {
-        const m = this.getFaceMetrics(lms, w, h);
-        const crownW = m.faceW * 0.95;
-        const crownH = m.faceH * 0.3;
-        // Anchor crown to top of head
-        this.drawOverlay(this.images.crown, m.forehead.x, m.forehead.y - crownH * 0.2, crownW, crownH, m.angle);
+        const m   = this.getFaceMetrics(lms, w, h);
+        const cfg = this._cfg('Crown');
+        const img = this.images.crown;
+        const vForehead = m.forehead.y - (m.faceH * 0.15);
+        const crownW = m.faceW * cfg.scale;  // 1.3x
+        const crownH = img.complete && img.naturalWidth > 0
+            ? crownW * (img.naturalHeight / img.naturalWidth)
+            : crownW * 0.5;
+        const cx = m.midEye.x + m.faceW * cfg.offsetX;
+        // Bottom of crown sits at virtual forehead
+        const cy = vForehead - crownH * 0.5;
+        this.drawOverlay(img, cx, cy, crownW, crownH, m.angle);
     },
 
     // ================================================================
-    // FILTER 8: Flower Crown - Flowers across forehead
+    // FILTER 8: Flower Crown - Wide band across forehead. Image-only.
     // ================================================================
     filterFlowerCrown: function(lms, w, h) {
-        const m = this.getFaceMetrics(lms, w, h);
-        const crowW = m.faceW * 1.5;
-        const crowH = crowW * 0.4;
-        this.drawOverlay(this.images.flowerCrown, m.midEye.x, m.forehead.y - crowH * 0.1, crowW, crowH, m.angle);
+        const m   = this.getFaceMetrics(lms, w, h);
+        const cfg = this._cfg('FlowerCrown');
+        const img = this.images.flowerCrown;
+        const vForehead = m.forehead.y - (m.faceH * 0.15);
+        const crowW = m.faceW * cfg.scale;  // 1.8x
+        const crowH = img.complete && img.naturalWidth > 0
+            ? crowW * (img.naturalHeight / img.naturalWidth)
+            : crowW * 0.35;
+        const cx = m.midEye.x + m.faceW * cfg.offsetX;
+        // Center of band sits at virtual forehead
+        const cy = vForehead - crowH * 0.1;
+        this.drawOverlay(img, cx, cy, crowW, crowH, m.angle);
     },
 
     // ================================================================
-    // FILTER 9: Heart Eyes - Hearts replace eyes
+    // FILTER 9: Heart Eyes - Hearts PNG centered on eye zone. Image-only.
     // ================================================================
     filterHeartEyes: function(lms, w, h) {
-        const m = this.getFaceMetrics(lms, w, h);
-        // Draw hearts asset scaled to face width, anchored between eyes
-        const heartsW = m.faceW * 1.0;
-        const heartsH = heartsW * 0.5;
-        this.drawOverlay(this.images.hearts, m.midEye.x, m.midEye.y, heartsW, heartsH, m.angle);
-        // Floating heart particles
-        const ctx = this.canvasCtx;
-        const t = Date.now() / 1000;
-        for (let i = 0; i < 4; i++) {
-            const px = m.midEye.x + Math.sin(t * 1.2 + i * 1.5) * m.faceW * 0.4;
-            const py = m.midEye.y - 30 - (t * 30 * (i+1)*0.15 % (m.faceH * 0.5));
-            const s  = 10 + Math.sin(t + i) * 5;
-            ctx.fillStyle = `rgba(255, ${50 + i*30}, ${100 + i*20}, ${0.5 + Math.sin(t+i)*0.3})`;
-            this._drawHeart(ctx, px, py, s);
-        }
+        const m   = this.getFaceMetrics(lms, w, h);
+        const cfg = this._cfg('HeartEyes');
+        const img = this.images.hearts;
+        const eyeDist = Math.hypot(m.rightEye.x - m.leftEye.x, m.rightEye.y - m.leftEye.y);
+        const heartsW = eyeDist * cfg.scale;
+        const heartsH = img.complete && img.naturalWidth > 0
+            ? heartsW * (img.naturalHeight / img.naturalWidth)
+            : heartsW * 0.5;
+        const cx = m.midEye.x + m.faceW * cfg.offsetX;
+        const cy = m.midEye.y + m.faceH * cfg.offsetY;
+        this.drawOverlay(img, cx, cy, heartsW, heartsH, m.angle);
     },
 
     // ================================================================
-    // FILTER 10: Clown - Clown wig + red nose
+    // FILTER 10: Clown - 2 sections:
+    //   SECTION A: Top 55% of PNG (wig) → above forehead
+    //   SECTION B: Center nose (40-70% rows, center cols) → on nose tip
     // ================================================================
     filterClown: function(lms, w, h) {
-        const m = this.getFaceMetrics(lms, w, h);
-        const clownW = m.faceW * 1.5;
-        const clownH = m.faceH * 0.75;
-        // Wig above head
-        this.drawOverlay(this.images.clown, m.midEye.x, m.forehead.y - clownH * 0.1, clownW, clownH, m.angle);
-        // Red clown nose on nose tip
-        const ctx = this.canvasCtx;
+        const m    = this.getFaceMetrics(lms, w, h);
+        const cfg  = this._cfg('Clown');
+        const img  = this.images.clown;
         const nose = this.lm(lms, 4, w, h);
-        const r = m.faceW * 0.065;
-        const g = ctx.createRadialGradient(nose.x - r*0.3, nose.y - r*0.3, 0, nose.x, nose.y, r);
-        g.addColorStop(0, '#ff6b6b');
-        g.addColorStop(0.6, '#ff0000');
-        g.addColorStop(1, '#cc0000');
-        ctx.fillStyle = g;
-        ctx.beginPath();
-        ctx.arc(nose.x, nose.y, r, 0, Math.PI * 2);
-        ctx.fill();
-        // White gleam
-        ctx.fillStyle = 'rgba(255,255,255,0.5)';
-        ctx.beginPath();
-        ctx.ellipse(nose.x - r*0.3, nose.y - r*0.3, r*0.3, r*0.2, -Math.PI/4, 0, Math.PI*2);
-        ctx.fill();
+        const vForehead = m.forehead.y - (m.faceH * 0.15);
+
+        // SECTION A: Wig — driven by cfg.scale, uses virtual forehead
+        const wigW  = m.faceW * cfg.scale;
+        const wigH  = wigW * 0.65;
+        const wigCX = m.midEye.x + m.faceW * cfg.offsetX;
+        // Center of wig sits above virtual forehead
+        const wigCY = vForehead - wigH * 0.35;
+        this.drawCrop(img, 0, 0, 1, 0.55, wigCX, wigCY, wigW, wigH, m.angle);
+
+        // SECTION B: Clown nose — 0.45x = large, visible red ball
+        const noseW = m.faceW * cfg.noseScale;  // 0.45
+        const noseH = noseW;
+        this.drawCrop(img, 0.30, 0.45, 0.40, 0.25, nose.x, nose.y, noseW, noseH, m.angle);
     },
 
     // ================================================================
@@ -543,7 +584,6 @@ window.arTracker = {
     filterBeard: function(lms, w, h) {
         const ctx = this.canvasCtx;
         const m   = this.getFaceMetrics(lms, w, h);
-        // Jaw landmarks
         const jawL   = this.lm(lms, 172, w, h);
         const jawR   = this.lm(lms, 397, w, h);
         const chin   = this.lm(lms, 175, w, h);
@@ -552,24 +592,56 @@ window.arTracker = {
         const mouthR = this.lm(lms, 291, w, h);
 
         ctx.save();
+
+        // ---- Beard body (stays tight to jawline, no giant droop) ----
         ctx.fillStyle = '#1a1008';
-        // Beard shape following jawline
         ctx.beginPath();
         ctx.moveTo(mouthL.x, mouthL.y);
-        ctx.quadraticCurveTo(jawL.x + 10, jawL.y - 20, jawL.x, jawL.y + 15);
-        ctx.quadraticCurveTo(chin.x - m.faceW*0.1, chin.y + m.faceW*0.15, chin.x, chin.y + m.faceW*0.18);
-        ctx.quadraticCurveTo(chin.x + m.faceW*0.1, chin.y + m.faceW*0.15, jawR.x, jawR.y + 15);
-        ctx.quadraticCurveTo(jawR.x - 10, jawR.y - 20, mouthR.x, mouthR.y);
+        // Left jaw curve
+        ctx.quadraticCurveTo(jawL.x + 10, jawL.y - 15, jawL.x, jawL.y + 8);
+        // Chin tip — reduced droop: 0.08 instead of 0.18
+        ctx.quadraticCurveTo(
+            chin.x - m.faceW * 0.08, chin.y + m.faceW * 0.08,
+            chin.x,                  chin.y + m.faceW * 0.08
+        );
+        ctx.quadraticCurveTo(
+            chin.x + m.faceW * 0.08, chin.y + m.faceW * 0.08,
+            jawR.x,                  jawR.y + 8
+        );
+        // Right jaw curve
+        ctx.quadraticCurveTo(jawR.x - 10, jawR.y - 15, mouthR.x, mouthR.y);
         ctx.closePath();
         ctx.fill();
 
-        // Mustache
+        // ---- Beard hair texture lines ----
+        ctx.strokeStyle = 'rgba(80,40,10,0.35)';
+        ctx.lineWidth = 1.5;
+        const midX = (mouthL.x + mouthR.x) / 2;
+        for (let i = -3; i <= 3; i++) {
+            const lx = midX + i * m.faceW * 0.06;
+            ctx.beginPath();
+            ctx.moveTo(lx, chin.y - m.faceW * 0.02);
+            ctx.lineTo(lx + i * 2, chin.y + m.faceW * 0.06);
+            ctx.stroke();
+        }
+
+        // ---- Mustache ----
+        const muW = (mouthR.x - mouthL.x) * 0.28;
+        const muH = m.faceW * 0.035; // thinner
         ctx.fillStyle = '#1a1008';
+        // Left half
         ctx.beginPath();
-        ctx.ellipse(mouthL.x + (mouthR.x - mouthL.x)*0.25, upLip.y, (mouthR.x - mouthL.x)*0.28, m.faceW*0.04, m.angle - 0.15, 0, Math.PI);
+        ctx.ellipse(
+            mouthL.x + (mouthR.x - mouthL.x) * 0.25, upLip.y,
+            muW, muH, m.angle - 0.1, 0, Math.PI
+        );
         ctx.fill();
+        // Right half
         ctx.beginPath();
-        ctx.ellipse(mouthL.x + (mouthR.x - mouthL.x)*0.75, upLip.y, (mouthR.x - mouthL.x)*0.28, m.faceW*0.04, m.angle + 0.15, 0, Math.PI);
+        ctx.ellipse(
+            mouthL.x + (mouthR.x - mouthL.x) * 0.75, upLip.y,
+            muW, muH, m.angle + 0.1, 0, Math.PI
+        );
         ctx.fill();
         ctx.restore();
     },

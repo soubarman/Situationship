@@ -78,6 +78,19 @@ class AppColorFilters {
   static List<String> get names => _matrices.keys.toList();
 }
 
+// ─── Filter Calibration Config ───────────────────────────────────────────────
+class FilterConfig {
+  double scale;
+  double offsetX;
+  double offsetY;
+
+  FilterConfig({
+    this.scale   = 1.0,
+    this.offsetX = 0.0,
+    this.offsetY = 0.0,
+  });
+}
+
 // ─── Firestore instance ───────────────────────────────────────────────────────
 final _db = FirebaseFirestore.instanceFor(
   app: Firebase.app(),
@@ -140,6 +153,19 @@ class _TakeScreenState extends ConsumerState<TakeScreen>
     'Glitter',
     'Alien',
   ];
+
+  // ── Live Filter Calibration ──
+  bool _showCalibrator = false;
+  double _calScale   = 1.0;
+  double _calOffsetX = 0.0;
+  double _calOffsetY = 0.0;
+
+  void _updateFilterConfig() {
+    if (_arFilter == 'NONE') return;
+    try {
+      updateARFilterConfig(_arFilter, _calScale, _calOffsetX, _calOffsetY);
+    } catch (_) {}
+  }
 
   // ── Capture state ──
   Uint8List? _capturedImageBytes;
@@ -701,6 +727,8 @@ class _TakeScreenState extends ConsumerState<TakeScreen>
                     ],
                   ),
                 ),
+              // Live filter calibrator (appears when long-pressing a filter)
+              _buildFilterCalibrator(),
             ],
           ),
         ),
@@ -1142,7 +1170,21 @@ class _TakeScreenState extends ConsumerState<TakeScreen>
           final sel = _arFilter == f;
           return GestureDetector(
             onTap: () {
-              setState(() => _arFilter = f);
+              setState(() {
+                _arFilter = f;
+                _calScale   = 1.0;
+                _calOffsetX = 0.0;
+                _calOffsetY = 0.0;
+                _showCalibrator = false;
+              });
+              setARFilter(f);
+            },
+            onLongPress: () {
+              if (f == 'NONE') return;
+              setState(() {
+                _arFilter = f;
+                _showCalibrator = !_showCalibrator;
+              });
               setARFilter(f);
             },
             child: AnimatedContainer(
@@ -1175,6 +1217,127 @@ class _TakeScreenState extends ConsumerState<TakeScreen>
           );
         },
       ),
+    );
+  }
+
+  // ── Live Filter Calibrator Panel ─────────────────────────────────────────────
+  Widget _buildFilterCalibrator() {
+    if (!_showCalibrator || _arFilter == 'NONE') return const SizedBox();
+    return Positioned(
+      bottom: 130,
+      left: 16,
+      right: 16,
+      child: Container(
+        padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+        decoration: BoxDecoration(
+          color: Colors.black.withOpacity(0.82),
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: AppTheme.accentPurple.withOpacity(0.5)),
+          boxShadow: [
+            BoxShadow(
+              color: AppTheme.accentPurple.withOpacity(0.3),
+              blurRadius: 20,
+            ),
+          ],
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  'Calibrate: $_arFilter',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 13,
+                  ),
+                ),
+                GestureDetector(
+                  onTap: () => setState(() => _showCalibrator = false),
+                  child: const Icon(Icons.close, color: Colors.white54, size: 18),
+                ),
+              ],
+            ),
+            const SizedBox(height: 10),
+            _calibSlider(
+              label: 'Scale',
+              value: _calScale,
+              min: 0.3,
+              max: 3.5,
+              onChanged: (v) {
+                setState(() => _calScale = v);
+                _updateFilterConfig();
+              },
+            ),
+            _calibSlider(
+              label: 'X Offset',
+              value: _calOffsetX,
+              min: -1.5,
+              max: 1.5,
+              onChanged: (v) {
+                setState(() => _calOffsetX = v);
+                _updateFilterConfig();
+              },
+            ),
+            _calibSlider(
+              label: 'Y Offset',
+              value: _calOffsetY,
+              min: -1.5,
+              max: 1.5,
+              onChanged: (v) {
+                setState(() => _calOffsetY = v);
+                _updateFilterConfig();
+              },
+            ),
+            const SizedBox(height: 4),
+            Text(
+              'S:${_calScale.toStringAsFixed(2)}  X:${_calOffsetX.toStringAsFixed(2)}  Y:${_calOffsetY.toStringAsFixed(2)}',
+              style: const TextStyle(color: Colors.white38, fontSize: 10),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _calibSlider({
+    required String label,
+    required double value,
+    required double min,
+    required double max,
+    required ValueChanged<double> onChanged,
+  }) {
+    return Row(
+      children: [
+        SizedBox(
+          width: 68,
+          child: Text(
+            label,
+            style: const TextStyle(color: Colors.white60, fontSize: 11),
+          ),
+        ),
+        Expanded(
+          child: SliderTheme(
+            data: SliderThemeData(
+              activeTrackColor: AppTheme.accentPurple,
+              inactiveTrackColor: Colors.white12,
+              thumbColor: Colors.white,
+              overlayColor: AppTheme.accentPurple.withOpacity(0.2),
+              trackHeight: 3,
+              thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 7),
+            ),
+            child: Slider(
+              value: value.clamp(min, max),
+              min: min,
+              max: max,
+              onChanged: onChanged,
+            ),
+          ),
+        ),
+      ],
     );
   }
 }
