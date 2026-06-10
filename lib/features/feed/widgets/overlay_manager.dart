@@ -33,12 +33,14 @@ class OverlayManager extends StatefulWidget {
   final List<OverlayItem> items;
   final Function(OverlayItem) onItemTap;
   final VoidCallback onItemsChanged;
+  final Function(bool)? onDragStateChanged;
 
   const OverlayManager({
     super.key,
     required this.items,
     required this.onItemTap,
     required this.onItemsChanged,
+    this.onDragStateChanged,
   });
 
   @override
@@ -187,6 +189,7 @@ class _OverlayManagerState extends State<OverlayManager> {
                   widget.items.remove(item);
                   widget.items.add(item);
                 });
+                if (widget.onDragStateChanged != null) widget.onDragStateChanged!(true);
               },
               onScaleUpdate: (details) {
                 if (_activeItem != item) return;
@@ -211,6 +214,7 @@ class _OverlayManagerState extends State<OverlayManager> {
                   _isInTrashZone = false;
                   widget.onItemsChanged();
                 });
+                if (widget.onDragStateChanged != null) widget.onDragStateChanged!(false);
               },
               child: child,
             ),

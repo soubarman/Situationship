@@ -58,6 +58,7 @@ class _TakeScreenState extends ConsumerState<TakeScreen>
   String _mode = 'PHOTO'; // PHOTO | VIDEO
   String _tab = 'NONE'; // NONE | AR | FILTERS | STICKERS
   String _filter = 'Normal';
+  bool _isDraggingItem = false;
 
   // ── Camera / Media state (Web) ──
   html.VideoElement? _videoElement;
@@ -557,16 +558,23 @@ class _TakeScreenState extends ConsumerState<TakeScreen>
           _buildPreviewArea(),
           
           // Floating Controls Overlay
-          SafeArea(
-            child: Column(
-              children: [
-                _buildTopBar(),
-                const Spacer(),
-                _buildTabContent(),
-                _buildTabBar(),
-                _buildBottomControls(),
-                _buildPostBar(),
-              ],
+          AnimatedOpacity(
+            duration: const Duration(milliseconds: 200),
+            opacity: _isDraggingItem ? 0.0 : 1.0,
+            child: IgnorePointer(
+              ignoring: _isDraggingItem,
+              child: SafeArea(
+                child: Column(
+                  children: [
+                    _buildTopBar(),
+                    const Spacer(),
+                    _buildTabContent(),
+                    _buildTabBar(),
+                    _buildBottomControls(),
+                    _buildPostBar(),
+                  ],
+                ),
+              ),
             ),
           ),
         ],
@@ -719,6 +727,9 @@ class _TakeScreenState extends ConsumerState<TakeScreen>
                 },
                 child: OverlayManager(
                   items: _overlays,
+                  onDragStateChanged: (dragging) {
+                    setState(() => _isDraggingItem = dragging);
+                  },
                   onItemTap: (item) {
                     if (item.isText) {
                       _editOverlayItem(item);
