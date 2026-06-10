@@ -144,33 +144,65 @@ class StoriesRow extends ConsumerWidget {
                 context.push('/take/create');
               }
             },
-            child: Container(
-              width: 68,
-              height: 68,
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(22), // Modern squircle
-                gradient: myStory != null ? AppTheme.primaryGradient : null,
-                color: myStory == null ? (isDark ? Colors.white.withOpacity(0.08) : Colors.black.withOpacity(0.03)) : null,
-                border: Border.all(
-                  color: myStory != null 
-                    ? Colors.transparent 
-                    : (isDark ? Colors.white.withOpacity(0.15) : AppTheme.primaryBlue.withOpacity(0.3)),
-                  width: 1.5,
-                ),
-                boxShadow: myStory == null ? [
-                  BoxShadow(
-                    color: AppTheme.accentPurple.withOpacity(0.15),
-                    blurRadius: 12,
-                    spreadRadius: 2,
-                  )
-                ] : [
-                  BoxShadow(
-                    color: AppTheme.primaryBlue.withOpacity(0.3),
-                    blurRadius: 10,
-                    offset: const Offset(0, 4),
-                  )
-                ],
-              ),
+            child: myStory == null 
+              ? _BleedingWaveWidget(
+                  child: Container(
+                    width: 68,
+                    height: 68,
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(22), // Modern squircle
+                      color: isDark ? Colors.white.withOpacity(0.08) : AppTheme.accentPurple.withOpacity(0.1),
+                      border: Border.all(
+                        color: isDark ? Colors.white.withOpacity(0.15) : AppTheme.accentPurple.withOpacity(0.3),
+                        width: 1.5,
+                      ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: AppTheme.accentPurple.withOpacity(0.15),
+                          blurRadius: 12,
+                          spreadRadius: 2,
+                        )
+                      ],
+                    ),
+                    child: Stack(
+                      alignment: Alignment.center,
+                      clipBehavior: Clip.none,
+                      children: [
+                        // If we don't have a story, show a cool animated plus icon
+                        Container(
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            color: AppTheme.accentPurple.withOpacity(0.2),
+                            shape: BoxShape.circle,
+                          ),
+                          child: const Icon(
+                            Icons.auto_awesome_rounded, // Sparkle icon
+                            color: AppTheme.accentPurple,
+                            size: 24,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                )
+              : Container(
+                  width: 68,
+                  height: 68,
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(22), // Modern squircle
+                    gradient: AppTheme.primaryGradient,
+                    border: Border.all(
+                      color: Colors.transparent,
+                      width: 1.5,
+                    ),
+                    boxShadow: [
+                      BoxShadow(
+                        color: AppTheme.primaryBlue.withOpacity(0.3),
+                        blurRadius: 10,
+                        offset: const Offset(0, 4),
+                      )
+                    ],
+                  ),
               child: Stack(
                 alignment: Alignment.center,
                 clipBehavior: Clip.none,
@@ -190,18 +222,16 @@ class StoriesRow extends ConsumerWidget {
                     
                   // If we don't have a story, show a cool animated plus icon
                   if (myStory == null)
-                    _BleedingWaveWidget(
-                      child: Container(
-                        padding: const EdgeInsets.all(8),
-                        decoration: BoxDecoration(
-                          color: AppTheme.accentPurple.withOpacity(0.2),
-                          shape: BoxShape.circle,
-                        ),
-                        child: const Icon(
-                          Icons.auto_awesome_rounded, // Sparkle icon
-                          color: AppTheme.accentPurple,
-                          size: 24,
-                        ),
+                    Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: AppTheme.accentPurple.withOpacity(0.2),
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(
+                        Icons.auto_awesome_rounded, // Sparkle icon
+                        color: AppTheme.accentPurple,
+                        size: 24,
                       ),
                     ),
                     
@@ -392,14 +422,14 @@ class _BleedingWaveWidgetState extends State<_BleedingWaveWidget> with SingleTic
           animation: _controller,
           builder: (context, _) {
             return Transform.scale(
-              scale: 1.0 + (_controller.value * 0.8), // Expands by 80%
+              scale: 1.0 + (_controller.value * 0.4), // Expands by 40%
               child: Opacity(
-                opacity: (1.0 - _controller.value) * 0.6, // Fades out smoothly
+                opacity: (1.0 - _controller.value) * 0.4, // Fades out smoothly
                 child: Container(
-                  width: 40,
-                  height: 40,
-                  decoration: const BoxDecoration(
-                    shape: BoxShape.circle,
+                  width: 68,
+                  height: 68,
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(22),
                     color: AppTheme.accentPurple,
                   ),
                 ),
