@@ -151,15 +151,15 @@ class StoriesRow extends ConsumerWidget {
                     height: 68,
                     decoration: BoxDecoration(
                       borderRadius: BorderRadius.circular(22), // Modern squircle
-                      color: isDark ? Colors.white.withOpacity(0.08) : AppTheme.accentPurple.withOpacity(0.1),
+                      color: isDark ? Colors.white.withOpacity(0.1) : Colors.white.withOpacity(0.95),
                       border: Border.all(
-                        color: isDark ? Colors.white.withOpacity(0.15) : AppTheme.accentPurple.withOpacity(0.3),
-                        width: 1.5,
+                        color: isDark ? Colors.white.withOpacity(0.2) : AppTheme.accentPurple.withOpacity(0.5),
+                        width: 2.0,
                       ),
                       boxShadow: [
                         BoxShadow(
-                          color: AppTheme.accentPurple.withOpacity(0.15),
-                          blurRadius: 12,
+                          color: AppTheme.accentPurple.withOpacity(0.25),
+                          blurRadius: 16,
                           spreadRadius: 2,
                         )
                       ],
@@ -170,15 +170,26 @@ class StoriesRow extends ConsumerWidget {
                       children: [
                         // If we don't have a story, show a cool animated plus icon
                         Container(
-                          padding: const EdgeInsets.all(8),
-                          decoration: BoxDecoration(
-                            color: AppTheme.accentPurple.withOpacity(0.2),
+                          padding: const EdgeInsets.all(10),
+                          decoration: const BoxDecoration(
+                            gradient: LinearGradient(
+                              colors: [AppTheme.accentPurple, AppTheme.accentPink],
+                              begin: Alignment.topLeft,
+                              end: Alignment.bottomRight,
+                            ),
                             shape: BoxShape.circle,
+                            boxShadow: [
+                              BoxShadow(
+                                color: AppTheme.accentPink,
+                                blurRadius: 8,
+                                spreadRadius: -2,
+                              )
+                            ],
                           ),
                           child: const Icon(
                             Icons.auto_awesome_rounded, // Sparkle icon
-                            color: AppTheme.accentPurple,
-                            size: 24,
+                            color: Colors.white,
+                            size: 26,
                           ),
                         ),
                       ],
@@ -424,13 +435,15 @@ class _BleedingWaveWidgetState extends State<_BleedingWaveWidget> with SingleTic
             return Transform.scale(
               scale: 1.0 + (_controller.value * 0.4), // Expands by 40%
               child: Opacity(
-                opacity: (1.0 - _controller.value) * 0.4, // Fades out smoothly
+                opacity: (1.0 - _controller.value) * 0.7, // Fades out smoothly, much more visible
                 child: Container(
                   width: 68,
                   height: 68,
                   decoration: BoxDecoration(
                     borderRadius: BorderRadius.circular(22),
-                    color: AppTheme.accentPurple,
+                    gradient: const LinearGradient(
+                      colors: [AppTheme.accentPurple, AppTheme.accentPink],
+                    ),
                   ),
                 ),
               ),
