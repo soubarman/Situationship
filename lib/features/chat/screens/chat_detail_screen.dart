@@ -17,6 +17,7 @@ import 'package:intl/intl.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import '../../../core/widgets/full_screen_image_viewer.dart';
 
 class ChatDetailScreen extends ConsumerStatefulWidget {
   final String chatId;
@@ -2388,14 +2389,29 @@ class _MessageBubble extends StatelessWidget {
                     constraints: BoxConstraints(
                       maxWidth: MediaQuery.of(context).size.width * 0.6,
                     ),
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.only(
-                        topLeft: const Radius.circular(18),
-                        topRight: const Radius.circular(18),
-                        bottomLeft: Radius.circular(isMe ? 18 : 4),
-                        bottomRight: Radius.circular(isMe ? 4 : 18),
+                    child: GestureDetector(
+                      onTap: () {
+                        Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (context) => FullScreenImageViewer(
+                              imageUrl: message.imageUrl!,
+                              heroTag: '${message.id}_image',
+                            ),
+                          ),
+                        );
+                      },
+                      child: Hero(
+                        tag: '${message.id}_image',
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.only(
+                            topLeft: const Radius.circular(18),
+                            topRight: const Radius.circular(18),
+                            bottomLeft: Radius.circular(isMe ? 18 : 4),
+                            bottomRight: Radius.circular(isMe ? 4 : 18),
+                          ),
+                          child: Image.network(message.imageUrl!, fit: BoxFit.cover),
+                        ),
                       ),
-                      child: Image.network(message.imageUrl!, fit: BoxFit.cover),
                     ),
                   )
                 else if (message.type == MessageType.sticker && message.imageUrl != null)
