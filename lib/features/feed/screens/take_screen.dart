@@ -1,5 +1,6 @@
 // ignore_for_file: avoid_web_libraries_in_flutter
 import 'dart:async';
+import 'dart:convert';
 import 'package:universal_html/html.dart' as html;
 import 'dart:typed_data';
 import 'dart:ui' as ui;
@@ -301,11 +302,13 @@ class _TakeScreenState extends ConsumerState<TakeScreen>
 
     // ── Web: capture from the AR Canvas ──
     if (_arCanvasElement == null) return;
-    final blob = await _arCanvasElement!.toBlob('image/jpeg', 0.70);
-    final reader = html.FileReader();
-    reader.readAsArrayBuffer(blob);
-    await reader.onLoad.first;
-    final bytes = Uint8List.fromList(reader.result as List<int>);
+    
+    // Grab the image synchronously as a high-quality base64 string
+    // This is significantly faster and higher quality than toBlob + FileReader
+    final dataUrl = _arCanvasElement!.toDataUrl('image/jpeg', 1.0);
+    final base64Str = dataUrl.split(',').last;
+    final bytes = base64Decode(base64Str);
+    
     setState(() => _capturedImageBytes = bytes);
   }
 
