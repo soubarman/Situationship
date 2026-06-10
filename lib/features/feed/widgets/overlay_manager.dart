@@ -198,8 +198,8 @@ class _OverlayManagerState extends State<OverlayManager> {
                   item.position += details.focalPointDelta;
                   item.scale = _initialScale * details.scale;
                   item.rotation = _initialRotation + details.rotation;
-                  // Check trash zone: triggers if finger is within the bottom 240 pixels
-                  _isInTrashZone = details.localFocalPoint.dy > maxHeight - 240;
+                  // Check trash zone: triggers if finger is within the bottom 350 pixels
+                  _isInTrashZone = details.localFocalPoint.dy > maxHeight - 350;
                 });
               },
               onScaleEnd: (details) {
