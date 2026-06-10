@@ -21,22 +21,8 @@ import '../../../core/theme/app_theme.dart';
 import '../../../core/providers/app_state_provider.dart';
 import '../../../core/utils/color_filters.dart';
 
-// ─── Draggable Overlay Item ───────────────────────────────────────────────────
-class DraggableItem {
-  final String content;
-  final bool isText;
-  Offset position;
-  double scale;
-
-  DraggableItem({
-    required this.content,
-    required this.isText,
-    this.position = const Offset(100, 100),
-    this.scale = 1.0,
-  });
-}
-
-
+import '../widgets/overlay_manager.dart';
+import '../widgets/text_editor_overlay.dart';
 
 // ─── Filter Calibration Config ───────────────────────────────────────────────
 class FilterConfig {
@@ -144,7 +130,7 @@ class _TakeScreenState extends ConsumerState<TakeScreen>
   int _recordSeconds = 0;
 
   // ── Overlay items ──
-  final List<DraggableItem> _overlays = [];
+  final List<OverlayItem> _overlays = [];
   final GlobalKey _previewKey = GlobalKey();
 
   // ── Upload / Post state ──
@@ -403,11 +389,16 @@ class _TakeScreenState extends ConsumerState<TakeScreen>
       for (var i = 0; i < _overlays.length; i++) {
         final o = _overlays[i];
         overlayDataList[i.toString()] = {
+          'id': o.id,
           'content': o.content,
           'isText': o.isText,
           'dx': o.position.dx,
           'dy': o.position.dy,
           'scale': o.scale,
+          'rotation': o.rotation,
+          'fontFamily': o.fontFamily,
+          'color': o.color.value,
+          'hasBackground': o.hasBackground,
         };
       }
 
@@ -457,55 +448,32 @@ class _TakeScreenState extends ConsumerState<TakeScreen>
   // ─── Text & Sticker Overlays ────────────────────────────────────────────────
 
   void _addText() async {
-    final ctrl = TextEditingController();
-    await showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: AppTheme.darkCard,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: const Text('Add Text',
-            style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-        content: TextField(
-          controller: ctrl,
-          style: const TextStyle(color: Colors.white, fontSize: 18),
-          autofocus: true,
-          maxLength: 80,
-          decoration: InputDecoration(
-            hintText: 'Type something...',
-            hintStyle: const TextStyle(color: Colors.white38),
-            counterStyle: const TextStyle(color: Colors.white38),
-            filled: true,
-            fillColor: AppTheme.darkBg,
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: BorderSide.none,
-            ),
-          ),
-        ),
-        actions: [
-          TextButton(
-              onPressed: () => Navigator.pop(ctx),
-              child: const Text('Cancel',
-                  style: TextStyle(color: Colors.white54))),
-          ElevatedButton(
-            onPressed: () {
-              if (ctrl.text.trim().isNotEmpty) {
-                setState(() => _overlays.add(
-                    DraggableItem(content: ctrl.text.trim(), isText: true)));
-              }
-              Navigator.pop(ctx);
-            },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppTheme.accentPurple,
-              foregroundColor: Colors.white,
-              shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12)),
-            ),
-            child: const Text('Add'),
-          ),
-        ],
+    final result = await Navigator.push<OverlayItem>(
+      context,
+      PageRouteBuilder(
+        opaque: false,
+        pageBuilder: (context, _, __) => const TextEditorOverlay(),
       ),
     );
+    if (result != null) {
+      setState(() => _overlays.add(result));
+    }
+  }
+
+  void _editOverlayItem(OverlayItem item) async {
+    final result = await Navigator.push<OverlayItem>(
+      context,
+      PageRouteBuilder(
+        opaque: false,
+        pageBuilder: (context, _, __) => TextEditorOverlay(initialItem: item),
+      ),
+    );
+    if (result != null) {
+      setState(() {
+        final idx = _overlays.indexWhere((e) => e.id == item.id);
+        if (idx != -1) _overlays[idx] = result;
+      });
+    }
   }
 
   void _addSticker() {
@@ -548,7 +516,13 @@ class _TakeScreenState extends ConsumerState<TakeScreen>
                   .map((e) => GestureDetector(
                         onTap: () {
                           setState(() => _overlays.add(
-                              DraggableItem(content: e, isText: false)));
+                            OverlayItem(
+                              id: DateTime.now().millisecondsSinceEpoch.toString(),
+                              content: e, 
+                              isText: false,
+                              position: const Offset(150, 250),
+                            )
+                          ));
                           Navigator.pop(ctx);
                         },
                         child: Container(
@@ -701,7 +675,15 @@ class _TakeScreenState extends ConsumerState<TakeScreen>
                   ),
                 ),
               // Text/Sticker overlays
-              ..._overlays.map((item) => _buildOverlayItem(item)),
+              OverlayManager(
+                items: _overlays,
+                onItemTap: (item) {
+                  if (item.isText) {
+                    _editOverlayItem(item);
+                  }
+                },
+                onItemsChanged: () => setState(() {}),
+              ),
               // Recording indicator
               if (_isRecording)
                 Positioned(
@@ -943,47 +925,7 @@ class _TakeScreenState extends ConsumerState<TakeScreen>
   }
 
 
-  Widget _buildOverlayItem(DraggableItem item) {
-    return Positioned(
-      left: item.position.dx,
-      top: item.position.dy,
-      child: GestureDetector(
-        onPanUpdate: (d) {
-          setState(() => item.position += d.delta);
-        },
-        onScaleUpdate: (d) {
-          setState(() => item.scale = (item.scale * d.scale).clamp(0.5, 5.0));
-        },
-        onDoubleTap: () {
-          setState(() => _overlays.remove(item));
-        },
-        child: Transform.scale(
-          scale: item.scale,
-          child: item.isText
-              ? Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: Colors.black.withOpacity(0.35),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Text(
-                    item.content,
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 28,
-                      fontWeight: FontWeight.bold,
-                      shadows: [
-                        Shadow(color: Colors.black, blurRadius: 6),
-                      ],
-                    ),
-                  ),
-                )
-              : Text(item.content, style: const TextStyle(fontSize: 52)),
-        ),
-      ),
-    );
-  }
+
 
   String _formatDuration(int seconds) {
     final m = (seconds ~/ 60).toString().padLeft(2, '0');

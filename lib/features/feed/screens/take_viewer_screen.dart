@@ -681,25 +681,55 @@ class _TakeViewerScreenState extends ConsumerState<TakeViewerScreen>
             if (take['overlays'] != null)
               ...((take['overlays'] as Map<String, dynamic>).values.map((o) {
                 final isText = o['isText'] == true;
-                return Positioned(
-                  left: o['dx'] as double,
-                  top: o['dy'] as double,
-                  child: Transform.scale(
-                    scale: o['scale'] as double,
-                    child: isText
-                        ? Text(
-                            o['content'] as String,
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 32,
-                              fontWeight: FontWeight.bold,
-                              shadows: [Shadow(color: Colors.black, blurRadius: 4)],
-                            ),
-                          )
-                        : Text(
-                            o['content'] as String,
-                            style: const TextStyle(fontSize: 60),
+                final scale = (o['scale'] as num?)?.toDouble() ?? 1.0;
+                final rotation = (o['rotation'] as num?)?.toDouble() ?? 0.0;
+                final fontFamily = o['fontFamily'] as String? ?? 'Inter';
+                final colorValue = o['color'] as int?;
+                final color = colorValue != null ? Color(colorValue) : Colors.white;
+                final hasBackground = o['hasBackground'] == true;
+
+                Widget child = isText
+                    ? Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                        decoration: hasBackground
+                            ? BoxDecoration(
+                                color: color == Colors.white || color == Colors.transparent 
+                                    ? Colors.black87 
+                                    : Colors.white,
+                                borderRadius: BorderRadius.circular(12),
+                              )
+                            : null,
+                        child: Text(
+                          o['content'] as String,
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            fontFamily: fontFamily,
+                            fontSize: 32,
+                            fontWeight: FontWeight.bold,
+                            color: hasBackground && color == Colors.white
+                                ? Colors.black
+                                : color,
+                            shadows: hasBackground ? null : const [
+                              Shadow(color: Colors.black54, blurRadius: 8, offset: Offset(0, 2))
+                            ],
+                            decoration: TextDecoration.none,
                           ),
+                        ),
+                      )
+                    : Text(
+                        o['content'] as String,
+                        style: const TextStyle(fontSize: 48, decoration: TextDecoration.none),
+                      );
+
+                return Positioned(
+                  left: (o['dx'] as num).toDouble(),
+                  top: (o['dy'] as num).toDouble(),
+                  child: Transform.scale(
+                    scale: scale,
+                    child: Transform.rotate(
+                      angle: rotation,
+                      child: child,
+                    ),
                   ),
                 );
               })),
