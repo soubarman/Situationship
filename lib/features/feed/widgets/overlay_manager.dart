@@ -1,5 +1,6 @@
 import 'dart:math';
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
 import '../../../core/theme/app_theme.dart';
 
 class OverlayItem {
@@ -121,8 +122,8 @@ class _OverlayManagerState extends State<OverlayManager> {
             child: Text(
               item.content,
               textAlign: TextAlign.center,
-              style: TextStyle(
-                fontFamily: item.fontFamily,
+              style: GoogleFonts.getFont(
+                item.fontFamily,
                 fontSize: 32,
                 fontWeight: FontWeight.bold,
                 color: item.hasBackground && item.color == Colors.white
@@ -170,11 +171,10 @@ class _OverlayManagerState extends State<OverlayManager> {
             item.scale = _initialScale * details.scale;
             item.rotation = _initialRotation + details.rotation;
             
-            // Check trash zone (bottom 100 pixels)
+            // Check trash zone (bottom 100 pixels) using the actual finger position!
             final screenHeight = MediaQuery.of(context).size.height;
-            _isInTrashZone = item.position.dy > screenHeight - _trashZoneHeight;
+            _isInTrashZone = details.focalPoint.dy > screenHeight - _trashZoneHeight;
           });
-          widget.onItemsChanged();
         },
         onScaleEnd: (details) {
           if (_activeItem != item) return;

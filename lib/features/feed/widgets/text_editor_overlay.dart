@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
 import '../../../core/theme/app_theme.dart';
 import 'overlay_manager.dart';
 
@@ -19,8 +20,10 @@ class _TextEditorOverlayState extends State<TextEditorOverlay> {
   Color _color = Colors.white;
   bool _hasBackground = false;
   
-  // A few safe web/mobile fonts
-  final List<String> _fonts = ['Inter', 'Courier', 'Times New Roman', 'Cursive', 'Impact'];
+  double _fontSize = 32.0;
+
+  // Modern Instagram-style fonts
+  final List<String> _fonts = ['Inter', 'Permanent Marker', 'Pacifico', 'Caveat', 'Anton', 'Lobster', 'Oswald'];
   final List<Color> _colors = [
     Colors.white, Colors.black, AppTheme.accentPurple, Colors.blue, 
     Colors.green, Colors.yellow, Colors.orange, Colors.red
@@ -33,6 +36,8 @@ class _TextEditorOverlayState extends State<TextEditorOverlay> {
     _fontFamily = widget.initialItem?.fontFamily ?? 'Inter';
     _color = widget.initialItem?.color ?? Colors.white;
     _hasBackground = widget.initialItem?.hasBackground ?? false;
+    // Scale starts at 1.0, meaning base font size 32
+    _fontSize = 32.0 * (widget.initialItem?.scale ?? 1.0);
     
     _focusNode = FocusNode();
     Future.delayed(const Duration(milliseconds: 100), () => _focusNode.requestFocus());
@@ -56,7 +61,7 @@ class _TextEditorOverlayState extends State<TextEditorOverlay> {
       isText: true,
       content: _controller.text,
       position: widget.initialItem?.position ?? const Offset(100, 200),
-      scale: widget.initialItem?.scale ?? 1.0,
+      scale: _fontSize / 32.0, // Save scale relative to base size
       rotation: widget.initialItem?.rotation ?? 0.0,
       fontFamily: _fontFamily,
       color: _color,
@@ -127,9 +132,9 @@ class _TextEditorOverlayState extends State<TextEditorOverlay> {
                         borderRadius: BorderRadius.circular(20),
                       ),
                       child: Text(
-                        f,
-                        style: TextStyle(
-                          fontFamily: f,
+                        f.split(' ').first, // Show just the first word
+                        style: GoogleFonts.getFont(
+                          f,
                           color: sel ? Colors.black : Colors.white,
                           fontWeight: FontWeight.bold,
                         ),
@@ -142,28 +147,59 @@ class _TextEditorOverlayState extends State<TextEditorOverlay> {
 
             const Spacer(),
 
-            // Text Input
+            // Text Input + Slider Row
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 32),
-              child: TextField(
-                controller: _controller,
-                focusNode: _focusNode,
-                textAlign: TextAlign.center,
-                maxLines: null,
-                style: TextStyle(
-                  fontFamily: _fontFamily,
-                  fontSize: 32,
-                  fontWeight: FontWeight.bold,
-                  color: _hasBackground && _color == Colors.white ? Colors.black : _color,
-                  backgroundColor: _hasBackground 
-                      ? (_color == Colors.white || _color == Colors.transparent ? Colors.black87 : Colors.white)
-                      : null,
-                ),
-                decoration: const InputDecoration(
-                  border: InputBorder.none,
-                  hintText: 'Type something...',
-                  hintStyle: TextStyle(color: Colors.white38),
-                ),
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: Row(
+                children: [
+                  // Vertical Size Slider
+                  SizedBox(
+                    height: 250,
+                    child: RotatedBox(
+                      quarterTurns: 3,
+                      child: SliderTheme(
+                        data: SliderThemeData(
+                          activeTrackColor: Colors.white,
+                          inactiveTrackColor: Colors.white24,
+                          thumbColor: Colors.white,
+                          trackHeight: 2,
+                          thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 8),
+                        ),
+                        child: Slider(
+                          value: _fontSize,
+                          min: 16.0,
+                          max: 120.0,
+                          onChanged: (v) => setState(() => _fontSize = v),
+                        ),
+                      ),
+                    ),
+                  ),
+                  
+                  // Text Input
+                  Expanded(
+                    child: TextField(
+                      controller: _controller,
+                      focusNode: _focusNode,
+                      textAlign: TextAlign.center,
+                      maxLines: null,
+                      style: GoogleFonts.getFont(
+                        _fontFamily,
+                        fontSize: _fontSize,
+                        fontWeight: FontWeight.bold,
+                        color: _hasBackground && _color == Colors.white ? Colors.black : _color,
+                        backgroundColor: _hasBackground 
+                            ? (_color == Colors.white || _color == Colors.transparent ? Colors.black87 : Colors.white)
+                            : null,
+                      ),
+                      decoration: const InputDecoration(
+                        border: InputBorder.none,
+                        hintText: 'Type something...',
+                        hintStyle: TextStyle(color: Colors.white38),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 48), // Balance slider width
+                ],
               ),
             ),
 
