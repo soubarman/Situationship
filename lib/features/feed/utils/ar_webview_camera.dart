@@ -169,6 +169,10 @@ class ARWebViewCameraState extends State<ARWebViewCamera> {
     await _controller?.runJavaScript('stopRecording();');
   }
 
+  Future<void> stopCamera() async {
+    await _controller?.runJavaScript('if (typeof stopAR === "function") stopAR();');
+  }
+
   Future<void> updateFilterConfig(String name, double scale, double offsetX, double offsetY) async {
     await _controller?.runJavaScript(
       "updateFilterConfig('${name.replaceAll("'", "\\'")}', $scale, $offsetX, $offsetY);",

@@ -179,6 +179,20 @@
       }
     };
 
+    function stopAR() {
+      try {
+        const video = document.querySelector('video');
+        if (video && video.srcObject) {
+          video.srcObject.getTracks().forEach(track => track.stop());
+        }
+        if (window.arTracker && typeof window.arTracker.stop === 'function') {
+          window.arTracker.stop();
+        }
+      } catch (e) {
+        console.error('Error stopping AR:', e);
+      }
+    }
+
     // ── API callable from Flutter via runJavaScript() ─────────────────────────
 
     function setFilter(name) {

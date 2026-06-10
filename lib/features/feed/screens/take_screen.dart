@@ -165,11 +165,8 @@ class _TakeScreenState extends ConsumerState<TakeScreen>
 
   @override
   void dispose() {
-    if (kIsWeb) {
-      _stopCamera();
-    } else {
-      _cameraController?.dispose();
-    }
+    _stopCamera();
+    _cameraController?.dispose();
     _shutterAnim.dispose();
     _recordTimer?.cancel();
     super.dispose();
@@ -277,15 +274,19 @@ class _TakeScreenState extends ConsumerState<TakeScreen>
   }
 
   void _stopCamera() {
-    _stream?.getTracks().forEach((track) {
-      try {
-        (track as dynamic).stop();
-      } catch (_) {}
-    });
-    stopARTracker();
-    _stream = null;
-    _videoElement = null;
-    _arCanvasElement = null;
+    if (kIsWeb) {
+      _stream?.getTracks().forEach((track) {
+        try {
+          (track as dynamic).stop();
+        } catch (_) {}
+      });
+      stopARTracker();
+      _stream = null;
+      _videoElement = null;
+      _arCanvasElement = null;
+    } else {
+      _arWebViewKey.currentState?.stopCamera();
+    }
   }
 
   // ─── Photo Capture ──────────────────────────────────────────────────────────
@@ -562,9 +563,14 @@ class _TakeScreenState extends ConsumerState<TakeScreen>
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.black,
-      body: Stack(
+    return PopScope(
+      canPop: true,
+      onPopInvokedWithResult: (didPop, result) {
+        _stopCamera();
+      },
+      child: Scaffold(
+        backgroundColor: Colors.black,
+        body: Stack(
         fit: StackFit.expand,
         children: [
           // Full-screen camera preview
@@ -592,8 +598,9 @@ class _TakeScreenState extends ConsumerState<TakeScreen>
           ),
         ],
       ),
-    );
-  }
+    ),
+  );
+}
 
   // ── Top Bar ─────────────────────────────────────────────────────────────────
   Widget _buildTopBar() {
