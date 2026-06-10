@@ -64,6 +64,7 @@ window.arTracker = {
         };
         for (const [key, src] of Object.entries(assets)) {
             const img = new Image();
+            img.crossOrigin = 'anonymous'; // Prevents Flutter service worker from tainting the canvas
             img.src = src;
             this.images[key] = img;
         }

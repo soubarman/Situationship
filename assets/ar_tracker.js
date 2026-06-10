@@ -64,6 +64,7 @@ window.arTracker = {
         };
         for (const [key, src] of Object.entries(assets)) {
             const img = new Image();
+            img.crossOrigin = 'anonymous'; // Prevent canvas taint
             img.src = src;
             this.images[key] = img;
         }
