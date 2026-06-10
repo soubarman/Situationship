@@ -559,6 +559,7 @@ class _ChatDetailScreenState extends ConsumerState<ChatDetailScreen>
       
       if (file == null) return;
       
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Uploading photo...'), duration: Duration(seconds: 2)),
       );
@@ -580,9 +581,11 @@ class _ChatDetailScreenState extends ConsumerState<ChatDetailScreen>
       
     } catch (e) {
       print('Image upload error: $e');
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to upload image: $e')),
-      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to upload image: $e')),
+        );
+      }
     }
   }
 
@@ -592,7 +595,7 @@ class _ChatDetailScreenState extends ConsumerState<ChatDetailScreen>
       context: context,
       useRootNavigator: true,
       backgroundColor: Colors.transparent,
-      builder: (_) => Container(
+      builder: (sheetContext) => Container(
         padding: const EdgeInsets.all(20),
         decoration: BoxDecoration(
           color: isDark ? AppTheme.darkSurface : Colors.white,
@@ -620,7 +623,7 @@ class _ChatDetailScreenState extends ConsumerState<ChatDetailScreen>
               ),
               title: const Text('Take a Photo', style: TextStyle(fontWeight: FontWeight.w600)),
               onTap: () {
-                Navigator.pop(context);
+                Navigator.pop(sheetContext);
                 _pickAndSendImage(ImageSource.camera);
               },
             ),
@@ -636,7 +639,7 @@ class _ChatDetailScreenState extends ConsumerState<ChatDetailScreen>
               ),
               title: const Text('Choose from Gallery', style: TextStyle(fontWeight: FontWeight.w600)),
               onTap: () {
-                Navigator.pop(context);
+                Navigator.pop(sheetContext);
                 _pickAndSendImage(ImageSource.gallery);
               },
             ),
