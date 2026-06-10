@@ -1012,7 +1012,7 @@ class _PostCardState extends ConsumerState<PostCard>
     final emoji = parts.first;
     final label = parts.skip(1).join(' ');
     return Padding(
-      padding: const EdgeInsets.fromLTRB(18, 8, 18, 0),
+      padding: const EdgeInsets.fromLTRB(18, 8, 18, 12),
       child: Container(
         padding: const EdgeInsets.fromLTRB(10, 6, 14, 6),
         decoration: BoxDecoration(
