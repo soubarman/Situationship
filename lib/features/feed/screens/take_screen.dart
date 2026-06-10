@@ -1093,7 +1093,8 @@ class _TakeScreenState extends ConsumerState<TakeScreen>
   }
 
   Future<void> _handlePhotoShutter() async {
-    if (!_cameraReady) return;
+    if (kIsWeb && !_cameraReady) return;
+    if (!kIsWeb && !_nativeCameraReady) return;
     await _takePhoto();
   }
 
