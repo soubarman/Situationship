@@ -993,32 +993,45 @@ class _TakeScreenState extends ConsumerState<TakeScreen>
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          // Left: retake if captured, else flip camera placeholder
-          GestureDetector(
-            onTap: _capturedImageBytes != null ? _retake : null,
-            child: AnimatedOpacity(
-              opacity: _capturedImageBytes != null ? 1.0 : 0.0,
-              duration: const Duration(milliseconds: 200),
-              child: Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                decoration: BoxDecoration(
-                  color: Colors.black54,
-                  borderRadius: BorderRadius.circular(20),
-                  border: Border.all(color: Colors.white24),
+          // Left: Upload (if no image) or Retake (if image)
+          _capturedImageBytes == null
+              ? GestureDetector(
+                  onTap: _uploadFromGallery,
+                  child: Container(
+                    width: 56,
+                    height: 56,
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.15),
+                      shape: BoxShape.circle,
+                      border: Border.all(color: Colors.white.withOpacity(0.3), width: 1.5),
+                      boxShadow: [
+                        BoxShadow(color: Colors.black.withOpacity(0.2), blurRadius: 12, spreadRadius: 2),
+                      ],
+                    ),
+                    child: const Icon(Icons.photo_library_rounded, color: Colors.white, size: 28),
+                  ),
+                )
+              : GestureDetector(
+                  onTap: _retake,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.15),
+                      borderRadius: BorderRadius.circular(30),
+                      border: Border.all(color: Colors.white.withOpacity(0.3), width: 1.5),
+                      boxShadow: [
+                        BoxShadow(color: Colors.black.withOpacity(0.2), blurRadius: 12, spreadRadius: 2),
+                      ],
+                    ),
+                    child: const Row(
+                      children: [
+                        Icon(Icons.refresh_rounded, color: Colors.white, size: 20),
+                        SizedBox(width: 8),
+                        Text('Retake', style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
+                      ],
+                    ),
+                  ),
                 ),
-                child: const Row(
-                  children: [
-                    Icon(Icons.refresh_rounded,
-                        color: Colors.white, size: 16),
-                    SizedBox(width: 4),
-                    Text('Retake',
-                        style: TextStyle(color: Colors.white, fontSize: 13)),
-                  ],
-                ),
-              ),
-            ),
-          ),
 
           // Center: Shutter button
           if (_capturedImageBytes == null)
@@ -1042,19 +1055,17 @@ class _TakeScreenState extends ConsumerState<TakeScreen>
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
                     border: Border.all(color: Colors.white, width: 4),
+                    boxShadow: [
+                      BoxShadow(color: Colors.black.withOpacity(0.3), blurRadius: 10, spreadRadius: 2),
+                    ],
                   ),
                   padding: const EdgeInsets.all(6),
                   child: AnimatedContainer(
                     duration: const Duration(milliseconds: 200),
                     decoration: BoxDecoration(
-                      color: _mode == 'VIDEO'
-                          ? AppTheme.error
-                          : Colors.white,
-                      shape: _isRecording
-                          ? BoxShape.rectangle
-                          : BoxShape.circle,
-                      borderRadius:
-                          _isRecording ? BorderRadius.circular(8) : null,
+                      color: _mode == 'VIDEO' ? AppTheme.error : Colors.white,
+                      shape: _isRecording ? BoxShape.rectangle : BoxShape.circle,
+                      borderRadius: _isRecording ? BorderRadius.circular(8) : null,
                     ),
                   ),
                 ),
