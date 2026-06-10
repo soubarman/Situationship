@@ -306,9 +306,19 @@ class _TakeScreenState extends ConsumerState<TakeScreen>
     // Grab the image synchronously as a high-quality base64 string
     // This is significantly faster and higher quality than toBlob + FileReader
     final dataUrl = _arCanvasElement!.toDataUrl('image/jpeg', 1.0);
-    final base64Str = dataUrl.split(',').last;
-    final bytes = base64Decode(base64Str);
+    final parts = dataUrl.split(',');
+    if (parts.length < 2) {
+      _snack('Camera is still loading. Please wait a moment.');
+      return;
+    }
     
+    final base64Str = parts.last;
+    if (base64Str.isEmpty || base64Str.length < 100) {
+      _snack('Camera is still initializing. Please wait a moment.');
+      return;
+    }
+    
+    final bytes = base64Decode(base64Str);
     setState(() => _capturedImageBytes = bytes);
   }
 
@@ -1118,19 +1128,17 @@ class _TakeScreenState extends ConsumerState<TakeScreen>
     }
 
     // ── Web path ──
-    if (_stream == null) return;
+    if (_stream == null || _arCanvasElement == null) return;
     _videoChunks.clear();
     
     try {
-      // Use MediaRecorder to record the AR Canvas stream
-      final options = {
-        'mimeType': 'video/webm;codecs=vp8,opus',
-        'videoBitsPerSecond': 800000,
-      };
-      
       // Capture stream from the Canvas to bake in AR filters!
       final canvasStream = _arCanvasElement!.captureStream(30);
-      _mediaRecorder = html.MediaRecorder(canvasStream, options);
+      
+      // Use MediaRecorder without forcing mimeType for broader browser support
+      _mediaRecorder = html.MediaRecorder(canvasStream, {
+        'videoBitsPerSecond': 800000,
+      });
       
       _mediaRecorder!.addEventListener('dataavailable', (event) {
         final e = event as html.BlobEvent;
