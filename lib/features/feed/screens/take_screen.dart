@@ -580,73 +580,55 @@ class _TakeScreenState extends ConsumerState<TakeScreen>
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
       child: Row(
         children: [
-          ClipRRect(
-            borderRadius: BorderRadius.circular(20),
-            child: BackdropFilter(
-              filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-              child: GestureDetector(
-                onTap: () {
-                  _stopCamera();
-                  context.pop();
-                },
-                child: Container(
-                  width: 36,
-                  height: 36,
-                  decoration: BoxDecoration(
-                    color: Colors.black45,
-                    shape: BoxShape.circle,
-                  ),
-                  child: const Icon(Icons.close_rounded, color: Colors.white, size: 20),
-                ),
+          GestureDetector(
+            onTap: () {
+              _stopCamera();
+              context.pop();
+            },
+            child: Container(
+              width: 36,
+              height: 36,
+              decoration: const BoxDecoration(
+                color: Colors.black54,
+                shape: BoxShape.circle,
               ),
+              child: const Icon(Icons.close_rounded, color: Colors.white, size: 20),
             ),
           ),
           const Spacer(),
-          ClipRRect(
-            borderRadius: BorderRadius.circular(24),
-            child: BackdropFilter(
-              filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
-                decoration: BoxDecoration(
-                  color: Colors.black45,
-                  borderRadius: BorderRadius.circular(24),
-                ),
-                child: Row(
-                  children: [
-                    _modeBtn('PHOTO'),
-                    _modeBtn('VIDEO'),
-                  ],
-                ),
-              ),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+            decoration: BoxDecoration(
+              color: Colors.black54,
+              borderRadius: BorderRadius.circular(24),
+            ),
+            child: Row(
+              children: [
+                _modeBtn('PHOTO'),
+                _modeBtn('VIDEO'),
+              ],
             ),
           ),
           const Spacer(),
-          ClipRRect(
-            borderRadius: BorderRadius.circular(24),
-            child: BackdropFilter(
-              filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-              child: GestureDetector(
-                onTap: _uploadFromGallery,
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                  decoration: BoxDecoration(
-                    color: Colors.black45,
-                    borderRadius: BorderRadius.circular(24),
-                    border: Border.all(color: Colors.white24),
-                  ),
-                  child: const Row(
-                    children: [
-                      Icon(Icons.upload_rounded, color: Colors.white, size: 14),
-                      SizedBox(width: 4),
-                      Text('UPLOAD',
-                          style: TextStyle(
-                              color: Colors.white,
-                              fontSize: 11,
-                              fontWeight: FontWeight.bold)),
-                    ],
-                  ),
-                ),
+          GestureDetector(
+            onTap: _uploadFromGallery,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+              decoration: BoxDecoration(
+                color: Colors.black54,
+                borderRadius: BorderRadius.circular(24),
+                border: Border.all(color: Colors.white24),
+              ),
+              child: const Row(
+                children: [
+                  Icon(Icons.upload_rounded, color: Colors.white, size: 14),
+                  SizedBox(width: 4),
+                  Text('UPLOAD',
+                      style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 11,
+                          fontWeight: FontWeight.bold)),
+                ],
               ),
             ),
           ),
@@ -685,9 +667,36 @@ class _TakeScreenState extends ConsumerState<TakeScreen>
       child: Stack(
         fit: StackFit.expand,
         children: [
-              // Base layer: camera or captured image
-              _buildBaseLayer(),
-              // Filter overlay (for captured image)
+          // Base layer: camera or captured image
+          _buildBaseLayer(),
+          
+          // Gradients to make UI text visible over bright camera feeds
+          const Positioned(
+            top: 0, left: 0, right: 0, height: 160,
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [Colors.black54, Colors.transparent],
+                ),
+              ),
+            ),
+          ),
+          const Positioned(
+            bottom: 0, left: 0, right: 0, height: 240,
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.bottomCenter,
+                  end: Alignment.topCenter,
+                  colors: [Colors.black87, Colors.transparent],
+                ),
+              ),
+            ),
+          ),
+          
+          // Filter overlay (for captured image)
               if (_capturedImageBytes != null)
                 Positioned.fill(
                   child: IgnorePointer(
@@ -973,28 +982,22 @@ class _TakeScreenState extends ConsumerState<TakeScreen>
             child: AnimatedOpacity(
               opacity: _capturedImageBytes != null ? 1.0 : 0.0,
               duration: const Duration(milliseconds: 200),
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(20),
-                child: BackdropFilter(
-                  filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-                  child: Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                    decoration: BoxDecoration(
-                      color: Colors.black45,
-                      borderRadius: BorderRadius.circular(20),
-                      border: Border.all(color: Colors.white24),
-                    ),
-                    child: const Row(
-                      children: [
-                        Icon(Icons.refresh_rounded,
-                            color: Colors.white, size: 16),
-                        SizedBox(width: 4),
-                        Text('Retake',
-                            style: TextStyle(color: Colors.white, fontSize: 13)),
-                      ],
-                    ),
-                  ),
+              child: Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                decoration: BoxDecoration(
+                  color: Colors.black54,
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(color: Colors.white24),
+                ),
+                child: const Row(
+                  children: [
+                    Icon(Icons.refresh_rounded,
+                        color: Colors.white, size: 16),
+                    SizedBox(width: 4),
+                    Text('Retake',
+                        style: TextStyle(color: Colors.white, fontSize: 13)),
+                  ],
                 ),
               ),
             ),
@@ -1180,21 +1183,18 @@ class _TakeScreenState extends ConsumerState<TakeScreen>
   Widget _buildTabBar() {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 8),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(24),
-        child: BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-          child: Container(
-            color: Colors.black26,
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: ['AR', 'FILTERS', 'STICKERS']
-                  .map((t) => _tabBtn(t))
-                  .toList(),
-            ),
-          ),
+      child: Container(
+        decoration: BoxDecoration(
+          color: Colors.black54,
+          borderRadius: BorderRadius.circular(24),
+        ),
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: ['AR', 'FILTERS', 'STICKERS']
+              .map((t) => _tabBtn(t))
+              .toList(),
         ),
       ),
     );
@@ -1332,50 +1332,47 @@ class _TakeScreenState extends ConsumerState<TakeScreen>
   Widget _buildPostBar() {
     return Padding(
       padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(32),
-        child: BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-          child: Container(
-            color: Colors.black26,
-            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                const Text(
-                  '✨ +5 aura on first post today',
-                  style:
-                      TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w600),
-                ),
-                AnimatedOpacity(
-                  opacity: _capturedImageBytes != null ? 1.0 : 0.4,
-                  duration: const Duration(milliseconds: 200),
-                  child: ElevatedButton(
-                    onPressed:
-                        _isSaving || _capturedImageBytes == null ? null : _post,
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: AppTheme.accentPurple,
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 28, vertical: 12),
-                      shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(24)),
-                      elevation: 0,
-                    ),
-                    child: _isSaving
-                        ? const SizedBox(
-                            width: 18,
-                            height: 18,
-                            child: CircularProgressIndicator(
-                                strokeWidth: 2, color: Colors.white))
-                        : const Text('Post',
-                            style: TextStyle(
-                                fontWeight: FontWeight.bold, fontSize: 15)),
-                  ),
-                ),
-              ],
+      child: Container(
+        decoration: BoxDecoration(
+          color: Colors.black54,
+          borderRadius: BorderRadius.circular(32),
+        ),
+        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            const Text(
+              '✨ +5 aura on first post today',
+              style:
+                  TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w600),
             ),
-          ),
+            AnimatedOpacity(
+              opacity: _capturedImageBytes != null ? 1.0 : 0.4,
+              duration: const Duration(milliseconds: 200),
+              child: ElevatedButton(
+                onPressed:
+                    _isSaving || _capturedImageBytes == null ? null : _post,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppTheme.accentPurple,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 28, vertical: 12),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(24)),
+                  elevation: 0,
+                ),
+                child: _isSaving
+                    ? const SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(
+                            strokeWidth: 2, color: Colors.white))
+                    : const Text('Post',
+                        style: TextStyle(
+                            fontWeight: FontWeight.bold, fontSize: 15)),
+              ),
+            ),
+          ],
         ),
       ),
     );

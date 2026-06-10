@@ -74,7 +74,7 @@ class _OverlayManagerState extends State<OverlayManager> {
               Positioned(
                 left: 0,
                 right: 0,
-                bottom: 40,
+                bottom: 120, // moved up to clear the post bar
                 child: AnimatedScale(
                   scale: _isInTrashZone ? 1.5 : 1.0,
                   duration: const Duration(milliseconds: 150),
@@ -174,8 +174,8 @@ class _OverlayManagerState extends State<OverlayManager> {
             item.position += details.focalPointDelta;
             item.scale = _initialScale * details.scale;
             item.rotation = _initialRotation + details.rotation;
-            // Check trash zone using the local finger position and actual container height
-            _isInTrashZone = details.localFocalPoint.dy > maxHeight - _trashZoneHeight - 64; // Added 64 padding to catch the finger
+            // Check trash zone: triggers if finger is within the bottom 240 pixels
+            _isInTrashZone = details.localFocalPoint.dy > maxHeight - 240;
           });
         },
         onScaleEnd: (details) {
