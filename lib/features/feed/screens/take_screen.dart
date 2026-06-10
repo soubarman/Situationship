@@ -56,7 +56,7 @@ class _TakeScreenState extends ConsumerState<TakeScreen>
     with SingleTickerProviderStateMixin {
   // ── Mode state ──
   String _mode = 'PHOTO'; // PHOTO | VIDEO
-  String _tab = 'AR'; // AR | FILTERS | TEXT | STICKERS
+  String _tab = 'NONE'; // NONE | AR | FILTERS | STICKERS
   String _filter = 'Normal';
 
   // ── Camera / Media state (Web) ──
@@ -710,7 +710,13 @@ class _TakeScreenState extends ConsumerState<TakeScreen>
               // Text/Sticker overlays
               GestureDetector(
                 behavior: HitTestBehavior.translucent,
-                onTap: _addText,
+                onTap: () {
+                  if (_tab != 'NONE') {
+                    setState(() => _tab = 'NONE');
+                  } else {
+                    _addText();
+                  }
+                },
                 child: OverlayManager(
                   items: _overlays,
                   onItemTap: (item) {
@@ -1204,9 +1210,12 @@ class _TakeScreenState extends ConsumerState<TakeScreen>
     final sel = _tab == t;
     return GestureDetector(
       onTap: () {
-        setState(() => _tab = t);
-        if (t == 'TEXT') _addText();
-        if (t == 'STICKERS') _addSticker();
+        if (t == 'STICKERS') {
+          _addSticker();
+          setState(() => _tab = 'NONE');
+        } else {
+          setState(() => _tab = (_tab == t) ? 'NONE' : t);
+        }
       },
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 200),
@@ -1332,47 +1341,40 @@ class _TakeScreenState extends ConsumerState<TakeScreen>
   Widget _buildPostBar() {
     return Padding(
       padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
-      child: Container(
-        decoration: BoxDecoration(
-          color: Colors.black54,
-          borderRadius: BorderRadius.circular(32),
-        ),
-        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            const Text(
-              '✨ +5 aura on first post today',
-              style:
-                  TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w600),
+      child: Align(
+        alignment: Alignment.centerRight,
+        child: AnimatedOpacity(
+          opacity: _capturedImageBytes != null ? 1.0 : 0.4,
+          duration: const Duration(milliseconds: 200),
+          child: ElevatedButton(
+            onPressed:
+                _isSaving || _capturedImageBytes == null ? null : _post,
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppTheme.accentPurple,
+              foregroundColor: Colors.white,
+              padding: const EdgeInsets.symmetric(
+                  horizontal: 28, vertical: 12),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(24)),
+              elevation: 4,
             ),
-            AnimatedOpacity(
-              opacity: _capturedImageBytes != null ? 1.0 : 0.4,
-              duration: const Duration(milliseconds: 200),
-              child: ElevatedButton(
-                onPressed:
-                    _isSaving || _capturedImageBytes == null ? null : _post,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppTheme.accentPurple,
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 28, vertical: 12),
-                  shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(24)),
-                  elevation: 0,
-                ),
-                child: _isSaving
-                    ? const SizedBox(
-                        width: 18,
-                        height: 18,
-                        child: CircularProgressIndicator(
-                            strokeWidth: 2, color: Colors.white))
-                    : const Text('Post',
-                        style: TextStyle(
-                            fontWeight: FontWeight.bold, fontSize: 15)),
-              ),
-            ),
-          ],
+            child: _isSaving
+                ? const SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(
+                        strokeWidth: 2, color: Colors.white))
+                : const Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text('Post',
+                          style: TextStyle(
+                              fontWeight: FontWeight.bold, fontSize: 15)),
+                      SizedBox(width: 6),
+                      Icon(Icons.send_rounded, size: 16),
+                    ],
+                  ),
+          ),
         ),
       ),
     );
