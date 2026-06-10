@@ -9,7 +9,9 @@ import 'core/providers/theme_provider.dart';
 import 'core/providers/firebase_auth_provider.dart';
 import 'core/providers/app_state_provider.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'core/models/user_model.dart';
+import 'package:flutter/foundation.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -34,6 +36,10 @@ void main() async {
   await Firebase.initializeApp(
     options: DefaultFirebaseOptions.currentPlatform,
   );
+
+  if (kIsWeb) {
+    await FirebaseAuth.instance.setPersistence(Persistence.LOCAL);
+  }
 
   // ── Firestore offline cache ─────────────────────────────────────────────────
   // Data loads instantly from cache on repeat visits — no loading spinner jank.

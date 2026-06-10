@@ -48,7 +48,7 @@ window.arTracker = {
         return this.filterConfigs[key] || { scale: 1.0, noseScale: 1.0, offsetX: 0, offsetY: 0 };
     },
 
-    // ---- Pre-load all filter image assets ----
+    // ---- Pre-load all filter image assets (using fetch to prevent canvas taint) ----
     loadImages: function() {
         const assets = {
             dog:        'assets/filters/dog_filter.png',
@@ -63,10 +63,14 @@ window.arTracker = {
             crown:      'assets/filters/crown_filter.png',
         };
         for (const [key, src] of Object.entries(assets)) {
-            const img = new Image();
-            img.crossOrigin = 'anonymous'; // Prevents Flutter service worker from tainting the canvas
-            img.src = src;
-            this.images[key] = img;
+            fetch(src)
+                .then(res => res.blob())
+                .then(blob => {
+                    const img = new Image();
+                    img.src = URL.createObjectURL(blob);
+                    this.images[key] = img;
+                })
+                .catch(err => console.error('Failed to load filter image:', src, err));
         }
     },
 
