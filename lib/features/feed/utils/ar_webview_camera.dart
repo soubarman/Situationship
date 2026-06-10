@@ -124,7 +124,37 @@ class ARWebViewCameraState extends State<ARWebViewCamera> {
   // ── Public API (called by parent) ─────────────────────────────────────────
 
   Future<void> setFilter(String filterName) async {
-    await _controller?.runJavaScript("setFilter('${filterName.replaceAll("'", "\\'")}');");
+    // Determine the asset path and the JS object key based on the filter name
+    String? assetPath;
+    String? jsKey;
+    switch (filterName) {
+      case 'Dog': assetPath = 'assets/filters/dog_filter.png'; jsKey = 'dog'; break;
+      case 'Thug Life': assetPath = 'assets/filters/thug_life.png'; jsKey = 'thugLife'; break;
+      case 'Flower Crown': assetPath = 'assets/filters/flower_crown.png'; jsKey = 'flowerCrown'; break;
+      case 'Cat': assetPath = 'assets/filters/cat_filter.png'; jsKey = 'cat'; break;
+      case 'Devil': assetPath = 'assets/filters/devil_horns.png'; jsKey = 'devil'; break;
+      case 'Bunny': assetPath = 'assets/filters/bunny_filter.png'; jsKey = 'bunny'; break;
+      case 'Halo': assetPath = 'assets/filters/angel_halo.png'; jsKey = 'halo'; break;
+      case 'Hearts': assetPath = 'assets/filters/heart_eyes.png'; jsKey = 'hearts'; break;
+      case 'Clown': assetPath = 'assets/filters/clown_filter.png'; jsKey = 'clown'; break;
+      case 'Crown': assetPath = 'assets/filters/crown_filter.png'; jsKey = 'crown'; break;
+    }
+
+    // Inject the base64 image into JS to bypass CORS and canvas tainting on Android
+    if (assetPath != null && jsKey != null) {
+      try {
+        final ByteData data = await DefaultAssetBundle.of(context).load(assetPath);
+        final base64Str = base64Encode(data.buffer.asUint8List());
+        await _controller?.runJavaScript("if (window.arTracker) { "
+            "if (!window.arTracker.images['$jsKey']) window.arTracker.images['$jsKey'] = new Image(); "
+            "window.arTracker.images['$jsKey'].src = 'data:image/png;base64,$base64Str'; "
+            "}");
+      } catch (e) {
+        debugPrint('Failed to load asset for filter: $e');
+      }
+    }
+
+    await _controller?.runJavaScript("if (window.arTracker) window.arTracker.setFilter('${filterName.replaceAll("'", "\\'")}');");
   }
 
   Future<void> captureFrame() async {

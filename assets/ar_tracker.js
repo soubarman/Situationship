@@ -48,39 +48,13 @@ window.arTracker = {
         return this.filterConfigs[key] || { scale: 1.0, noseScale: 1.0, offsetX: 0, offsetY: 0 };
     },
 
-    // ---- Pre-load all filter image assets (using fetch to prevent canvas taint on Android) ----
+    // ---- Filter image assets are now injected by Flutter as base64 strings ----
     loadImages: function() {
-        const assets = {
-            dog:        'assets/filters/dog_filter.png',
-            thugLife:   'assets/filters/thug_life.png',
-            flowerCrown:'assets/filters/flower_crown.png',
-            cat:        'assets/filters/cat_filter.png',
-            devil:      'assets/filters/devil_horns.png',
-            bunny:      'assets/filters/bunny_filter.png',
-            halo:       'assets/filters/angel_halo.png',
-            hearts:     'assets/filters/heart_eyes.png',
-            clown:      'assets/filters/clown_filter.png',
-            crown:      'assets/filters/crown_filter.png',
-        };
-        for (const [key, src] of Object.entries(assets)) {
-            // Apply path patching for Flutter Android assets
-            let fetchUrl = src;
-            const isFlutterAssets = location.hostname === 'appassets.androidplatform.net'
-                                 || location.hostname === 'localhost'
-                                 || location.protocol === 'file:';
-            if (isFlutterAssets && location.pathname.includes('/assets/') && fetchUrl.startsWith('assets/filters/')) {
-                fetchUrl = fetchUrl.replace('assets/filters/', 'filters/');
-            }
-
-            fetch(fetchUrl)
-                .then(res => res.blob())
-                .then(blob => {
-                    const img = new Image();
-                    img.src = URL.createObjectURL(blob);
-                    this.images[key] = img;
-                })
-                .catch(err => console.error('Failed to load filter image:', fetchUrl, err));
-        }
+        // We no longer pre-load using fetch or Image() because it triggers
+        // CORS blocks and canvas tainting on Android WebView.
+        // Instead, the Flutter app reads the PNG assets and injects them 
+        // directly as base64 data URIs via setFilterImage/setFilter.
+        if (!this.images) this.images = {};
     },
 
     initialize: function(videoElement) {
