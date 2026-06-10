@@ -111,7 +111,7 @@ class _TakeScreenState extends ConsumerState<TakeScreen>
     with SingleTickerProviderStateMixin {
   // ── Mode state ──
   String _mode = 'PHOTO'; // PHOTO | VIDEO
-  String _tab = 'FILTER'; // FILTER | TEXT | STICKERS
+  String _tab = 'AR'; // AR | FILTERS | TEXT | STICKERS
   String _filter = 'Normal';
 
   // ── Camera / Media state (Web) ──
@@ -1246,7 +1246,7 @@ class _TakeScreenState extends ConsumerState<TakeScreen>
   Widget _buildTabBar() {
     return Row(
       mainAxisAlignment: MainAxisAlignment.center,
-      children: ['FILTER', 'TEXT', 'STICKERS']
+      children: ['AR', 'FILTERS', 'TEXT', 'STICKERS']
           .map((t) => _tabBtn(t))
           .toList(),
     );
@@ -1289,9 +1289,10 @@ class _TakeScreenState extends ConsumerState<TakeScreen>
 
   // ── Tab Content ──────────────────────────────────────────────────────────────
   Widget _buildTabContent() {
-    if (_tab == 'FILTER') {
-      // Both web and Android now use AR face filters
+    if (_tab == 'AR') {
       return _buildARFilterBar();
+    } else if (_tab == 'FILTERS') {
+      return _buildColorFilterBar();
     }
     return const SizedBox(height: 16);
   }
