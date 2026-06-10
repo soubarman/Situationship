@@ -619,22 +619,30 @@ class _TakeScreenState extends ConsumerState<TakeScreen>
           ),
           const Spacer(),
           GestureDetector(
-            onTap: _uploadFromGallery,
+            onTap: () {
+              if (_tab != 'NONE') {
+                setState(() => _tab = 'NONE');
+              }
+              _addText();
+            },
             child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
               decoration: BoxDecoration(
-                color: Colors.black54,
+                color: Colors.white.withOpacity(0.15),
                 borderRadius: BorderRadius.circular(24),
-                border: Border.all(color: Colors.white24),
+                border: Border.all(color: Colors.white.withOpacity(0.3), width: 1.5),
+                boxShadow: [
+                  BoxShadow(color: Colors.black.withOpacity(0.2), blurRadius: 10, spreadRadius: 2),
+                ],
               ),
               child: const Row(
                 children: [
-                  Icon(Icons.upload_rounded, color: Colors.white, size: 14),
-                  SizedBox(width: 4),
-                  Text('UPLOAD',
+                  Icon(Icons.text_fields_rounded, color: Colors.white, size: 16),
+                  SizedBox(width: 6),
+                  Text('Text',
                       style: TextStyle(
                           color: Colors.white,
-                          fontSize: 11,
+                          fontSize: 13,
                           fontWeight: FontWeight.bold)),
                 ],
               ),
