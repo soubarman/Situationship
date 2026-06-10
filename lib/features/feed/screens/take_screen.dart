@@ -1271,6 +1271,7 @@ class _TakeScreenState extends ConsumerState<TakeScreen>
     return SizedBox(
       height: 80,
       child: ListView.builder(
+        key: const PageStorageKey('color_filters_list'),
         scrollDirection: Axis.horizontal,
         padding: const EdgeInsets.symmetric(horizontal: 16),
         itemCount: filters.length,
@@ -1287,10 +1288,11 @@ class _TakeScreenState extends ConsumerState<TakeScreen>
                 _arWebViewKey.currentState?.applyColorMatrix(matrix);
               }
             },
-            child: AnimatedContainer(
-              duration: const Duration(milliseconds: 200),
-              margin: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
-              width: 64,
+            child: RepaintBoundary(
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 200),
+                margin: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
+                width: 64,
               decoration: BoxDecoration(
                 borderRadius: BorderRadius.circular(12),
                 border: Border.all(
@@ -1340,6 +1342,7 @@ class _TakeScreenState extends ConsumerState<TakeScreen>
                   ],
                 ),
               ),
+            ),
             ),
           );
         },
@@ -1395,6 +1398,7 @@ class _TakeScreenState extends ConsumerState<TakeScreen>
     return SizedBox(
       height: 48,
       child: ListView.builder(
+        key: const PageStorageKey('ar_filters_list'),
         scrollDirection: Axis.horizontal,
         padding: const EdgeInsets.symmetric(horizontal: 16),
         itemCount: _arFilters.length,
@@ -1434,8 +1438,8 @@ class _TakeScreenState extends ConsumerState<TakeScreen>
               padding: const EdgeInsets.symmetric(horizontal: 18),
               decoration: BoxDecoration(
                 color: sel
-                    ? AppTheme.accentPurple.withOpacity(0.2)
-                    : Colors.white.withOpacity(0.05),
+                    ? AppTheme.accentPurple.withOpacity(0.4)
+                    : Colors.black87,
                 borderRadius: BorderRadius.circular(24),
                 border: Border.all(
                   color: sel
