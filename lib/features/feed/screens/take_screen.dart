@@ -675,14 +675,18 @@ class _TakeScreenState extends ConsumerState<TakeScreen>
                   ),
                 ),
               // Text/Sticker overlays
-              OverlayManager(
-                items: _overlays,
-                onItemTap: (item) {
-                  if (item.isText) {
-                    _editOverlayItem(item);
-                  }
-                },
-                onItemsChanged: () => setState(() {}),
+              GestureDetector(
+                behavior: HitTestBehavior.translucent,
+                onTap: _addText,
+                child: OverlayManager(
+                  items: _overlays,
+                  onItemTap: (item) {
+                    if (item.isText) {
+                      _editOverlayItem(item);
+                    }
+                  },
+                  onItemsChanged: () => setState(() {}),
+                ),
               ),
               // Recording indicator
               if (_isRecording)
@@ -1148,7 +1152,7 @@ class _TakeScreenState extends ConsumerState<TakeScreen>
   Widget _buildTabBar() {
     return Row(
       mainAxisAlignment: MainAxisAlignment.center,
-      children: ['AR', 'FILTERS', 'TEXT', 'STICKERS']
+      children: ['AR', 'FILTERS', 'STICKERS']
           .map((t) => _tabBtn(t))
           .toList(),
     );

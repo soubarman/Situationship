@@ -61,46 +61,50 @@ class _OverlayManagerState extends State<OverlayManager> {
 
   @override
   Widget build(BuildContext context) {
-    return Stack(
-      fit: StackFit.expand,
-      children: [
-        // Items
-        ...widget.items.map(_buildItem),
-        
-        // Trash Can (only visible when dragging)
-        if (_isDragging)
-          Positioned(
-            left: 0,
-            right: 0,
-            bottom: 40,
-            child: AnimatedScale(
-              scale: _isInTrashZone ? 1.5 : 1.0,
-              duration: const Duration(milliseconds: 150),
-              child: AnimatedOpacity(
-                opacity: _isInTrashZone ? 1.0 : 0.6,
-                duration: const Duration(milliseconds: 150),
-                child: Container(
-                  height: 64,
-                  decoration: const BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: Colors.black45,
-                  ),
-                  child: Center(
-                    child: Icon(
-                      Icons.delete_outline_rounded,
-                      color: _isInTrashZone ? AppTheme.error : Colors.white,
-                      size: 32,
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        return Stack(
+          fit: StackFit.expand,
+          children: [
+            // Items
+            ...widget.items.map((item) => _buildItem(item, constraints.maxHeight)),
+            
+            // Trash Can (only visible when dragging)
+            if (_isDragging)
+              Positioned(
+                left: 0,
+                right: 0,
+                bottom: 40,
+                child: AnimatedScale(
+                  scale: _isInTrashZone ? 1.5 : 1.0,
+                  duration: const Duration(milliseconds: 150),
+                  child: AnimatedOpacity(
+                    opacity: _isInTrashZone ? 1.0 : 0.6,
+                    duration: const Duration(milliseconds: 150),
+                    child: Container(
+                      height: 64,
+                      decoration: const BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: Colors.black45,
+                      ),
+                      child: Center(
+                        child: Icon(
+                          Icons.delete_outline_rounded,
+                          color: _isInTrashZone ? AppTheme.error : Colors.white,
+                          size: 32,
+                        ),
+                      ),
                     ),
                   ),
                 ),
               ),
-            ),
-          ),
-      ],
+          ],
+        );
+      }
     );
   }
 
-  Widget _buildItem(OverlayItem item) {
+  Widget _buildItem(OverlayItem item, double maxHeight) {
     final isSticker = !item.isText;
     
     // Base widget
@@ -170,10 +174,8 @@ class _OverlayManagerState extends State<OverlayManager> {
             item.position += details.focalPointDelta;
             item.scale = _initialScale * details.scale;
             item.rotation = _initialRotation + details.rotation;
-            
-            // Check trash zone (bottom 100 pixels) using the actual finger position!
-            final screenHeight = MediaQuery.of(context).size.height;
-            _isInTrashZone = details.focalPoint.dy > screenHeight - _trashZoneHeight;
+            // Check trash zone using the local finger position and actual container height
+            _isInTrashZone = details.localFocalPoint.dy > maxHeight - _trashZoneHeight - 64; // Added 64 padding to catch the finger
           });
         },
         onScaleEnd: (details) {
