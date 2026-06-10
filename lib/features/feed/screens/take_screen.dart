@@ -222,8 +222,8 @@ class _TakeScreenState extends ConsumerState<TakeScreen>
       final stream = await mediaDevices.getUserMedia({
         'video': {
           'facingMode': 'user',
-          'width': {'ideal': 1280},
-          'height': {'ideal': 720},
+          'width': {'ideal': 640},
+          'height': {'ideal': 480},
         },
         'audio': false,
       });
@@ -1298,7 +1298,7 @@ class _TakeScreenState extends ConsumerState<TakeScreen>
                     ColorFiltered(
                       colorFilter: ColorFilter.matrix(AppColorFilters.get(f)),
                       child: Image.asset(
-                        'assets/images/app_icon.jpeg',
+                        'assets/images/filter_person.png',
                         fit: BoxFit.cover,
                       ),
                     ),

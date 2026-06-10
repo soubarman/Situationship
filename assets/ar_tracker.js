@@ -82,7 +82,7 @@ window.arTracker = {
 
         this.camera = new Camera(this.videoElement, {
             onFrame: async () => { await this.faceMesh.send({ image: this.videoElement }); },
-            width: 1280, height: 720
+            width: 640, height: 480
         });
         this.camera.start();
         this.isRunning = true;
