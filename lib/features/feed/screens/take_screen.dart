@@ -830,31 +830,36 @@ class _TakeScreenState extends ConsumerState<TakeScreen>
         );
       }
 
-      // Captured photo preview
-      if (_capturedImageBytes != null) {
-        return ColorFiltered(
-          colorFilter: ColorFilter.matrix(AppColorFilters.get(_filter)),
-          child: Image.memory(_capturedImageBytes!, fit: BoxFit.cover),
-        );
-      }
-
-      // Live AR WebView (fills frame, handles face mesh internally)
-      // Note: Color matrix is applied via JS for live feed to bypass Flutter compositing issues
-      return ARWebViewCamera(
-        key: _arWebViewKey,
-        onReady: () => setState(() => _arWebViewReady = true),
-        onCapture: (bytes) {
-          setState(() => _capturedImageBytes = bytes);
-        },
-        onVideoCapture: (bytes) {
-          setState(() {
-            _capturedVideoBytes = bytes;
-            _isRecording = false;
-          });
-          // Also trigger a still capture for thumbnail
-          _arWebViewKey.currentState?.captureFrame();
-          _snack('Video recorded! Tap Post to share.');
-        },
+      // Keep the Live AR WebView always active in the background to avoid 
+      // expensive reloads when hitting "Retake".
+      return Stack(
+        fit: StackFit.expand,
+        children: [
+          // Live AR WebView (fills frame, handles face mesh internally)
+          ARWebViewCamera(
+            key: _arWebViewKey,
+            onReady: () => setState(() => _arWebViewReady = true),
+            onCapture: (bytes) {
+              setState(() => _capturedImageBytes = bytes);
+            },
+            onVideoCapture: (bytes) {
+              setState(() {
+                _capturedVideoBytes = bytes;
+                _isRecording = false;
+              });
+              // Also trigger a still capture for thumbnail
+              _arWebViewKey.currentState?.captureFrame();
+              _snack('Video recorded! Tap Post to share.');
+            },
+          ),
+          
+          // Captured photo preview overlaid on top
+          if (_capturedImageBytes != null)
+            ColorFiltered(
+              colorFilter: ColorFilter.matrix(AppColorFilters.get(_filter)),
+              child: Image.memory(_capturedImageBytes!, fit: BoxFit.cover),
+            ),
+        ],
       );
     }
 
