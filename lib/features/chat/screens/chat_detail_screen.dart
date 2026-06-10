@@ -57,6 +57,8 @@ class _ChatDetailScreenState extends ConsumerState<ChatDetailScreen>
   String? _giphyError;
   Timer? _giphyDebounce;
 
+  final List<XFile> _uploadingImages = [];
+
   static const _emojiQuickPicks = [
     '😊', '🔥', '✨', '😂', '🥺', '💫', '❤️', '🙏', '👀', '🎉', '😍', '💬',
     '👍', '🙌', '💯', '🚀', '⭐', '🎈', '🍕', '🍻', '💖', '🍿', '💡', '🎵'
@@ -560,9 +562,11 @@ class _ChatDetailScreenState extends ConsumerState<ChatDetailScreen>
       if (file == null) return;
       
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Uploading photo...'), duration: Duration(seconds: 2)),
-      );
+      
+      setState(() {
+        _uploadingImages.add(file);
+      });
+      _scrollToBottom();
       
       final bytes = await file.readAsBytes();
       final storageRef = FirebaseStorage.instance
@@ -577,16 +581,86 @@ class _ChatDetailScreenState extends ConsumerState<ChatDetailScreen>
       final snapshot = await uploadTask;
       final downloadUrl = await snapshot.ref.getDownloadURL();
       
+      if (mounted) {
+        setState(() {
+          _uploadingImages.remove(file);
+        });
+      }
+      
       _sendImage(downloadUrl);
       
     } catch (e) {
       print('Image upload error: $e');
       if (mounted) {
+        setState(() {
+          _uploadingImages.clear();
+        });
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Failed to upload image: $e')),
         );
       }
     }
+  }
+
+  Widget _buildUploadingImageBubble(XFile file, bool isDark) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 6),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.end,
+        crossAxisAlignment: CrossAxisAlignment.end,
+        children: [
+          Flexible(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                Container(
+                  constraints: BoxConstraints(
+                    maxWidth: MediaQuery.of(context).size.width * 0.6,
+                  ),
+                  child: ClipRRect(
+                    borderRadius: const BorderRadius.only(
+                      topLeft: Radius.circular(18),
+                      topRight: Radius.circular(18),
+                      bottomLeft: Radius.circular(18),
+                      bottomRight: Radius.circular(4),
+                    ),
+                    child: Stack(
+                      alignment: Alignment.center,
+                      children: [
+                        Image.network(
+                          file.path,
+                          fit: BoxFit.cover,
+                          color: isDark ? Colors.black.withOpacity(0.5) : Colors.white.withOpacity(0.5),
+                          colorBlendMode: isDark ? BlendMode.darken : BlendMode.lighten,
+                        ),
+                        const CircularProgressIndicator(color: AppTheme.primaryBlue),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 3),
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      'Sending...',
+                      style: TextStyle(fontSize: 10, color: AppTheme.textTertiary),
+                    ),
+                    const SizedBox(width: 4),
+                    Icon(
+                      Icons.access_time,
+                      size: 10,
+                      color: AppTheme.textTertiary,
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 4),
+        ],
+      ),
+    );
   }
 
   void _showImagePicker() {
@@ -766,14 +840,20 @@ class _ChatDetailScreenState extends ConsumerState<ChatDetailScreen>
                 : ListView.builder(
                     controller: _scrollController,
                     padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-                    itemCount: messages.length + (_isTypingLocal ? 1 : 0),
+                    itemCount: messages.length + (_isTypingLocal ? 1 : 0) + _uploadingImages.length,
                     itemBuilder: (context, index) {
-                      if (_isTypingLocal && index == messages.length) {
+                      if (_isTypingLocal && index == messages.length + _uploadingImages.length) {
                         return _TypingIndicator(
                           controller: _typingController,
                           avatarUrl: avatarUrl,
                         );
                       }
+                      
+                      if (index >= messages.length && index < messages.length + _uploadingImages.length) {
+                        final file = _uploadingImages[index - messages.length];
+                        return _buildUploadingImageBubble(file, isDark);
+                      }
+                      
                       final msg = messages[index];
                       final isMe = msg.senderId == currentUser?.id ||
                           (msg.senderId == 'anonymous' && currentUser?.id == chat.requestSenderId);
