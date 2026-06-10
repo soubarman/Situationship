@@ -159,13 +159,18 @@ class _FeedScreenState extends ConsumerState<FeedScreen> {
       elevation: 0,
       scrolledUnderElevation: 0,
       backgroundColor: Colors.transparent,
-      title: const Text(
+      title: Text(
         'Situationship',
         style: TextStyle(
           fontSize: 26,
-          fontWeight: FontWeight.w800,
-          color: Colors.white,
-          letterSpacing: -0.6,
+          fontWeight: FontWeight.w900,
+          letterSpacing: -0.8,
+          foreground: Paint()
+            ..shader = LinearGradient(
+              colors: isDark 
+                  ? [Colors.white, Colors.white.withOpacity(0.8)] 
+                  : [AppTheme.primaryBlue, AppTheme.accentPurple],
+            ).createShader(const Rect.fromLTWH(0.0, 0.0, 200.0, 30.0)),
         ),
       ),
       actions: [
@@ -296,12 +301,19 @@ class _FeedScreenState extends ConsumerState<FeedScreen> {
             decoration: BoxDecoration(
               color: isDark
                   ? Colors.white.withOpacity(0.08)
-                  : Colors.white.withOpacity(0.4),
+                  : Colors.white.withOpacity(0.85),
               borderRadius: BorderRadius.circular(20),
               border: Border.all(
-                color: Colors.amber.withOpacity(isDark ? 0.4 : 0.45),
-                width: 1.0,
+                color: isDark ? Colors.amber.withOpacity(0.4) : Colors.amber.withOpacity(0.6),
+                width: 1.2,
               ),
+              boxShadow: isDark ? [] : [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.03),
+                  blurRadius: 8,
+                  offset: const Offset(0, 2),
+                )
+              ],
             ),
             child: Row(
               mainAxisSize: MainAxisSize.min,
@@ -614,12 +626,19 @@ class _GlassIcon extends StatelessWidget {
         child: Container(
           padding: const EdgeInsets.all(8),
           decoration: BoxDecoration(
-            color: isDark ? Colors.white.withOpacity(0.08) : Colors.white.withOpacity(0.4),
+            color: isDark ? Colors.white.withOpacity(0.08) : Colors.white.withOpacity(0.85),
             borderRadius: BorderRadius.circular(12),
             border: Border.all(
-              color: isDark ? Colors.white.withOpacity(0.12) : Colors.black.withOpacity(0.05),
-              width: 0.8,
+              color: isDark ? Colors.white.withOpacity(0.12) : Colors.white.withOpacity(0.9),
+              width: 1.0,
             ),
+            boxShadow: isDark ? [] : [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.03),
+                blurRadius: 8,
+                offset: const Offset(0, 2),
+              )
+            ],
           ),
           child: Icon(icon, size: 20, color: color),
         ),
