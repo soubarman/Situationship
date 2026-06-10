@@ -1448,7 +1448,17 @@ class _TakeScreenState extends ConsumerState<TakeScreen>
                   fit: StackFit.expand,
                   children: [
                     Image.asset(
-                      'assets/images/filter_person.png',
+                      switch (f) {
+                        'Thug Life' => 'assets/images/ar_thug_life.png',
+                        'Dog' => 'assets/images/ar_dog.png',
+                        'Cat' => 'assets/images/ar_cat.png',
+                        'Bunny' => 'assets/images/ar_bunny.png',
+                        'Flower Crown' => 'assets/images/ar_flower_crown.png',
+                        'Devil' => 'assets/images/ar_devil.png',
+                        'Angel' => 'assets/images/ar_angel.png',
+                        'Crown' => 'assets/images/ar_crown.png',
+                        _ => 'assets/images/filter_person.png',
+                      },
                       fit: BoxFit.cover,
                     ),
                     Container(
