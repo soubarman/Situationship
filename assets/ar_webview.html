@@ -16,18 +16,18 @@
       top: 0; left: 0;
       width: 100%; height: 100%;
       object-fit: cover;
-      /* mirror front camera */
-      transform: scaleX(-1);
+      transform: scaleX(-1); /* mirror front camera */
     }
     video { display: none; }
     #status {
       position: absolute; top: 50%; left: 50%;
       transform: translate(-50%, -50%);
-      color: rgba(255,255,255,0.7);
-      font-family: sans-serif;
+      color: rgba(255,255,255,0.8);
+      font-family: -apple-system, sans-serif;
       font-size: 14px;
       text-align: center;
       pointer-events: none;
+      max-width: 80%;
     }
   </style>
 </head>
@@ -35,23 +35,64 @@
   <canvas id="output-canvas"></canvas>
   <div id="status">Starting camera...</div>
 
-  <!-- MediaPipe CDN -->
+  <!-- ── Path-patch: runs BEFORE ar_tracker.js ────────────────────────────────
+       When served from Flutter asset server (appassets.androidplatform.net),
+       ar_tracker.js uses paths like "assets/filters/dog_filter.png" which
+       resolve relative to the HTML file's location. The HTML is at
+       flutter_assets/assets/ar_webview.html, so "assets/filters/..." would
+       incorrectly become "flutter_assets/assets/assets/filters/...".
+       We intercept Image construction and strip the leading "assets/" prefix.
+  ──────────────────────────────────────────────────────────────────────────── -->
+  <script>
+    (function() {
+      const isFlutterAssets = location.hostname === 'appassets.androidplatform.net'
+                           || location.hostname === 'localhost'
+                           || location.protocol === 'file:';
+
+      if (isFlutterAssets && location.pathname.includes('/assets/')) {
+        // Wrap Image so that "assets/filters/..." → "filters/..."
+        const NativeImage = window.Image;
+        function PatchedImage(w, h) {
+          const img = (w && h) ? new NativeImage(w, h) : new NativeImage();
+          const origDesc = Object.getOwnPropertyDescriptor(NativeImage.prototype, 'src');
+          Object.defineProperty(img, 'src', {
+            set(value) {
+              if (typeof value === 'string' && value.startsWith('assets/filters/')) {
+                value = value.replace('assets/filters/', 'filters/');
+              }
+              origDesc.set.call(img, value);
+            },
+            get() { return origDesc.get.call(img); }
+          });
+          return img;
+        }
+        PatchedImage.prototype = NativeImage.prototype;
+        window.Image = PatchedImage;
+      }
+    })();
+  </script>
+
+  <!-- MediaPipe CDN (loads from internet) -->
   <script src="https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh@0.4.1633559619/face_mesh.js" crossorigin="anonymous"></script>
   <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils@0.3.1632432234/camera_utils.js" crossorigin="anonymous"></script>
 
-  <!-- AR Tracker (same file as web) -->
+  <!-- AR Tracker (bundled as Flutter asset) -->
   <script src="ar_tracker.js"></script>
 
   <script>
     const statusEl = document.getElementById('status');
-    let arStarted = false;
 
     function showStatus(msg) {
       statusEl.textContent = msg;
       statusEl.style.display = 'block';
     }
-    function hideStatus() {
-      statusEl.style.display = 'none';
+    function hideStatus() { statusEl.style.display = 'none'; }
+
+    // Safe message sender — ARChannel exists on Android, not on plain browser
+    function postToFlutter(obj) {
+      try {
+        if (window.ARChannel) ARChannel.postMessage(JSON.stringify(obj));
+      } catch(e) { console.warn('ARChannel error:', e); }
     }
 
     // ── Initialize camera and AR tracker ──────────────────────────────────────
@@ -61,7 +102,7 @@
 
         const stream = await navigator.mediaDevices.getUserMedia({
           video: {
-            facingMode: 'user',
+            facingMode: { ideal: 'user' },
             width:  { ideal: 1280 },
             height: { ideal: 720 }
           },
@@ -69,117 +110,102 @@
         });
 
         const video = document.createElement('video');
-        video.srcObject = stream;
-        video.autoplay  = true;
+        video.srcObject  = stream;
+        video.autoplay   = true;
         video.playsInline = true;
-        video.muted     = true;
+        video.muted      = true;
         document.body.appendChild(video);
 
-        showStatus('Loading AR...');
+        showStatus('Loading AR engine...');
 
-        await new Promise((resolve) => {
+        await new Promise((resolve, reject) => {
           video.addEventListener('loadedmetadata', resolve, { once: true });
+          setTimeout(() => reject(new Error('Camera timeout')), 10000);
         });
         await video.play();
 
-        // Initialize ar_tracker — it creates its own canvas internally
+        // Initialize ar_tracker — creates its own canvas internally
         const canvas = window.arTracker.initialize(video);
 
-        // Replace the placeholder canvas with the one ar_tracker created
+        // Swap placeholder canvas with the tracker's canvas
         const placeholder = document.getElementById('output-canvas');
-        canvas.id = 'output-canvas';
+        canvas.id       = 'output-canvas';
         canvas.style.cssText = placeholder.style.cssText;
         placeholder.parentNode.replaceChild(canvas, placeholder);
 
-        arStarted = true;
         hideStatus();
-
-        // Tell Flutter we're ready
-        if (window.ARChannel) {
-          ARChannel.postMessage(JSON.stringify({ type: 'ready' }));
-        }
+        postToFlutter({ type: 'ready' });
 
       } catch (err) {
-        showStatus('Camera error: ' + err.message);
-        if (window.ARChannel) {
-          ARChannel.postMessage(JSON.stringify({ type: 'error', message: err.message }));
-        }
+        console.error('AR start error:', err);
+        showStatus('⚠️ ' + (err.message || 'Camera error'));
+        postToFlutter({ type: 'error', message: err.message || String(err) });
       }
     }
 
-    // ── API callable from Flutter ─────────────────────────────────────────────
+    // ── API callable from Flutter via runJavaScript() ─────────────────────────
 
-    // Set the active AR filter
     function setFilter(name) {
       if (window.arTracker) window.arTracker.setFilter(name);
     }
 
-    // Update filter alignment config (from calibration sliders)
     function updateFilterConfig(name, scale, offsetX, offsetY) {
       if (window.arTracker && window.arTracker.updateFilterConfig) {
         window.arTracker.updateFilterConfig(name, scale, offsetX, offsetY);
       }
     }
 
-    // Capture current frame as JPEG base64 and send to Flutter
+    // Capture current frame as JPEG and send to Flutter
     function captureFrame() {
       const canvas = document.getElementById('output-canvas');
-      if (!canvas) {
-        if (window.ARChannel) ARChannel.postMessage(JSON.stringify({ type: 'capture_error' }));
-        return;
-      }
-      // Un-mirror for capture: draw to temp canvas without scaleX(-1)
-      const tmp = document.createElement('canvas');
-      tmp.width  = canvas.width;
-      tmp.height = canvas.height;
-      const tmpCtx = tmp.getContext('2d');
-      // Flip back to normal orientation
-      tmpCtx.translate(tmp.width, 0);
-      tmpCtx.scale(-1, 1);
-      tmpCtx.drawImage(canvas, 0, 0);
-      const base64 = tmp.toDataURL('image/jpeg', 0.85);
-      if (window.ARChannel) {
-        ARChannel.postMessage(JSON.stringify({ type: 'capture', data: base64 }));
-      }
+      if (!canvas) { postToFlutter({ type: 'capture_error' }); return; }
+
+      const tmp    = document.createElement('canvas');
+      tmp.width    = canvas.width;
+      tmp.height   = canvas.height;
+      const ctx    = tmp.getContext('2d');
+      // Un-mirror: canvas has scaleX(-1) via CSS; un-flip for capture
+      ctx.translate(tmp.width, 0);
+      ctx.scale(-1, 1);
+      ctx.drawImage(canvas, 0, 0);
+
+      postToFlutter({ type: 'capture', data: tmp.toDataURL('image/jpeg', 0.85) });
     }
 
-    // Start video recording
+    // Video recording from the AR canvas stream
     let mediaRecorder = null;
     let videoChunks   = [];
 
     function startRecording() {
       const canvas = document.getElementById('output-canvas');
-      if (!canvas || !canvas.captureStream) return;
+      if (!canvas || !canvas.captureStream) {
+        postToFlutter({ type: 'error', message: 'captureStream not supported' });
+        return;
+      }
       videoChunks = [];
       const stream = canvas.captureStream(30);
-      mediaRecorder = new MediaRecorder(stream, { mimeType: 'video/webm;codecs=vp8' });
+      const mimeType = MediaRecorder.isTypeSupported('video/webm;codecs=vp8')
+                       ? 'video/webm;codecs=vp8'
+                       : 'video/webm';
+      mediaRecorder = new MediaRecorder(stream, { mimeType });
       mediaRecorder.ondataavailable = (e) => {
         if (e.data && e.data.size > 0) videoChunks.push(e.data);
       };
       mediaRecorder.onstop = () => {
-        const blob = new Blob(videoChunks, { type: 'video/webm' });
+        const blob   = new Blob(videoChunks, { type: 'video/webm' });
         const reader = new FileReader();
-        reader.onload = () => {
-          if (window.ARChannel) {
-            ARChannel.postMessage(JSON.stringify({
-              type: 'video',
-              data: reader.result  // base64 data URL
-            }));
-          }
-        };
+        reader.onload = () => postToFlutter({ type: 'video', data: reader.result });
         reader.readAsDataURL(blob);
       };
       mediaRecorder.start(1000);
-      if (window.ARChannel) ARChannel.postMessage(JSON.stringify({ type: 'recording_started' }));
+      postToFlutter({ type: 'recording_started' });
     }
 
     function stopRecording() {
-      if (mediaRecorder && mediaRecorder.state !== 'inactive') {
-        mediaRecorder.stop();
-      }
+      if (mediaRecorder && mediaRecorder.state !== 'inactive') mediaRecorder.stop();
     }
 
-    // ── Boot ─────────────────────────────────────────────────────────────────
+    // ── Boot ──────────────────────────────────────────────────────────────────
     window.addEventListener('load', startAR);
   </script>
 </body>

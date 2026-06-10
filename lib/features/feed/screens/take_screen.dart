@@ -810,8 +810,8 @@ class _TakeScreenState extends ConsumerState<TakeScreen>
           onAction: _uploadFromGallery,
         );
       }
-      // Loading
-      if (!_nativeCameraReady || _cameraController == null) {
+      // Loading (waiting for permission request to complete)
+      if (!_nativeCameraReady) {
         return Container(
           color: AppTheme.darkCard,
           child: const Center(
