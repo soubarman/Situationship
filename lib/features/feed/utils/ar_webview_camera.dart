@@ -89,6 +89,10 @@ class ARWebViewCameraState extends State<ARWebViewCamera> {
         case 'capture':
           final base64Str = (data['data'] as String)
               .replaceFirst(RegExp(r'^data:image/\w+;base64,'), '');
+          if (base64Str.isEmpty || base64Str.length < 100) {
+            debugPrint('ARWebView: capture ignored (canvas empty/loading)');
+            break;
+          }
           final bytes = base64Decode(base64Str);
           widget.onCapture?.call(bytes);
           break;
@@ -96,6 +100,10 @@ class ARWebViewCameraState extends State<ARWebViewCamera> {
         case 'video':
           final base64Str = (data['data'] as String)
               .replaceFirst(RegExp(r'^data:video/\w+;base64,'), '');
+          if (base64Str.isEmpty || base64Str.length < 100) {
+            debugPrint('ARWebView: video capture ignored (empty data)');
+            break;
+          }
           final bytes = base64Decode(base64Str);
           widget.onVideoCapture?.call(bytes);
           break;

@@ -38,20 +38,21 @@ final userDataStreamProvider = StreamProvider<UserModel?>((ref) {
       }
       return db.collection('users').doc(user.uid).snapshots().map((doc) {
         if (!doc.exists) {
-          final userModel = UserModel(
+          // If the document isn't in cache yet, just return a placeholder.
+          // DO NOT overwrite the database with empty data, as the auth controller
+          // handles the actual document creation during signup.
+          return UserModel(
             id: user.uid,
             name: user.displayName ?? user.email?.split('@').first ?? 'User',
             email: user.email ?? '',
+            bio: 'Loading...', // Prevents app_router from redirecting to /complete-profile
             age: 18,
-            avatarUrl: user.photoURL,
+            avatarUrl: user.photoURL ?? 'https://i.pravatar.cc/150?u=${user.uid}', // Prevents avatarUrl == null redirect
             interests: [],
             isVerified: false,
             isOnline: true,
             coins: 100,
           );
-          // Fire-and-forget so the stream doesn't hang if network is blocked
-          db.collection('users').doc(user.uid).set(userModel.toMap(), SetOptions(merge: true));
-          return userModel;
         }
         return UserModel.fromMap(doc.data()!);
       });

@@ -17,7 +17,6 @@
       top: 0; left: 0;
       width: 100%; height: 100%;
       object-fit: cover;
-      transform: scaleX(-1); /* mirror front camera */
     }
     video { display: none; }
     #status {
@@ -197,16 +196,8 @@
       const canvas = document.getElementById('output-canvas');
       if (!canvas) { postToFlutter({ type: 'capture_error' }); return; }
 
-      const tmp    = document.createElement('canvas');
-      tmp.width    = canvas.width;
-      tmp.height   = canvas.height;
-      const ctx    = tmp.getContext('2d');
-      // Un-mirror: canvas has scaleX(-1) via CSS; un-flip for capture
-      ctx.translate(tmp.width, 0);
-      ctx.scale(-1, 1);
-      ctx.drawImage(canvas, 0, 0);
-
-      postToFlutter({ type: 'capture', data: tmp.toDataURL('image/jpeg', 0.85) });
+      // Canvas is already mirrored internally by ar_tracker.js, so just grab it!
+      postToFlutter({ type: 'capture', data: canvas.toDataURL('image/jpeg', 0.85) });
     }
 
     // Video recording from the AR canvas stream
