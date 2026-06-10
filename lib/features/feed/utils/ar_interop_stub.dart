@@ -10,3 +10,6 @@ void updateARFilterConfig(
   double offsetX,
   double offsetY,
 ) {}
+
+void applyColorMatrixJS(List<double> matrix) {}
+

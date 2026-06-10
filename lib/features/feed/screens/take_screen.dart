@@ -794,24 +794,22 @@ class _TakeScreenState extends ConsumerState<TakeScreen>
       }
 
       // Live AR WebView (fills frame, handles face mesh internally)
-      return ColorFiltered(
-        colorFilter: ColorFilter.matrix(AppColorFilters.get(_filter)),
-        child: ARWebViewCamera(
-          key: _arWebViewKey,
-          onReady: () => setState(() => _arWebViewReady = true),
-          onCapture: (bytes) {
-            setState(() => _capturedImageBytes = bytes);
-          },
-          onVideoCapture: (bytes) {
-            setState(() {
-              _capturedVideoBytes = bytes;
-              _isRecording = false;
-            });
-            // Also trigger a still capture for thumbnail
-            _arWebViewKey.currentState?.captureFrame();
-            _snack('Video recorded! Tap Post to share.');
-          },
-        ),
+      // Note: Color matrix is applied via JS for live feed to bypass Flutter compositing issues
+      return ARWebViewCamera(
+        key: _arWebViewKey,
+        onReady: () => setState(() => _arWebViewReady = true),
+        onCapture: (bytes) {
+          setState(() => _capturedImageBytes = bytes);
+        },
+        onVideoCapture: (bytes) {
+          setState(() {
+            _capturedVideoBytes = bytes;
+            _isRecording = false;
+          });
+          // Also trigger a still capture for thumbnail
+          _arWebViewKey.currentState?.captureFrame();
+          _snack('Video recorded! Tap Post to share.');
+        },
       );
     }
 
@@ -897,10 +895,8 @@ class _TakeScreenState extends ConsumerState<TakeScreen>
     }
 
     // Render the live HTML AR Canvas element
-    return ColorFiltered(
-      colorFilter: ColorFilter.matrix(AppColorFilters.get(_filter)),
-      child: HtmlElementView(viewType: _arViewType!),
-    );
+    // Note: Color matrix is applied via JS SVG filter
+    return HtmlElementView(viewType: _arViewType!);
   }
 
   // ── Permission denied screen helper ──────────────────────────────────────────
@@ -1261,11 +1257,11 @@ class _TakeScreenState extends ConsumerState<TakeScreen>
     return const SizedBox(height: 16);
   }
 
-  // ── Color Filter Bar (Android / iOS) ─────────────────────────────────────────
+  // ── Color Filter Bar (Android / iOS / Web) ─────────────────────────────────
   Widget _buildColorFilterBar() {
     final filters = AppColorFilters.names;
     return SizedBox(
-      height: 72,
+      height: 80,
       child: ListView.builder(
         scrollDirection: Axis.horizontal,
         padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -1274,28 +1270,66 @@ class _TakeScreenState extends ConsumerState<TakeScreen>
           final f = filters[i];
           final sel = _filter == f;
           return GestureDetector(
-            onTap: () => setState(() => _filter = f),
+            onTap: () {
+              setState(() => _filter = f);
+              final matrix = AppColorFilters.get(f);
+              if (kIsWeb) {
+                applyColorMatrixJS(matrix);
+              } else {
+                _arWebViewKey.currentState?.applyColorMatrix(matrix);
+              }
+            },
             child: AnimatedContainer(
               duration: const Duration(milliseconds: 200),
-              margin: const EdgeInsets.symmetric(horizontal: 5, vertical: 8),
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              margin: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
+              width: 64,
               decoration: BoxDecoration(
-                color: sel
-                    ? AppTheme.accentPurple
-                    : Colors.white.withOpacity(0.08),
-                borderRadius: BorderRadius.circular(20),
+                borderRadius: BorderRadius.circular(12),
                 border: Border.all(
-                  color: sel
-                      ? AppTheme.accentPurple
-                      : Colors.white.withOpacity(0.15),
+                  color: sel ? AppTheme.accentPurple : Colors.transparent,
+                  width: 2,
                 ),
               ),
-              child: Text(
-                f,
-                style: TextStyle(
-                  color: sel ? Colors.white : Colors.white60,
-                  fontSize: 12,
-                  fontWeight: sel ? FontWeight.bold : FontWeight.normal,
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(10),
+                child: Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    ColorFiltered(
+                      colorFilter: ColorFilter.matrix(AppColorFilters.get(f)),
+                      child: Image.asset(
+                        'assets/images/app_icon.jpeg',
+                        fit: BoxFit.cover,
+                      ),
+                    ),
+                    Container(
+                      decoration: const BoxDecoration(
+                        gradient: LinearGradient(
+                          colors: [Colors.black87, Colors.transparent],
+                          begin: Alignment.bottomCenter,
+                          end: Alignment.center,
+                        ),
+                      ),
+                    ),
+                    Align(
+                      alignment: Alignment.bottomCenter,
+                      child: Padding(
+                        padding: const EdgeInsets.only(bottom: 6),
+                        child: Text(
+                          f,
+                          textAlign: TextAlign.center,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 9,
+                            fontWeight: FontWeight.bold,
+                            shadows: [Shadow(color: Colors.black, blurRadius: 4)],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ),

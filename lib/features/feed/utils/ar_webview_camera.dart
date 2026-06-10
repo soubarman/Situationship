@@ -137,6 +137,12 @@ class ARWebViewCameraState extends State<ARWebViewCamera> {
     );
   }
 
+  Future<void> applyColorMatrix(List<double> matrix) async {
+    final matrixStr = '[${matrix.join(',')}]';
+    await _controller?.runJavaScript('applyColorMatrix($matrixStr);');
+  }
+
+
   @override
   Widget build(BuildContext context) {
     if (_controller == null) {

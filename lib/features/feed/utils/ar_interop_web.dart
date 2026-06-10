@@ -29,3 +29,7 @@ void updateARFilterConfig(
   final tracker = js_util.getProperty<Object>(html.window, 'arTracker');
   js_util.callMethod<void>(tracker, 'updateFilterConfig', [filterName, scale, offsetX, offsetY]);
 }
+
+void applyColorMatrixJS(List<double> matrix) {
+  js_util.callMethod<void>(html.window, 'applyColorMatrix', [matrix]);
+}
