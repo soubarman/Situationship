@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:universal_html/html.dart' as html;
 import 'dart:typed_data';
 import 'dart:ui' as ui;
+import 'dart:ui';
 import '../utils/ui_web_shim.dart' as ui_web;
 import '../utils/ar_interop.dart';
 import '../utils/ar_webview_camera.dart';
@@ -548,18 +549,27 @@ class _TakeScreenState extends ConsumerState<TakeScreen>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppTheme.darkBg,
-      body: SafeArea(
-        child: Column(
-          children: [
-            _buildTopBar(),
-            Expanded(child: _buildPreviewArea()),
-            _buildBottomControls(),
-            _buildTabBar(),
-            _buildTabContent(),
-            _buildPostBar(),
-          ],
-        ),
+      backgroundColor: Colors.black,
+      body: Stack(
+        fit: StackFit.expand,
+        children: [
+          // Full-screen camera preview
+          _buildPreviewArea(),
+          
+          // Floating Controls Overlay
+          SafeArea(
+            child: Column(
+              children: [
+                _buildTopBar(),
+                const Spacer(),
+                _buildTabContent(),
+                _buildTabBar(),
+                _buildBottomControls(),
+                _buildPostBar(),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -570,55 +580,73 @@ class _TakeScreenState extends ConsumerState<TakeScreen>
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
       child: Row(
         children: [
-          GestureDetector(
-            onTap: () {
-              _stopCamera();
-              context.pop();
-            },
-            child: Container(
-              width: 36,
-              height: 36,
-              decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.1),
-                shape: BoxShape.circle,
+          ClipRRect(
+            borderRadius: BorderRadius.circular(20),
+            child: BackdropFilter(
+              filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+              child: GestureDetector(
+                onTap: () {
+                  _stopCamera();
+                  context.pop();
+                },
+                child: Container(
+                  width: 36,
+                  height: 36,
+                  decoration: BoxDecoration(
+                    color: Colors.black45,
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(Icons.close_rounded, color: Colors.white, size: 20),
+                ),
               ),
-              child: const Icon(Icons.close_rounded, color: Colors.white, size: 20),
             ),
           ),
           const Spacer(),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
-            decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.1),
-              borderRadius: BorderRadius.circular(24),
-            ),
-            child: Row(
-              children: [
-                _modeBtn('PHOTO'),
-                _modeBtn('VIDEO'),
-              ],
+          ClipRRect(
+            borderRadius: BorderRadius.circular(24),
+            child: BackdropFilter(
+              filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+                decoration: BoxDecoration(
+                  color: Colors.black45,
+                  borderRadius: BorderRadius.circular(24),
+                ),
+                child: Row(
+                  children: [
+                    _modeBtn('PHOTO'),
+                    _modeBtn('VIDEO'),
+                  ],
+                ),
+              ),
             ),
           ),
           const Spacer(),
-          GestureDetector(
-            onTap: _uploadFromGallery,
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-              decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.1),
-                borderRadius: BorderRadius.circular(24),
-                border: Border.all(color: Colors.white24),
-              ),
-              child: const Row(
-                children: [
-                  Icon(Icons.upload_rounded, color: Colors.white, size: 14),
-                  SizedBox(width: 4),
-                  Text('UPLOAD',
-                      style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 11,
-                          fontWeight: FontWeight.bold)),
-                ],
+          ClipRRect(
+            borderRadius: BorderRadius.circular(24),
+            child: BackdropFilter(
+              filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+              child: GestureDetector(
+                onTap: _uploadFromGallery,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: Colors.black45,
+                    borderRadius: BorderRadius.circular(24),
+                    border: Border.all(color: Colors.white24),
+                  ),
+                  child: const Row(
+                    children: [
+                      Icon(Icons.upload_rounded, color: Colors.white, size: 14),
+                      SizedBox(width: 4),
+                      Text('UPLOAD',
+                          style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 11,
+                              fontWeight: FontWeight.bold)),
+                    ],
+                  ),
+                ),
               ),
             ),
           ),
@@ -652,15 +680,11 @@ class _TakeScreenState extends ConsumerState<TakeScreen>
 
   // ── Preview Area ─────────────────────────────────────────────────────────────
   Widget _buildPreviewArea() {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 12),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(28),
-        child: RepaintBoundary(
-          key: _previewKey,
-          child: Stack(
-            fit: StackFit.expand,
-            children: [
+    return RepaintBoundary(
+      key: _previewKey,
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
               // Base layer: camera or captured image
               _buildBaseLayer(),
               // Filter overlay (for captured image)
@@ -718,8 +742,6 @@ class _TakeScreenState extends ConsumerState<TakeScreen>
               // Live filter calibrator (appears when long-pressing a filter)
               _buildFilterCalibrator(),
             ],
-          ),
-        ),
       ),
     );
   }
@@ -951,22 +973,28 @@ class _TakeScreenState extends ConsumerState<TakeScreen>
             child: AnimatedOpacity(
               opacity: _capturedImageBytes != null ? 1.0 : 0.0,
               duration: const Duration(milliseconds: 200),
-              child: Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(20),
-                  border: Border.all(color: Colors.white24),
-                ),
-                child: const Row(
-                  children: [
-                    Icon(Icons.refresh_rounded,
-                        color: Colors.white, size: 16),
-                    SizedBox(width: 4),
-                    Text('Retake',
-                        style: TextStyle(color: Colors.white, fontSize: 13)),
-                  ],
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(20),
+                child: BackdropFilter(
+                  filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+                  child: Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: Colors.black45,
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(color: Colors.white24),
+                    ),
+                    child: const Row(
+                      children: [
+                        Icon(Icons.refresh_rounded,
+                            color: Colors.white, size: 16),
+                        SizedBox(width: 4),
+                        Text('Retake',
+                            style: TextStyle(color: Colors.white, fontSize: 13)),
+                      ],
+                    ),
+                  ),
                 ),
               ),
             ),
@@ -1150,11 +1178,25 @@ class _TakeScreenState extends ConsumerState<TakeScreen>
 
   // ── Tab Bar ──────────────────────────────────────────────────────────────────
   Widget _buildTabBar() {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: ['AR', 'FILTERS', 'STICKERS']
-          .map((t) => _tabBtn(t))
-          .toList(),
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(24),
+        child: BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+          child: Container(
+            color: Colors.black26,
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: ['AR', 'FILTERS', 'STICKERS']
+                  .map((t) => _tabBtn(t))
+                  .toList(),
+            ),
+          ),
+        ),
+      ),
     );
   }
 
@@ -1290,41 +1332,51 @@ class _TakeScreenState extends ConsumerState<TakeScreen>
   Widget _buildPostBar() {
     return Padding(
       padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          const Text(
-            '✨ +5 aura on first post today',
-            style:
-                TextStyle(color: Colors.white38, fontSize: 12),
-          ),
-          AnimatedOpacity(
-            opacity: _capturedImageBytes != null ? 1.0 : 0.4,
-            duration: const Duration(milliseconds: 200),
-            child: ElevatedButton(
-              onPressed:
-                  _isSaving || _capturedImageBytes == null ? null : _post,
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppTheme.accentPurple,
-                foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(
-                    horizontal: 28, vertical: 12),
-                shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(24)),
-                elevation: 0,
-              ),
-              child: _isSaving
-                  ? const SizedBox(
-                      width: 18,
-                      height: 18,
-                      child: CircularProgressIndicator(
-                          strokeWidth: 2, color: Colors.white))
-                  : const Text('Post',
-                      style: TextStyle(
-                          fontWeight: FontWeight.bold, fontSize: 15)),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(32),
+        child: BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+          child: Container(
+            color: Colors.black26,
+            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                const Text(
+                  '✨ +5 aura on first post today',
+                  style:
+                      TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w600),
+                ),
+                AnimatedOpacity(
+                  opacity: _capturedImageBytes != null ? 1.0 : 0.4,
+                  duration: const Duration(milliseconds: 200),
+                  child: ElevatedButton(
+                    onPressed:
+                        _isSaving || _capturedImageBytes == null ? null : _post,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppTheme.accentPurple,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 28, vertical: 12),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(24)),
+                      elevation: 0,
+                    ),
+                    child: _isSaving
+                        ? const SizedBox(
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(
+                                strokeWidth: 2, color: Colors.white))
+                        : const Text('Post',
+                            style: TextStyle(
+                                fontWeight: FontWeight.bold, fontSize: 15)),
+                  ),
+                ),
+              ],
             ),
           ),
-        ],
+        ),
       ),
     );
   }
