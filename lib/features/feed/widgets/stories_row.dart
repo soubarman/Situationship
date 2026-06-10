@@ -190,7 +190,7 @@ class StoriesRow extends ConsumerWidget {
                     
                   // If we don't have a story, show a cool animated plus icon
                   if (myStory == null)
-                    _BlinkingWidget(
+                    _BleedingWaveWidget(
                       child: Container(
                         padding: const EdgeInsets.all(8),
                         decoration: BoxDecoration(
@@ -356,15 +356,15 @@ class _StoryItemState extends ConsumerState<_StoryItem> {
 }
 
 
-class _BlinkingWidget extends StatefulWidget {
+class _BleedingWaveWidget extends StatefulWidget {
   final Widget child;
-  const _BlinkingWidget({required this.child});
+  const _BleedingWaveWidget({required this.child});
 
   @override
-  State<_BlinkingWidget> createState() => _BlinkingWidgetState();
+  State<_BleedingWaveWidget> createState() => _BleedingWaveWidgetState();
 }
 
-class _BlinkingWidgetState extends State<_BlinkingWidget> with SingleTickerProviderStateMixin {
+class _BleedingWaveWidgetState extends State<_BleedingWaveWidget> with SingleTickerProviderStateMixin {
   late AnimationController _controller;
 
   @override
@@ -372,8 +372,8 @@ class _BlinkingWidgetState extends State<_BlinkingWidget> with SingleTickerProvi
     super.initState();
     _controller = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 800),
-    )..repeat(reverse: true);
+      duration: const Duration(milliseconds: 2000),
+    )..repeat();
   }
 
   @override
@@ -384,9 +384,31 @@ class _BlinkingWidgetState extends State<_BlinkingWidget> with SingleTickerProvi
 
   @override
   Widget build(BuildContext context) {
-    return FadeTransition(
-      opacity: _controller,
-      child: widget.child,
+    return Stack(
+      alignment: Alignment.center,
+      clipBehavior: Clip.none,
+      children: [
+        AnimatedBuilder(
+          animation: _controller,
+          builder: (context, _) {
+            return Transform.scale(
+              scale: 1.0 + (_controller.value * 0.8), // Expands by 80%
+              child: Opacity(
+                opacity: (1.0 - _controller.value) * 0.6, // Fades out smoothly
+                child: Container(
+                  width: 40,
+                  height: 40,
+                  decoration: const BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: AppTheme.accentPurple,
+                  ),
+                ),
+              ),
+            );
+          },
+        ),
+        widget.child,
+      ],
     );
   }
 }
