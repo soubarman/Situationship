@@ -1,6 +1,7 @@
 import 'dart:math';
 import 'dart:async';
 import 'dart:convert';
+import 'package:image_picker/image_picker.dart';
 import '../utils/chat_js_helper.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -547,6 +548,44 @@ class _ChatDetailScreenState extends ConsumerState<ChatDetailScreen>
     }
   }
 
+  Future<void> _pickAndSendImage(ImageSource source) async {
+    try {
+      final picker = ImagePicker();
+      final file = await picker.pickImage(
+        source: source,
+        imageQuality: 70,
+        maxWidth: 1024,
+      );
+      
+      if (file == null) return;
+      
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Uploading photo...'), duration: Duration(seconds: 2)),
+      );
+      
+      final bytes = await file.readAsBytes();
+      final storageRef = FirebaseStorage.instance
+          .ref()
+          .child('chats/${widget.chatId}/img_${DateTime.now().millisecondsSinceEpoch}.jpg');
+          
+      final uploadTask = storageRef.putData(
+        bytes,
+        SettableMetadata(contentType: 'image/jpeg'),
+      );
+      
+      final snapshot = await uploadTask;
+      final downloadUrl = await snapshot.ref.getDownloadURL();
+      
+      _sendImage(downloadUrl);
+      
+    } catch (e) {
+      print('Image upload error: $e');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to upload image: $e')),
+      );
+    }
+  }
+
   void _showImagePicker() {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     showModalBottomSheet(
@@ -564,35 +603,44 @@ class _ChatDetailScreenState extends ConsumerState<ChatDetailScreen>
           children: [
             Container(
               width: 40, height: 4,
-              margin: const EdgeInsets.only(bottom: 16),
+              margin: const EdgeInsets.only(bottom: 24),
               decoration: BoxDecoration(
                 color: Colors.grey.withOpacity(0.3),
                 borderRadius: BorderRadius.circular(2),
               ),
             ),
-            const Text('Send a Photo', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
-            const SizedBox(height: 16),
-            GridView.builder(
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: 3,
-                crossAxisSpacing: 8,
-                mainAxisSpacing: 8,
-              ),
-              itemCount: _demoImages.length,
-              itemBuilder: (ctx, i) => GestureDetector(
-                onTap: () {
-                  Navigator.pop(ctx);
-                  _sendImage(_demoImages[i]);
-                },
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(12),
-                  child: Image.network(_demoImages[i], fit: BoxFit.cover),
+            ListTile(
+              leading: Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: AppTheme.primaryBlue.withOpacity(0.1),
+                  shape: BoxShape.circle,
                 ),
+                child: const Icon(Icons.camera_alt_rounded, color: AppTheme.primaryBlue),
               ),
+              title: const Text('Take a Photo', style: TextStyle(fontWeight: FontWeight.w600)),
+              onTap: () {
+                Navigator.pop(context);
+                _pickAndSendImage(ImageSource.camera);
+              },
             ),
             const SizedBox(height: 8),
+            ListTile(
+              leading: Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: AppTheme.accentPurple.withOpacity(0.1),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(Icons.photo_library_rounded, color: AppTheme.accentPurple),
+              ),
+              title: const Text('Choose from Gallery', style: TextStyle(fontWeight: FontWeight.w600)),
+              onTap: () {
+                Navigator.pop(context);
+                _pickAndSendImage(ImageSource.gallery);
+              },
+            ),
+            const SizedBox(height: 20),
           ],
         ),
       ),
