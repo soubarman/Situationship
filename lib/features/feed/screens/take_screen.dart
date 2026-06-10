@@ -1396,7 +1396,7 @@ class _TakeScreenState extends ConsumerState<TakeScreen>
 
   Widget _buildARFilterBar() {
     return SizedBox(
-      height: 48,
+      height: 80,
       child: ListView.builder(
         key: const PageStorageKey('ar_filters_list'),
         scrollDirection: Axis.horizontal,
@@ -1434,28 +1434,51 @@ class _TakeScreenState extends ConsumerState<TakeScreen>
             },
             child: AnimatedContainer(
               duration: const Duration(milliseconds: 200),
-              margin: const EdgeInsets.only(right: 8),
-              padding: const EdgeInsets.symmetric(horizontal: 18),
+              margin: const EdgeInsets.symmetric(horizontal: 6, vertical: 8),
+              width: 64,
               decoration: BoxDecoration(
-                color: sel
-                    ? AppTheme.accentPurple.withOpacity(0.4)
-                    : Colors.black87,
-                borderRadius: BorderRadius.circular(24),
+                shape: BoxShape.circle,
                 border: Border.all(
-                  color: sel
-                      ? AppTheme.accentPurple
-                      : Colors.white.withOpacity(0.15),
+                  color: sel ? AppTheme.accentPurple : Colors.transparent,
+                  width: 3,
                 ),
               ),
-              child: Center(
-                child: Text(
-                  f,
-                  style: TextStyle(
-                    color: sel ? AppTheme.accentPurple : Colors.white60,
-                    fontSize: 12,
-                    fontWeight:
-                        sel ? FontWeight.bold : FontWeight.normal,
-                  ),
+              child: ClipOval(
+                child: Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    Image.asset(
+                      'assets/images/filter_person.png',
+                      fit: BoxFit.cover,
+                    ),
+                    Container(
+                      decoration: const BoxDecoration(
+                        gradient: LinearGradient(
+                          colors: [Colors.black87, Colors.transparent],
+                          begin: Alignment.bottomCenter,
+                          end: Alignment.center,
+                        ),
+                      ),
+                    ),
+                    Align(
+                      alignment: Alignment.bottomCenter,
+                      child: Padding(
+                        padding: const EdgeInsets.only(bottom: 10),
+                        child: Text(
+                          f,
+                          textAlign: TextAlign.center,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 10,
+                            fontWeight: FontWeight.bold,
+                            shadows: [Shadow(color: Colors.black, blurRadius: 4)],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ),
