@@ -19,6 +19,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_core/firebase_core.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/providers/app_state_provider.dart';
+import '../../../core/utils/color_filters.dart';
 
 // ─── Draggable Overlay Item ───────────────────────────────────────────────────
 class DraggableItem {
@@ -35,50 +36,7 @@ class DraggableItem {
   });
 }
 
-// ─── Instagram-style Color Filter Matrices ────────────────────────────────────
-class AppColorFilters {
-  static const Map<String, List<double>> _matrices = {
-    'Normal': [
-      1, 0, 0, 0, 0,
-      0, 1, 0, 0, 0,
-      0, 0, 1, 0, 0,
-      0, 0, 0, 1, 0,
-    ],
-    'Clarendon': [
-      1.1,  0,    0,    0, -20,
-      0,    1.05, 0,    0, -10,
-      0,    0,    1.15, 0, -20,
-      0,    0,    0,    1,   0,
-    ],
-    'Gingham': [
-      0.98, 0.02, 0,    0, 10,
-      0.02, 0.98, 0,    0, 10,
-      0,    0,    0.92, 0, 20,
-      0,    0,    0,    1,  0,
-    ],
-    'Moon': [
-      0.37, 0.34, 0.29, 0, 15,
-      0.37, 0.34, 0.29, 0, 15,
-      0.37, 0.34, 0.29, 0, 15,
-      0,    0,    0,    1,  0,
-    ],
-    'Lark': [
-      1.0,  0,    0,    0,  5,
-      0,    1.12, 0,    0,  5,
-      0,    0,    1.08, 0,  0,
-      0,    0,    0,    1,  0,
-    ],
-    'Valencia': [
-      1.08, 0,    0,    0, 12,
-      0,    0.95, 0,    0,  8,
-      0,    0,    0.85, 0,  5,
-      0,    0,    0,    1,  0,
-    ],
-  };
 
-  static List<double> get(String name) => _matrices[name] ?? _matrices['Normal']!;
-  static List<String> get names => _matrices.keys.toList();
-}
 
 // ─── Filter Calibration Config ───────────────────────────────────────────────
 class FilterConfig {
@@ -836,21 +794,24 @@ class _TakeScreenState extends ConsumerState<TakeScreen>
       }
 
       // Live AR WebView (fills frame, handles face mesh internally)
-      return ARWebViewCamera(
-        key: _arWebViewKey,
-        onReady: () => setState(() => _arWebViewReady = true),
-        onCapture: (bytes) {
-          setState(() => _capturedImageBytes = bytes);
-        },
-        onVideoCapture: (bytes) {
-          setState(() {
-            _capturedVideoBytes = bytes;
-            _isRecording = false;
-          });
-          // Also trigger a still capture for thumbnail
-          _arWebViewKey.currentState?.captureFrame();
-          _snack('Video recorded! Tap Post to share.');
-        },
+      return ColorFiltered(
+        colorFilter: ColorFilter.matrix(AppColorFilters.get(_filter)),
+        child: ARWebViewCamera(
+          key: _arWebViewKey,
+          onReady: () => setState(() => _arWebViewReady = true),
+          onCapture: (bytes) {
+            setState(() => _capturedImageBytes = bytes);
+          },
+          onVideoCapture: (bytes) {
+            setState(() {
+              _capturedVideoBytes = bytes;
+              _isRecording = false;
+            });
+            // Also trigger a still capture for thumbnail
+            _arWebViewKey.currentState?.captureFrame();
+            _snack('Video recorded! Tap Post to share.');
+          },
+        ),
       );
     }
 
@@ -936,7 +897,10 @@ class _TakeScreenState extends ConsumerState<TakeScreen>
     }
 
     // Render the live HTML AR Canvas element
-    return HtmlElementView(viewType: _arViewType!);
+    return ColorFiltered(
+      colorFilter: ColorFilter.matrix(AppColorFilters.get(_filter)),
+      child: HtmlElementView(viewType: _arViewType!),
+    );
   }
 
   // ── Permission denied screen helper ──────────────────────────────────────────
