@@ -130,93 +130,131 @@ class StoriesRow extends ConsumerWidget {
 
   Widget _buildAddStory(BuildContext context, bool isDark, UserModel user, Map<String, dynamic>? myStory) {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
       child: Column(
         children: [
-          Stack(
-            children: [
-              GestureDetector(
-                onTap: () {
-                  if (myStory != null) {
-                    context.push(
-                      '/take/view/${user.id}',
-                      extra: {'userName': user.name, 'userAvatar': user.avatarUrl},
-                    );
-                  } else {
-                    context.push('/take/create');
-                  }
-                },
-                child: Container(
-                  width: 68,
-                  height: 68,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    gradient: myStory != null ? AppTheme.primaryGradient : const LinearGradient(
-                      colors: [Color(0xFF9B5DE5), Color(0xFFFF5069), Color(0xFFFF9B54)],
-                      begin: Alignment.topRight,
-                      end: Alignment.bottomLeft,
-                    ),
-                  ),
-                  padding: const EdgeInsets.all(2.5),
-                  child: Container(
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      color: isDark ? AppTheme.darkBg : Colors.white,
-                    ),
-                    padding: const EdgeInsets.all(2),
-                    child: CircleAvatar(
-                      radius: 32,
-                      backgroundColor: isDark ? const Color(0xFF1A1A24) : const Color(0xFFF0F0F0),
-                      backgroundImage: myStory != null && myStory['imageUrl'] != null 
-                          ? CachedNetworkImageProvider(myStory['imageUrl'])
-                          : null,
-                      child: myStory == null ? _BlinkingWidget(
-                        child: Icon(
-                          Icons.add_rounded,
-                          color: isDark ? Colors.white : Colors.black87,
-                          size: 32,
-                        ),
-                      ) : null,
-                    ),
-                  ),
+          GestureDetector(
+            onTap: () {
+              if (myStory != null) {
+                context.push(
+                  '/take/view/${user.id}',
+                  extra: {'userName': user.name, 'userAvatar': user.avatarUrl},
+                );
+              } else {
+                context.push('/take/create');
+              }
+            },
+            child: Container(
+              width: 68,
+              height: 68,
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(22), // Modern squircle
+                gradient: myStory != null ? AppTheme.primaryGradient : null,
+                color: myStory == null ? (isDark ? Colors.white.withOpacity(0.08) : Colors.black.withOpacity(0.03)) : null,
+                border: Border.all(
+                  color: myStory != null 
+                    ? Colors.transparent 
+                    : (isDark ? Colors.white.withOpacity(0.15) : AppTheme.primaryBlue.withOpacity(0.3)),
+                  width: 1.5,
                 ),
+                boxShadow: myStory == null ? [
+                  BoxShadow(
+                    color: AppTheme.accentPurple.withOpacity(0.15),
+                    blurRadius: 12,
+                    spreadRadius: 2,
+                  )
+                ] : [
+                  BoxShadow(
+                    color: AppTheme.primaryBlue.withOpacity(0.3),
+                    blurRadius: 10,
+                    offset: const Offset(0, 4),
+                  )
+                ],
               ),
-              if (myStory != null)
-                Positioned(
-                  right: 0,
-                  bottom: 0,
-                  child: GestureDetector(
-                    onTap: () => context.push('/take/create'),
-                    child: Container(
-                      width: 24,
-                      height: 24,
+              child: Stack(
+                alignment: Alignment.center,
+                clipBehavior: Clip.none,
+                children: [
+                  // If we have a story, show the image inside the squircle
+                  if (myStory != null && myStory['imageUrl'] != null)
+                    Container(
+                      margin: const EdgeInsets.all(2.5),
                       decoration: BoxDecoration(
-                        color: AppTheme.primaryBlue,
-                        shape: BoxShape.circle,
-                        border: Border.all(
-                          color: isDark ? AppTheme.darkBg : Colors.white,
-                          width: 2,
+                        borderRadius: BorderRadius.circular(19),
+                        image: DecorationImage(
+                          image: CachedNetworkImageProvider(myStory['imageUrl']),
+                          fit: BoxFit.cover,
                         ),
                       ),
-                      child: const Icon(
-                        Icons.add_rounded,
-                        color: Colors.white,
-                        size: 16,
+                    ),
+                    
+                  // If we don't have a story, show a cool animated plus icon
+                  if (myStory == null)
+                    _BlinkingWidget(
+                      child: Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: AppTheme.accentPurple.withOpacity(0.2),
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(
+                          Icons.auto_awesome_rounded, // Sparkle icon
+                          color: AppTheme.accentPurple,
+                          size: 24,
+                        ),
                       ),
                     ),
-                  ),
-                ),
-            ],
-          ),
-          const SizedBox(height: 6),
-          const _BlinkingWidget(
-            child: Text(
-              'Add yours',
-              style: TextStyle(
-                fontSize: 11,
-                fontWeight: FontWeight.w700,
-                color: Color(0xFFFF8EC8),
+                    
+                  // If we DO have a story, show a tiny plus badge on the corner
+                  if (myStory != null)
+                    Positioned(
+                      right: -6,
+                      bottom: -6,
+                      child: GestureDetector(
+                        onTap: () => context.push('/take/create'),
+                        child: Container(
+                          width: 24,
+                          height: 24,
+                          decoration: BoxDecoration(
+                            gradient: const LinearGradient(
+                              colors: [AppTheme.accentPurple, AppTheme.accentPink],
+                            ),
+                            shape: BoxShape.circle,
+                            border: Border.all(
+                              color: isDark ? AppTheme.darkBg : Colors.white,
+                              width: 2.5,
+                            ),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withOpacity(0.2),
+                                blurRadius: 4,
+                                spreadRadius: 1,
+                              )
+                            ]
+                          ),
+                          child: const Icon(
+                            Icons.add_rounded,
+                            color: Colors.white,
+                            size: 16,
+                          ),
+                        ),
+                      ),
+                    ),
+                ],
               ),
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            myStory != null ? 'Your Take' : 'New Take',
+            style: TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w800,
+              letterSpacing: 0.2,
+              foreground: Paint()
+                ..shader = const LinearGradient(
+                  colors: [AppTheme.accentPurple, AppTheme.accentPink],
+                ).createShader(const Rect.fromLTWH(0.0, 0.0, 100.0, 20.0)),
             ),
           ),
         ],
