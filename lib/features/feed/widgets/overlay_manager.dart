@@ -141,65 +141,77 @@ class _OverlayManagerState extends State<OverlayManager> {
             ),
           );
 
-    return Positioned(
-      left: item.position.dx,
-      top: item.position.dy,
-      child: GestureDetector(
-        behavior: HitTestBehavior.deferToChild,
-        onTap: () {
-          // Bring to front
-          widget.items.remove(item);
-          widget.items.add(item);
-          widget.onItemTap(item);
-          widget.onItemsChanged();
-        },
-        onScaleStart: (details) {
-          setState(() {
-            _activeItem = item;
-            _initialPosition = item.position;
-            _initialScale = item.scale;
-            _initialRotation = item.rotation;
-            _isDragging = true;
-            _isInTrashZone = false;
-            
-            // Bring to front
-            widget.items.remove(item);
-            widget.items.add(item);
-          });
-        },
-        onScaleUpdate: (details) {
-          if (_activeItem != item) return;
-          
-          setState(() {
-            item.position += details.focalPointDelta;
-            item.scale = _initialScale * details.scale;
-            item.rotation = _initialRotation + details.rotation;
-            // Check trash zone: triggers if finger is within the bottom 240 pixels
-            _isInTrashZone = details.localFocalPoint.dy > maxHeight - 240;
-          });
-        },
-        onScaleEnd: (details) {
-          if (_activeItem != item) return;
-          
-          setState(() {
-            _isDragging = false;
-            if (_isInTrashZone) {
-              widget.items.remove(item);
-            }
-            _activeItem = null;
-            _isInTrashZone = false;
-          });
-          widget.onItemsChanged();
-        },
-        child: Transform.translate(
-          // Offset by half size approximately to keep the touch point centered?
-          // Since it's Positioned, the x,y is the top-left corner.
-          // Transform scales around its center.
-          offset: Offset.zero,
-          child: Transform.scale(
-            scale: item.scale,
-            child: Transform.rotate(
-              angle: item.rotation,
+    final isActiveAndInTrash = _activeItem == item && _isInTrashZone;
+    final screenWidth = MediaQuery.of(context).size.width;
+    final snappedLeft = (screenWidth / 2) - 60; // approximate visual center offset
+    final snappedTop = maxHeight - 150;
+
+    final duration = isActiveAndInTrash ? const Duration(milliseconds: 150) : Duration.zero;
+    final currentLeft = isActiveAndInTrash ? snappedLeft : item.position.dx;
+    final currentTop = isActiveAndInTrash ? snappedTop : item.position.dy;
+    final currentScale = isActiveAndInTrash ? 0.4 : item.scale;
+
+    return AnimatedPositioned(
+      duration: duration,
+      curve: Curves.easeOutCubic,
+      left: currentLeft,
+      top: currentTop,
+      child: AnimatedScale(
+        duration: duration,
+        curve: Curves.easeOutCubic,
+        scale: currentScale,
+        child: Transform.rotate(
+          angle: item.rotation,
+          child: AnimatedOpacity(
+            duration: const Duration(milliseconds: 150),
+            opacity: isActiveAndInTrash ? 0.4 : 1.0,
+            child: GestureDetector(
+              behavior: HitTestBehavior.deferToChild,
+              onTap: () {
+                // Bring to front
+                widget.items.remove(item);
+                widget.items.add(item);
+                widget.onItemTap(item);
+                widget.onItemsChanged();
+              },
+              onScaleStart: (details) {
+                setState(() {
+                  _activeItem = item;
+                  _initialPosition = item.position;
+                  _initialScale = item.scale;
+                  _initialRotation = item.rotation;
+                  _isDragging = true;
+                  _isInTrashZone = false;
+                  
+                  // Bring to front
+                  widget.items.remove(item);
+                  widget.items.add(item);
+                });
+              },
+              onScaleUpdate: (details) {
+                if (_activeItem != item) return;
+                
+                setState(() {
+                  item.position += details.focalPointDelta;
+                  item.scale = _initialScale * details.scale;
+                  item.rotation = _initialRotation + details.rotation;
+                  // Check trash zone: triggers if finger is within the bottom 240 pixels
+                  _isInTrashZone = details.localFocalPoint.dy > maxHeight - 240;
+                });
+              },
+              onScaleEnd: (details) {
+                if (_activeItem != item) return;
+                
+                setState(() {
+                  _isDragging = false;
+                  if (_isInTrashZone) {
+                    widget.items.remove(item);
+                  }
+                  _activeItem = null;
+                  _isInTrashZone = false;
+                  widget.onItemsChanged();
+                });
+              },
               child: child,
             ),
           ),
