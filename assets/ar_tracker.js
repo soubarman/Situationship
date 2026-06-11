@@ -171,6 +171,7 @@ window.arTracker = {
         const ctx = this.canvasCtx;
         ctx.save();
         ctx.clearRect(0, 0, w, h);
+
         // Only mirror for front-facing (selfie) camera
         if (this.facingMode === 'user') {
             ctx.translate(w, 0);
