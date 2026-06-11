@@ -83,6 +83,7 @@ window.arTracker = {
     initialize: function(videoElement, facingMode = 'user') {
         if (this.isRunning) this.stop();
         this.videoElement = videoElement;
+        this.facingMode = facingMode;
         this.canvasElement = document.createElement('canvas');
         this.canvasCtx = this.canvasElement.getContext('2d');
         this.loadImages();
@@ -170,9 +171,11 @@ window.arTracker = {
         const ctx = this.canvasCtx;
         ctx.save();
         ctx.clearRect(0, 0, w, h);
-        // Mirror for selfie
-        ctx.translate(w, 0);
-        ctx.scale(-1, 1);
+        // Only mirror for front-facing (selfie) camera
+        if (this.facingMode === 'user') {
+            ctx.translate(w, 0);
+            ctx.scale(-1, 1);
+        }
         ctx.drawImage(img, 0, 0, w, h);
 
         if (results.multiFaceLandmarks && results.multiFaceLandmarks.length > 0 && this.activeFilter !== 'NONE') {
