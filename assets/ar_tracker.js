@@ -25,7 +25,7 @@ window.arTracker = {
         ThugLife:    { scale: 2.0,  noseScale: 1.0,  offsetX: 0, offsetY: 0     },
         Dog:         { scale: 1.55, noseScale: 0.50,  offsetX: 0, offsetY: -0.42 },
         Cat:         { scale: 1.30, noseScale: 0.45,  offsetX: 0, offsetY: -0.45 },
-        Bunny:       { scale: 1.60, noseScale: 1.0,  offsetX: 0, offsetY: 0      },
+        Bunny:       { scale: 2.60, noseScale: 1.0,  offsetX: 0, offsetY: 0      },
         Devil:       { scale: 2.00, noseScale: 1.0,  offsetX: 0, offsetY: 0      },
         Angel:       { scale: 1.20, noseScale: 1.0,  offsetX: 0, offsetY: 0      },
         Crown:       { scale: 1.30, noseScale: 1.0,  offsetX: 0, offsetY: 0      },
@@ -48,13 +48,36 @@ window.arTracker = {
         return this.filterConfigs[key] || { scale: 1.0, noseScale: 1.0, offsetX: 0, offsetY: 0 };
     },
 
-    // ---- Filter image assets are now injected by Flutter as base64 strings ----
+    // ---- Filter image assets ----
     loadImages: function() {
-        // We no longer pre-load using fetch or Image() because it triggers
-        // CORS blocks and canvas tainting on Android WebView.
-        // Instead, the Flutter app reads the PNG assets and injects them 
-        // directly as base64 data URIs via setFilterImage/setFilter.
         if (!this.images) this.images = {};
+        
+        // Native WebView uses ar_webview.html and injects images via base64 to avoid CORS/tainting.
+        // Flutter Web uses index.html and must fetch images manually.
+        if (!window.location.href.includes('ar_webview.html')) {
+            const assets = {
+                dog:        'assets/filters/dog_filter.png',
+                thugLife:   'assets/filters/thug_life.png',
+                flowerCrown:'assets/filters/flower_crown.png',
+                cat:        'assets/filters/cat_filter.png',
+                devil:      'assets/filters/devil_horns.png',
+                bunny:      'assets/filters/bunny_filter.png',
+                halo:       'assets/filters/angel_halo.png',
+                hearts:     'assets/filters/heart_eyes.png',
+                clown:      'assets/filters/clown_filter.png',
+                crown:      'assets/filters/crown_filter.png',
+            };
+            for (const [key, src] of Object.entries(assets)) {
+                fetch(src)
+                    .then(res => res.blob())
+                    .then(blob => {
+                        const img = new Image();
+                        img.src = URL.createObjectURL(blob);
+                        this.images[key] = img;
+                    })
+                    .catch(err => console.error('Failed to load filter image:', src, err));
+            }
+        }
     },
 
     initialize: function(videoElement) {
@@ -260,15 +283,16 @@ window.arTracker = {
         const m   = this.getFaceMetrics(lms, w, h);
         const cfg = this._cfg('Bunny');
         const img = this.images.bunny;
-        // Virtual forehead: landmark 10 is too low for people with hair
-        const vForehead = m.forehead.y - (m.faceH * 0.15);
-        const earW = m.faceW * cfg.scale;  // 1.6x
+        const earW = m.faceW * cfg.scale;
         const earH = img.complete && img.naturalWidth > 0
             ? earW * (img.naturalHeight / img.naturalWidth)
             : earW * 1.8;
         const cx = m.midEye.x + m.faceW * cfg.offsetX;
-        // Anchor center so ears float well above actual hair line
-        const cy = vForehead - earH * 0.75;
+        
+        // Drop the ears much lower so the headband sits on the hair
+        const targetY = m.forehead.y + (m.faceH * 0.22);
+        const cy = targetY - (earH * 0.5) + (m.faceH * cfg.offsetY);
+        
         this.drawOverlay(img, cx, cy, earW, earH, m.angle);
     },
 

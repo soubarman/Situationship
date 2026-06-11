@@ -1026,24 +1026,9 @@ class _TakeScreenState extends ConsumerState<TakeScreen>
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          // Left: Upload (if no image) or Retake (if image)
+          // Left: Empty space (if no image) or Retake (if image)
           _capturedImageBytes == null
-              ? GestureDetector(
-                  onTap: _uploadFromGallery,
-                  child: Container(
-                    width: 56,
-                    height: 56,
-                    decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.15),
-                      shape: BoxShape.circle,
-                      border: Border.all(color: Colors.white.withOpacity(0.3), width: 1.5),
-                      boxShadow: [
-                        BoxShadow(color: Colors.black.withOpacity(0.2), blurRadius: 12, spreadRadius: 2),
-                      ],
-                    ),
-                    child: const Icon(Icons.photo_library_rounded, color: Colors.white, size: 28),
-                  ),
-                )
+              ? const SizedBox(width: 56)
               : GestureDetector(
                   onTap: _retake,
                   child: Container(
