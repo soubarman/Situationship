@@ -102,20 +102,30 @@
     }
 
     // ── Initialize camera and AR tracker ──────────────────────────────────────
-    async function startAR() {
+    async function startAR(isFront = true) {
+      if (window.arTracker && window.arTracker.isRunning) {
+         window.arTracker.stop();
+      }
       try {
         showStatus('Requesting camera...');
 
         const stream = await navigator.mediaDevices.getUserMedia({
           video: {
-            facingMode: { ideal: 'user' },
+            facingMode: { ideal: isFront ? 'user' : 'environment' },
             width:  { ideal: 640 },
             height: { ideal: 480 }
           },
           audio: false
         });
 
+        const oldVideo = document.getElementById('input-video');
+        if (oldVideo) {
+          oldVideo.srcObject?.getTracks().forEach(t => t.stop());
+          oldVideo.remove();
+        }
+
         const video = document.createElement('video');
+        video.id = 'input-video';
         video.srcObject  = stream;
         video.autoplay   = true;
         video.playsInline = true;
@@ -131,7 +141,8 @@
         await video.play();
 
         // Initialize ar_tracker — creates its own canvas internally
-        const canvas = window.arTracker.initialize(video);
+        const facingMode = isFront ? 'user' : 'environment';
+        const canvas = window.arTracker.initialize(video, facingMode);
 
         // Swap placeholder canvas with the tracker's canvas
         const placeholder = document.getElementById('output-canvas');

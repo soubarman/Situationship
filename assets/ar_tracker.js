@@ -80,7 +80,7 @@ window.arTracker = {
         }
     },
 
-    initialize: function(videoElement) {
+    initialize: function(videoElement, facingMode = 'user') {
         if (this.isRunning) this.stop();
         this.videoElement = videoElement;
         this.canvasElement = document.createElement('canvas');
@@ -93,7 +93,8 @@ window.arTracker = {
 
         this.camera = new Camera(this.videoElement, {
             onFrame: async () => { await this.faceMesh.send({ image: this.videoElement }); },
-            width: 640, height: 480
+            width: 640, height: 480,
+            facingMode: facingMode
         });
         this.camera.start();
         this.isRunning = true;

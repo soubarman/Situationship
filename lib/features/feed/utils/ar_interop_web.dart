@@ -5,9 +5,9 @@
 import 'dart:html' as html;
 import 'dart:js_util' as js_util;
 
-html.CanvasElement initializeARTracker(html.VideoElement videoElement) {
+html.CanvasElement initializeARTracker(html.VideoElement videoElement, String facingMode) {
   final tracker = js_util.getProperty<Object>(html.window, 'arTracker');
-  return js_util.callMethod<html.CanvasElement>(tracker, 'initialize', [videoElement]);
+  return js_util.callMethod<html.CanvasElement>(tracker, 'initialize', [videoElement, facingMode]);
 }
 
 void setARFilter(String filterName) {

@@ -62,6 +62,7 @@ class _TakeScreenState extends ConsumerState<TakeScreen>
   bool _isDraggingItem = false;
 
   // ── Camera / Media state (Web) ──
+  bool _isFrontCamera = true;
   html.VideoElement? _videoElement;
   html.MediaStream? _stream;
   bool _cameraReady = false;
@@ -207,7 +208,7 @@ class _TakeScreenState extends ConsumerState<TakeScreen>
 
       final stream = await mediaDevices.getUserMedia({
         'video': {
-          'facingMode': 'user',
+          'facingMode': _isFrontCamera ? 'user' : 'environment',
           'width': {'ideal': 640},
           'height': {'ideal': 480},
         },
@@ -227,7 +228,7 @@ class _TakeScreenState extends ConsumerState<TakeScreen>
       _videoElement = video;
 
       // Initialize AR Tracker
-      final canvas = initializeARTracker(video);
+      final canvas = initializeARTracker(video, _isFrontCamera ? 'user' : 'environment');
       canvas.style.width = '100%';
       canvas.style.height = '100%';
       canvas.style.objectFit = 'cover';
@@ -638,6 +639,27 @@ class _TakeScreenState extends ConsumerState<TakeScreen>
             ),
           ),
           const Spacer(),
+          GestureDetector(
+            onTap: () {
+              setState(() => _isFrontCamera = !_isFrontCamera);
+              if (kIsWeb) {
+                _stopCamera();
+                _initWebCamera();
+              } else {
+                _arWebViewKey.currentState?.flipCamera(_isFrontCamera);
+              }
+            },
+            child: Container(
+              margin: const EdgeInsets.only(right: 12),
+              width: 36,
+              height: 36,
+              decoration: const BoxDecoration(
+                color: Colors.black54,
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(Icons.flip_camera_ios_rounded, color: Colors.white, size: 20),
+            ),
+          ),
           GestureDetector(
             onTap: () {
               if (_tab != 'NONE') {

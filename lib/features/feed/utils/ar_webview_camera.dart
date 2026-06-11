@@ -157,6 +157,10 @@ class ARWebViewCameraState extends State<ARWebViewCamera> {
     await _controller?.runJavaScript("if (window.arTracker) window.arTracker.setFilter('${filterName.replaceAll("'", "\\'")}');");
   }
 
+  Future<void> flipCamera(bool isFront) async {
+    await _controller?.runJavaScript("if (window.startAR) window.startAR(${isFront ? 'true' : 'false'});");
+  }
+
   Future<void> captureFrame() async {
     await _controller?.runJavaScript('captureFrame();');
   }
