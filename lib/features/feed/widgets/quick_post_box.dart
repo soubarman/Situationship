@@ -237,6 +237,7 @@ class _QuickPostBoxState extends ConsumerState<QuickPostBox> {
         ],
       ),
       child: Column(
+        mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           // ── Text input row ──────────────────────────────────────────────

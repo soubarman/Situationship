@@ -12,6 +12,7 @@ import '../../../core/widgets/empty_state_widget.dart';
 import '../widgets/post_card.dart';
 import '../widgets/stories_row.dart';
 import '../widgets/quick_post_box.dart';
+import '../../spotlight/widgets/spotlight_feed_section.dart';
 import '../../../core/models/user_model.dart';
 import '../../../core/models/notification_model.dart';
 import '../../../core/providers/firestore_provider.dart';
@@ -53,8 +54,11 @@ class _FeedScreenState extends ConsumerState<FeedScreen> {
               slivers: [
                 _buildAppBar(context, isDark, currentUser, ref),
                 const SliverToBoxAdapter(child: StoriesRow()),
-                const SliverToBoxAdapter(child: QuickPostBox()),
     
+                const SliverToBoxAdapter(
+                  child: SpotlightFeedSection(),
+                ),
+
                 // ── Feed filter chips ──────────────────────────────────────────
                 SliverToBoxAdapter(
                   child: Padding(
@@ -76,6 +80,7 @@ class _FeedScreenState extends ConsumerState<FeedScreen> {
                     ),
                   ),
                 ),
+
     
                 // ── Firestore error banner ─────────────────────────────────────
                 if (postsStream.hasError)
@@ -146,6 +151,29 @@ class _FeedScreenState extends ConsumerState<FeedScreen> {
             ),
           ),
         ],
+      ),
+      floatingActionButton: Padding(
+        padding: const EdgeInsets.only(bottom: 80.0),
+        child: FloatingActionButton(
+          onPressed: () {
+            showModalBottomSheet(
+              context: context,
+              useRootNavigator: true,
+              isScrollControlled: true,
+              backgroundColor: Colors.transparent,
+              builder: (context) => Padding(
+                padding: EdgeInsets.only(
+                  bottom: MediaQuery.of(context).viewInsets.bottom,
+                ),
+                child: const SafeArea(
+                  child: QuickPostBox(),
+                ),
+              ),
+            );
+          },
+          backgroundColor: AppTheme.primaryBlue,
+          child: const Icon(Icons.add_rounded, color: Colors.white, size: 32),
+        ),
       ),
     );
   }

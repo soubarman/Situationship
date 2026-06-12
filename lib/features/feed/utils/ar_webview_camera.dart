@@ -189,7 +189,7 @@ class ARWebViewCameraState extends State<ARWebViewCamera> {
   }
 
   Future<void> applyBeautyFilter(double intensity) async {
-    await _controller?.runJavaScript('updateBeautyFilter($intensity);');
+    await _controller?.runJavaScript('if(window.arTracker) window.arTracker.setBeautyIntensity($intensity);');
   }
 
 

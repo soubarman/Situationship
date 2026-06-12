@@ -35,5 +35,6 @@ void applyColorMatrixJS(List<double> matrix, double blurRadius) {
 }
 
 void applyBeautyFilterJS(double intensity) {
-  js_util.callMethod<void>(html.window, 'updateBeautyFilter', [intensity]);
+  final tracker = js_util.getProperty<Object>(html.window, 'arTracker');
+  js_util.callMethod<void>(tracker, 'setBeautyIntensity', [intensity]);
 }

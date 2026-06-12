@@ -22,6 +22,7 @@ import '../../features/post/screens/create_post_screen.dart';
 import '../../features/feed/screens/take_screen.dart';
 import '../../features/feed/screens/story_view_screen.dart';
 import '../../features/feed/screens/take_viewer_screen.dart';
+import '../../features/spotlight/screens/spotlight_screen.dart';
 import '../providers/firebase_auth_provider.dart';
 import '../providers/app_state_provider.dart';
 
@@ -100,6 +101,11 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         path: '/search',
         name: 'search',
         builder: (context, state) => const SearchScreen(),
+      ),
+      GoRoute(
+        path: '/spotlight',
+        name: 'spotlight',
+        builder: (context, state) => const SpotlightScreen(),
       ),
       ShellRoute(
         builder: (context, state, child) => MainShell(child: child),
