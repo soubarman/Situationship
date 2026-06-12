@@ -206,6 +206,14 @@ class AppColorFilters {
   /// Returns a list of all available filter names.
   static List<String> get names => _matrices.keys.toList();
 
+  /// Returns the blur radius for a given filter name.
+  static double getBlur(String name) {
+    if (name == 'Flawless') return 2.5;
+    if (name == 'Porcelain') return 1.5;
+    if (name == 'Soft') return 2.0;
+    return 0.0;
+  }
+
   /// Returns true if this filter name implies a "grainy" or "noisy" effect.
   /// We can use this to render a noise overlay in the UI.
   static bool hasGrain(String name) {

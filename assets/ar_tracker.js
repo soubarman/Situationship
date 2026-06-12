@@ -9,7 +9,12 @@ window.arTracker = {
     faceMesh: null,
     camera: null,
     videoElement: null,
-    activeFilter: 'NONE',
+    // Beauty filter support
+    beautyIntensity: 0,
+    maskCanvas: null,
+    maskCtx: null,
+    blurCanvas: null,
+    blurCtx: null,
     isRunning: false,
     images: {},
     frameCount: 0,
@@ -37,6 +42,17 @@ window.arTracker = {
     // Live-update a filter's config from Flutter (no recompile needed)
     updateFilterConfig: function(filterName, scale, offsetX, offsetY) {
         const key = filterName.replace(/\s/g, '');
+        // Global export
+        window.updateFilterConfig = (f, s, ox, oy) => {
+            this.activeFilter = f;
+            if (s !== undefined) this.filterConfigs[f].scale = s;
+            if (ox !== undefined) this.filterConfigs[f].offsetX = ox;
+            if (oy !== undefined) this.filterConfigs[f].offsetY = oy;
+        };
+
+        window.updateBeautyFilter = (intensity) => {
+            this.beautyIntensity = intensity;
+        };
         if (!this.filterConfigs[key]) this.filterConfigs[key] = {};
         this.filterConfigs[key].scale   = scale;
         this.filterConfigs[key].offsetX = offsetX;
@@ -97,6 +113,13 @@ window.arTracker = {
             width: 640, height: 480,
             facingMode: facingMode
         });
+        
+        // Setup internal offscreen canvases for beauty filter
+        this.maskCanvas = document.createElement('canvas');
+        this.maskCtx = this.maskCanvas.getContext('2d');
+        this.blurCanvas = document.createElement('canvas');
+        this.blurCtx = this.blurCanvas.getContext('2d');
+
         this.camera.start();
         this.isRunning = true;
         return this.canvasElement;
@@ -166,6 +189,10 @@ window.arTracker = {
         const h     = img.height;
         this.canvasElement.width  = w;
         this.canvasElement.height = h;
+        this.maskCanvas.width = w;
+        this.maskCanvas.height = h;
+        this.blurCanvas.width = w;
+        this.blurCanvas.height = h;
         this.frameCount++;
 
         const ctx = this.canvasCtx;
@@ -179,9 +206,15 @@ window.arTracker = {
         }
         ctx.drawImage(img, 0, 0, w, h);
 
-        if (results.multiFaceLandmarks && results.multiFaceLandmarks.length > 0 && this.activeFilter !== 'NONE') {
+        if (results.multiFaceLandmarks && results.multiFaceLandmarks.length > 0) {
             const lms = results.multiFaceLandmarks[0];
-            switch (this.activeFilter) {
+
+            if (this.beautyIntensity > 0) {
+                this.applyBeautySmoothing(ctx, lms, img, w, h, this.beautyIntensity);
+            }
+
+            if (this.activeFilter !== 'NONE') {
+                switch (this.activeFilter) {
                 case 'Thug Life':    this.filterThugLife(lms, w, h);     break;
                 case 'Dog':          this.filterDog(lms, w, h);           break;
                 case 'Cat':          this.filterCat(lms, w, h);           break;
@@ -202,8 +235,202 @@ window.arTracker = {
                 case 'Neon':         this.filterNeon(lms, w, h);          break;
                 case 'Glitter':      this.filterGlitter(lms, w, h);       break;
                 case 'Alien':        this.filterAlien(lms, w, h);         break;
+                }
             }
         }
+        ctx.restore();
+    },
+
+    // ================================================================
+    // BEAUTY FILTER: Advanced Face-Masked Spatial Blurring & Digital Makeup
+    // ================================================================
+    applyBeautySmoothing: function(ctx, lms, img, w, h, intensity) {
+        const m = this.getFaceMetrics(lms, w, h);
+        
+        const maskCtx = this.maskCtx;
+        maskCtx.clearRect(0, 0, w, h);
+
+        // --- STEP 1: SKIN SMOOTHING & GLOW ---
+        // 1a. Draw soft face ellipse for skin smoothing mask
+        const rx = m.faceW * 0.65;
+        const ry = m.faceH * 0.55;
+        const cx = m.nose.x;
+        const cy = m.nose.y - m.faceH * 0.05;
+
+        const faceGrad = maskCtx.createRadialGradient(cx, cy, 0, cx, cy, ry);
+        faceGrad.addColorStop(0, `rgba(255, 255, 255, 1)`);
+        faceGrad.addColorStop(0.65, `rgba(255, 255, 255, 0.9)`);
+        faceGrad.addColorStop(1, `rgba(255, 255, 255, 0)`);
+        
+        maskCtx.fillStyle = faceGrad;
+        maskCtx.beginPath();
+        maskCtx.ellipse(cx, cy, rx, ry, m.angle, 0, Math.PI*2);
+        maskCtx.fill();
+
+        // 1b. Punch out holes for eyes and mouth so they stay sharp
+        maskCtx.globalCompositeOperation = 'destination-out';
+        const punchHole = (px, py, radius) => {
+            const grad = maskCtx.createRadialGradient(px, py, 0, px, py, radius);
+            grad.addColorStop(0, 'rgba(0,0,0,1)');
+            grad.addColorStop(0.4, 'rgba(0,0,0,0.8)');
+            grad.addColorStop(1, 'rgba(0,0,0,0)');
+            maskCtx.fillStyle = grad;
+            maskCtx.beginPath();
+            maskCtx.arc(px, py, radius, 0, Math.PI*2);
+            maskCtx.fill();
+        };
+
+        const eyeR = m.faceW * 0.22;
+        punchHole(m.leftEye.x, m.leftEye.y, eyeR);
+        punchHole(m.rightEye.x, m.rightEye.y, eyeR);
+
+        const mouth = this.lm(lms, 14, w, h); // lower lip center
+        const mouthR = m.faceW * 0.25;
+        punchHole(mouth.x, mouth.y, mouthR);
+        maskCtx.globalCompositeOperation = 'source-over';
+
+        // 1c. Create blurred and brightened skin layer
+        const blurCtx = this.blurCtx;
+        blurCtx.clearRect(0, 0, w, h);
+        blurCtx.save();
+        if (this.facingMode === 'user') {
+            blurCtx.translate(w, 0);
+            blurCtx.scale(-1, 1);
+        }
+        // Increase brightness slightly for a glowing effect
+        blurCtx.filter = `blur(${intensity * 3}px) brightness(${100 + intensity * 10}%)`;
+        blurCtx.drawImage(img, 0, 0, w, h);
+        blurCtx.filter = 'none';
+        blurCtx.restore();
+
+        // 1d. Apply mask to the blurred skin
+        blurCtx.globalCompositeOperation = 'destination-in';
+        blurCtx.drawImage(this.maskCanvas, 0, 0, w, h);
+        blurCtx.globalCompositeOperation = 'source-over';
+
+        // 1e. Draw composited smooth glowing skin onto main canvas
+        // Using lighter blending to hide dark spots/blemishes
+        ctx.save();
+        ctx.globalCompositeOperation = 'lighten';
+        ctx.globalAlpha = Math.min(1.0, intensity * 1.5);
+        ctx.drawImage(this.blurCanvas, 0, 0, w, h);
+        
+        ctx.globalCompositeOperation = 'source-over';
+        ctx.globalAlpha = Math.min(1.0, intensity * 0.5);
+        ctx.drawImage(this.blurCanvas, 0, 0, w, h);
+        ctx.restore();
+
+        // Helper to trace landmarks
+        const tracePoly = (ctxToDraw, indices) => {
+            ctxToDraw.beginPath();
+            const start = this.lm(lms, indices[0], w, h);
+            ctxToDraw.moveTo(start.x, start.y);
+            for(let i = 1; i < indices.length; i++) {
+                const pt = this.lm(lms, indices[i], w, h);
+                ctxToDraw.lineTo(pt.x, pt.y);
+            }
+            ctxToDraw.closePath();
+        };
+
+        ctx.save();
+
+        // --- STEP 2: EYE BRIGHTENING & CATCHLIGHTS ---
+        if (intensity > 0.2) {
+            // Left eye whites
+            const leftEyeOutline = [33, 7, 163, 144, 145, 153, 154, 155, 133, 173, 157, 158, 159, 160, 161, 246];
+            // Right eye whites
+            const rightEyeOutline = [362, 382, 381, 380, 374, 373, 390, 249, 263, 466, 388, 387, 386, 385, 384, 398];
+            
+            ctx.globalCompositeOperation = 'overlay';
+            ctx.fillStyle = `rgba(255, 255, 255, ${intensity * 0.3})`;
+            tracePoly(ctx, leftEyeOutline); ctx.fill();
+            tracePoly(ctx, rightEyeOutline); ctx.fill();
+
+            // Catchlights (small white reflections in pupils)
+            ctx.globalCompositeOperation = 'source-over';
+            const drawCatchlight = (eyeCenter, radius) => {
+                ctx.beginPath();
+                ctx.arc(eyeCenter.x - radius, eyeCenter.y - radius, radius, 0, Math.PI*2);
+                ctx.fillStyle = `rgba(255, 255, 255, ${intensity * 0.6})`;
+                ctx.fill();
+            };
+            drawCatchlight(m.leftEye, m.faceW * 0.015);
+            drawCatchlight(m.rightEye, m.faceW * 0.015);
+        }
+
+        // --- STEP 3: LIP TINT ---
+        if (intensity > 0.2) {
+            const lipsOuter = [61, 146, 91, 181, 84, 17, 314, 405, 321, 375, 291, 409, 270, 269, 267, 0, 37, 39, 40, 185];
+            const lipsInner = [78, 95, 88, 178, 87, 14, 317, 402, 318, 324, 308, 415, 310, 311, 312, 13, 82, 81, 80, 191];
+            
+            ctx.globalCompositeOperation = 'multiply';
+            ctx.fillStyle = `rgba(220, 80, 100, ${intensity * 0.4})`; // Soft rosy red
+            
+            ctx.beginPath();
+            // Outer path
+            const startOut = this.lm(lms, lipsOuter[0], w, h);
+            ctx.moveTo(startOut.x, startOut.y);
+            for(let i = 1; i < lipsOuter.length; i++) {
+                const pt = this.lm(lms, lipsOuter[i], w, h);
+                ctx.lineTo(pt.x, pt.y);
+            }
+            ctx.closePath();
+            
+            // Inner path (drawn backwards to create a hole)
+            const startIn = this.lm(lms, lipsInner[lipsInner.length - 1], w, h);
+            ctx.moveTo(startIn.x, startIn.y);
+            for(let i = lipsInner.length - 2; i >= 0; i--) {
+                const pt = this.lm(lms, lipsInner[i], w, h);
+                ctx.lineTo(pt.x, pt.y);
+            }
+            ctx.closePath();
+            
+            ctx.fill('evenodd'); // Fill only the lip area, not the mouth opening
+        }
+
+        // --- STEP 4: CHEEK BLUSH ---
+        if (intensity > 0.3) {
+            ctx.globalCompositeOperation = 'multiply';
+            const blushR = m.faceW * 0.18;
+            
+            const drawBlush = (px, py) => {
+                const grad = ctx.createRadialGradient(px, py, 0, px, py, blushR);
+                grad.addColorStop(0, `rgba(230, 100, 120, ${intensity * 0.3})`);
+                grad.addColorStop(1, 'rgba(230, 100, 120, 0)');
+                ctx.fillStyle = grad;
+                ctx.beginPath();
+                ctx.arc(px, py, blushR, 0, Math.PI*2);
+                ctx.fill();
+            };
+            
+            // Cheeks are roughly below and slightly outside the eyes
+            drawBlush(m.leftEye.x - m.faceW * 0.1, m.leftEye.y + m.faceH * 0.15);
+            drawBlush(m.rightEye.x + m.faceW * 0.1, m.rightEye.y + m.faceH * 0.15);
+        }
+
+        // --- STEP 5: JAWLINE CONTOURING ---
+        if (intensity > 0.4) {
+            ctx.globalCompositeOperation = 'multiply';
+            
+            // Contour lines along the jaw
+            const drawContour = (px, py, radiusX, radiusY, ang) => {
+                const grad = ctx.createRadialGradient(px, py, 0, px, py, Math.max(radiusX, radiusY));
+                grad.addColorStop(0, `rgba(120, 80, 60, ${intensity * 0.35})`); // shadow
+                grad.addColorStop(1, 'rgba(120, 80, 60, 0)');
+                ctx.fillStyle = grad;
+                ctx.beginPath();
+                ctx.ellipse(px, py, radiusX, radiusY, ang, 0, Math.PI*2);
+                ctx.fill();
+            };
+            
+            // Left jaw shadow
+            drawContour(m.leftEar.x + m.faceW * 0.05, m.chin.y - m.faceH * 0.15, m.faceW * 0.15, m.faceH * 0.25, m.angle + 0.5);
+            // Right jaw shadow
+            drawContour(m.rightEar.x - m.faceW * 0.05, m.chin.y - m.faceH * 0.15, m.faceW * 0.15, m.faceH * 0.25, m.angle - 0.5);
+            // Chin shadow
+            drawContour(m.chin.x, m.chin.y + m.faceH * 0.05, m.faceW * 0.2, m.faceH * 0.1, m.angle);
+        }
+
         ctx.restore();
     },
 

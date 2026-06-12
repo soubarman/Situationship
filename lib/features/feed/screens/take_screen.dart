@@ -360,9 +360,9 @@ class _TakeScreenState extends ConsumerState<TakeScreen>
     setState(() => _isSaving = true);
 
     try {
-      // If there are overlays, capture the composed view via RepaintBoundary
+      // If there are overlays or a filter, capture the composed view via RepaintBoundary
       Uint8List? uploadBytes;
-      if (_overlays.isEmpty) {
+      if (_overlays.isEmpty && _filter == 'Normal') {
         uploadBytes = _capturedImageBytes!;
       } else {
         try {
@@ -754,13 +754,12 @@ class _TakeScreenState extends ConsumerState<TakeScreen>
             ),
           ),
           
-          // Filter overlay (for captured image)
+              // Filter overlay (for captured image)
               if (_capturedImageBytes != null)
                 Positioned.fill(
                   child: IgnorePointer(
                     child: ColorFiltered(
-                      colorFilter: ColorFilter.matrix(
-                          AppColorFilters.get(_filter)),
+                      colorFilter: ColorFilter.matrix(AppColorFilters.get(_filter)),
                       child: Container(color: Colors.transparent),
                     ),
                   ),
@@ -1332,10 +1331,13 @@ class _TakeScreenState extends ConsumerState<TakeScreen>
             onTap: () {
               setState(() => _filter = f);
               final matrix = AppColorFilters.get(f);
+              final blurRadius = AppColorFilters.getBlur(f);
               if (kIsWeb) {
-                applyColorMatrixJS(matrix);
+                applyColorMatrixJS(matrix, blurRadius);
+                applyBeautyFilterJS(blurRadius);
               } else {
-                _arWebViewKey.currentState?.applyColorMatrix(matrix);
+                _arWebViewKey.currentState?.applyColorMatrix(matrix, blurRadius);
+                _arWebViewKey.currentState?.applyBeautyFilter(blurRadius);
               }
             },
             child: RepaintBoundary(

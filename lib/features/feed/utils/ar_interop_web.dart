@@ -30,6 +30,10 @@ void updateARFilterConfig(
   js_util.callMethod<void>(tracker, 'updateFilterConfig', [filterName, scale, offsetX, offsetY]);
 }
 
-void applyColorMatrixJS(List<double> matrix) {
-  js_util.callMethod<void>(html.window, 'applyColorMatrix', [matrix]);
+void applyColorMatrixJS(List<double> matrix, double blurRadius) {
+  js_util.callMethod<void>(html.window, 'applyColorMatrix', [matrix, blurRadius]);
+}
+
+void applyBeautyFilterJS(double intensity) {
+  js_util.callMethod<void>(html.window, 'updateBeautyFilter', [intensity]);
 }

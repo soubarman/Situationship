@@ -183,9 +183,13 @@ class ARWebViewCameraState extends State<ARWebViewCamera> {
     );
   }
 
-  Future<void> applyColorMatrix(List<double> matrix) async {
+  Future<void> applyColorMatrix(List<double> matrix, double blurRadius) async {
     final matrixStr = '[${matrix.join(',')}]';
-    await _controller?.runJavaScript('applyColorMatrix($matrixStr);');
+    await _controller?.runJavaScript('applyColorMatrix($matrixStr, $blurRadius);');
+  }
+
+  Future<void> applyBeautyFilter(double intensity) async {
+    await _controller?.runJavaScript('updateBeautyFilter($intensity);');
   }
 
 

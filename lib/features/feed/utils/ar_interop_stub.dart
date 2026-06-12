@@ -11,5 +11,7 @@ void updateARFilterConfig(
   double offsetY,
 ) {}
 
-void applyColorMatrixJS(List<double> matrix) {}
+void applyColorMatrixJS(List<double> matrix, double blurRadius) {}
+
+void applyBeautyFilterJS(double intensity) {}
 
