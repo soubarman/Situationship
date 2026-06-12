@@ -341,7 +341,7 @@ class _SpotlightScreenState extends ConsumerState<SpotlightScreen> {
       sessionId: sessionId,
       userId: '',
       username: 'Empty',
-      profileImageUrl: 'https://i.pravatar.cc/150?img=${30 + rank}',
+      profileImageUrl: '',
       isVerified: false,
       amount: minBid,
       timestamp: DateTime.now(),
@@ -522,7 +522,9 @@ class _SpotlightListItem extends StatelessWidget {
             children: [
               CircleAvatar(
                 radius: 22,
-                backgroundImage: NetworkImage(bid.profileImageUrl),
+                backgroundColor: isDark ? Colors.white12 : Colors.black12,
+                backgroundImage: bid.userId.isNotEmpty ? NetworkImage(bid.profileImageUrl) : null,
+                child: bid.userId.isEmpty ? Icon(Icons.person, color: isDark ? Colors.white38 : Colors.black38) : null,
               ),
               const Positioned(
                 top: -4, right: -4,

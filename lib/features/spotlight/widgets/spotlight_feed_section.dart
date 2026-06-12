@@ -95,7 +95,7 @@ class SpotlightFeedSection extends ConsumerWidget {
       sessionId: sessionId,
       userId: '',
       username: 'Empty',
-      profileImageUrl: 'https://i.pravatar.cc/150?img=${30 + rank}',
+      profileImageUrl: '',
       isVerified: false,
       amount: minBid,
       timestamp: DateTime.now(),

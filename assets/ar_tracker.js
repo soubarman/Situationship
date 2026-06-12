@@ -101,11 +101,24 @@ window.arTracker = {
         this.faceMesh.setOptions({ maxNumFaces: 1, refineLandmarks: true, minDetectionConfidence: 0.5, minTrackingConfidence: 0.5 });
         this.faceMesh.onResults(this.onResults.bind(this));
 
-        this.camera = new Camera(this.videoElement, {
-            onFrame: async () => { await this.faceMesh.send({ image: this.videoElement }); },
-            width: 640, height: 480,
-            facingMode: facingMode
-        });
+        this.camera = {
+            stop: () => { this.isRunning = false; },
+            start: () => {
+                this.isRunning = true;
+                const loop = async () => {
+                    if (!this.isRunning) return;
+                    if (this.videoElement.readyState >= 2) {
+                        try {
+                            await this.faceMesh.send({ image: this.videoElement });
+                        } catch (e) {
+                            console.error("FaceMesh error:", e);
+                        }
+                    }
+                    requestAnimationFrame(loop);
+                };
+                loop();
+            }
+        };
         
         // Setup internal offscreen canvases for beauty filter
         this.maskCanvas = document.createElement('canvas');
