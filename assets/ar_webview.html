@@ -109,6 +109,22 @@
       try {
         showStatus('Requesting camera...');
 
+        // STOP OLD CAMERA FIRST
+        const oldVideo = document.getElementById('input-video');
+        if (oldVideo) {
+          if (oldVideo.srcObject) {
+            oldVideo.srcObject.getTracks().forEach(t => t.stop());
+            oldVideo.srcObject = null;
+          }
+          oldVideo.pause();
+          oldVideo.removeAttribute('src');
+          oldVideo.load();
+          oldVideo.remove();
+          
+          // ADD DELAY TO RELEASE HARDWARE LOCK
+          await new Promise(r => setTimeout(r, 500));
+        }
+
         const stream = await navigator.mediaDevices.getUserMedia({
           video: {
             facingMode: { ideal: isFront ? 'user' : 'environment' },
@@ -117,12 +133,6 @@
           },
           audio: false
         });
-
-        const oldVideo = document.getElementById('input-video');
-        if (oldVideo) {
-          oldVideo.srcObject?.getTracks().forEach(t => t.stop());
-          oldVideo.remove();
-        }
 
         const video = document.createElement('video');
         video.id = 'input-video';

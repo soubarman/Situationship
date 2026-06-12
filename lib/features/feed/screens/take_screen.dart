@@ -276,6 +276,12 @@ class _TakeScreenState extends ConsumerState<TakeScreen>
 
   void _stopCamera() {
     if (kIsWeb) {
+      if (_videoElement != null) {
+        _videoElement!.pause();
+        _videoElement!.removeAttribute('src');
+        _videoElement!.load();
+        _videoElement!.srcObject = null;
+      }
       _stream?.getTracks().forEach((track) {
         try {
           (track as dynamic).stop();
