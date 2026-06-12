@@ -644,7 +644,9 @@ class _TakeScreenState extends ConsumerState<TakeScreen>
               setState(() => _isFrontCamera = !_isFrontCamera);
               if (kIsWeb) {
                 _stopCamera();
-                _initWebCamera();
+                Future.delayed(const Duration(milliseconds: 500), () {
+                  if (mounted) _initWebCamera();
+                });
               } else {
                 _arWebViewKey.currentState?.flipCamera(_isFrontCamera);
               }
