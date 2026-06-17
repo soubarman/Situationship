@@ -3,8 +3,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:geolocator/geolocator.dart';
-import 'package:web/web.dart' as web;
-import 'dart:js_interop';
+
 import 'package:situationship/core/theme/app_theme.dart';
 import '../models/spotlight_model.dart';
 import '../providers/spotlight_provider.dart';
@@ -231,22 +230,7 @@ class _LocationPrompt extends StatelessWidget {
           const SizedBox(width: 10),
           GestureDetector(
             onTap: () async {
-              if (kIsWeb) {
-                try {
-                  // To trigger permission prompt on web
-                  web.window.navigator.geolocation.getCurrentPosition(
-                    ((web.GeolocationPosition pos) {
-                      ref.invalidate(locationProvider);
-                    }).toJS,
-                    ((web.GeolocationPositionError err) {
-                      ref.invalidate(locationProvider);
-                    }).toJS,
-                  );
-                } catch (e) {
-                  // Ignore
-                }
-                return;
-              }
+              // Geolocator handles Web permissions natively
 
               if (isPermanentlyDenied) {
                 await Geolocator.openAppSettings();

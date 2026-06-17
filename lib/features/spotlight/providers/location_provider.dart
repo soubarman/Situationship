@@ -2,8 +2,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:geolocator/geolocator.dart';
-import 'package:web/web.dart' as web;
-import 'dart:js_interop';
+import 'package:geolocator/geolocator.dart';
 
 
 // ─── Location status ──────────────────────────────────────────────────────────
@@ -20,29 +19,7 @@ class LocationState {
 // ─── Provider ─────────────────────────────────────────────────────────────────
 
 final locationProvider = FutureProvider<LocationState>((ref) async {
-  if (kIsWeb) {
-    try {
-      final completer = Completer<LocationState>();
-      final geo = web.window.navigator.geolocation;
-      
-      geo.getCurrentPosition(
-        ((web.GeolocationPosition pos) {
-          final lat = pos.coords.latitude.toStringAsFixed(1);
-          final lng = pos.coords.longitude.toStringAsFixed(1);
-          completer.complete(LocationState(status: LocationStatus.granted, sessionId: 'zone_${lat}_$lng'));
-        }).toJS,
-        ((web.GeolocationPositionError err) {
-          completer.complete(const LocationState(status: LocationStatus.deniedForever));
-        }).toJS,
-      );
-      
-      return await completer.future;
-    } catch (e) {
-      return const LocationState(status: LocationStatus.deniedForever);
-    }
-  }
-
-  // Mobile Implementation
+  // Implementation works for both Web and Mobile
   bool serviceEnabled = true;
   try {
     serviceEnabled = await Geolocator.isLocationServiceEnabled();

@@ -1,8 +1,8 @@
 // ignore_for_file: avoid_web_libraries_in_flutter
 import 'dart:async';
 import 'dart:convert';
-import 'package:web/web.dart' as web;
-import 'dart:js_interop';
+import '../../../core/utils/web_stub.dart' if (dart.library.html) 'package:web/web.dart' as web;
+import '../../../core/utils/js_interop_stub.dart' if (dart.library.html) 'dart:js_interop';
 import 'dart:typed_data';
 import 'dart:ui' as ui;
 import 'dart:ui';
