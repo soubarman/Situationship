@@ -110,7 +110,7 @@ class SpotlightFeedSection extends ConsumerWidget {
                       ),
                     ),
                     SizedBox(
-                      height: 100,
+                      height: 140,
                       child: ListView.builder(
                         scrollDirection: Axis.horizontal,
                         padding: const EdgeInsets.symmetric(horizontal: 12),
@@ -297,7 +297,7 @@ class SpotlightFeedCard extends StatelessWidget {
         }
       },
       child: Container(
-      width: 80,
+      width: 100,
       margin: const EdgeInsets.symmetric(horizontal: 4),
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(20),
@@ -344,10 +344,10 @@ class SpotlightFeedCard extends StatelessWidget {
 
             // Rank Badge
             Positioned(
-              top: 12,
-              left: 12,
+              top: 8,
+              left: 8,
               child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
                 decoration: BoxDecoration(
                   color: isTop3 ? rankColor : Colors.white.withOpacity(0.2),
                   borderRadius: BorderRadius.circular(12),
@@ -371,9 +371,9 @@ class SpotlightFeedCard extends StatelessWidget {
 
             // Bottom Info
             Positioned(
-              bottom: 12,
-              left: 12,
-              right: 12,
+              bottom: 8,
+              left: 8,
+              right: 8,
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -382,14 +382,14 @@ class SpotlightFeedCard extends StatelessWidget {
                     style: const TextStyle(
                       color: Colors.white,
                       fontWeight: FontWeight.bold,
-                      fontSize: 13,
+                      fontSize: 12,
                     ),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                   ),
                   const SizedBox(height: 4),
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
                     decoration: BoxDecoration(
                       color: Colors.white.withOpacity(0.15),
                       borderRadius: BorderRadius.circular(12),
