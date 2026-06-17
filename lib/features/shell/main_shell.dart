@@ -42,18 +42,18 @@ class MainShell extends ConsumerWidget {
         extendBody: true,
         body: child,
       bottomNavigationBar: Padding(
-        padding: EdgeInsets.fromLTRB(20, 0, 20, 16 + safeBottom),
+        padding: EdgeInsets.fromLTRB(24, 0, 24, 12 + safeBottom),
         child: ClipRRect(
-          borderRadius: BorderRadius.circular(34),
+          borderRadius: BorderRadius.circular(28),
           child: BackdropFilter(
-            filter: ImageFilter.blur(sigmaX: 24, sigmaY: 24),
+            filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
             child: Container(
-              height: 68,
+              height: 56,
               decoration: BoxDecoration(
                 color: isDark
-                    ? Colors.white.withOpacity(0.08)
-                    : Colors.white.withOpacity(0.75),
-                borderRadius: BorderRadius.circular(34),
+                    ? Colors.white.withOpacity(0.09)
+                    : Colors.white.withOpacity(0.80),
+                borderRadius: BorderRadius.circular(28),
                 border: Border.all(
                   color: isDark
                       ? Colors.white.withOpacity(0.12)
@@ -63,20 +63,15 @@ class MainShell extends ConsumerWidget {
                 boxShadow: [
                   BoxShadow(
                     color: isDark
-                        ? Colors.black.withOpacity(0.4)
-                        : Colors.black.withOpacity(0.1),
-                    blurRadius: 32,
-                    offset: const Offset(0, 8),
-                  ),
-                  BoxShadow(
-                    color: AppTheme.primaryBlue.withOpacity(0.06),
-                    blurRadius: 48,
-                    offset: const Offset(0, 16),
+                        ? Colors.black.withOpacity(0.35)
+                        : Colors.black.withOpacity(0.10),
+                    blurRadius: 24,
+                    offset: const Offset(0, 6),
                   ),
                 ],
               ),
               child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 8),
+                padding: const EdgeInsets.symmetric(horizontal: 6),
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceAround,
                   children: List.generate(_items.length, (i) {
@@ -164,7 +159,7 @@ class _NavBarItemState extends State<_NavBarItem>
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 280),
           curve: Curves.easeOutCubic,
-          padding: EdgeInsets.symmetric(horizontal: sel ? 18 : 12, vertical: 9),
+          padding: EdgeInsets.symmetric(horizontal: sel ? 14 : 10, vertical: 7),
           decoration: BoxDecoration(
             gradient: sel ? AppTheme.primaryGradient : null,
             color: sel ? null : Colors.transparent,
@@ -182,7 +177,7 @@ class _NavBarItemState extends State<_NavBarItem>
             children: [
               Icon(
                 sel ? widget.item.activeIcon : widget.item.icon,
-                size: 22,
+                size: 20,
                 color: sel
                     ? Colors.white
                     : (widget.isDark ? Colors.white.withOpacity(0.38) : AppTheme.textTertiary),
@@ -193,7 +188,7 @@ class _NavBarItemState extends State<_NavBarItem>
                   widget.item.label,
                   style: const TextStyle(
                     color: Colors.white,
-                    fontSize: 13,
+                    fontSize: 12,
                     fontWeight: FontWeight.w700,
                     letterSpacing: 0.1,
                   ),

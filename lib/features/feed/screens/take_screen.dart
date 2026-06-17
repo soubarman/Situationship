@@ -1,7 +1,8 @@
 // ignore_for_file: avoid_web_libraries_in_flutter
 import 'dart:async';
 import 'dart:convert';
-import 'package:universal_html/html.dart' as html;
+import 'package:web/web.dart' as web;
+import 'dart:js_interop';
 import 'dart:typed_data';
 import 'dart:ui' as ui;
 import 'dart:ui';
@@ -63,8 +64,8 @@ class _TakeScreenState extends ConsumerState<TakeScreen>
 
   // ── Camera / Media state (Web) ──
   bool _isFrontCamera = true;
-  html.VideoElement? _videoElement;
-  html.MediaStream? _stream;
+  web.HTMLVideoElement? _videoElement;
+  web.MediaStream? _stream;
   bool _cameraReady = false;
   String? _cameraError;
   String? _viewType;
@@ -80,14 +81,14 @@ class _TakeScreenState extends ConsumerState<TakeScreen>
   bool _arWebViewRecording = false;
 
   // ── Video Recording ──
-  html.MediaRecorder? _mediaRecorder;
-  final List<html.Blob> _videoChunks = [];
+  web.MediaRecorder? _mediaRecorder;
+  final List<web.Blob> _videoChunks = [];
   Uint8List? _capturedVideoBytes;
   String? _previewVideoUrl;
   String? _previewViewType;
 
   // ── AR Tracking ──
-  html.CanvasElement? _arCanvasElement;
+  web.HTMLCanvasElement? _arCanvasElement;
   String? _arViewType;
   String _arFilter = 'NONE';
   static const _arFilters = [
@@ -201,23 +202,24 @@ class _TakeScreenState extends ConsumerState<TakeScreen>
     });
 
     try {
-      final mediaDevices = html.window.navigator.mediaDevices;
+      final mediaDevices = web.window.navigator.mediaDevices;
       if (mediaDevices == null) {
         throw Exception('MediaDevices API not supported in this browser.');
       }
 
-      final stream = await mediaDevices.getUserMedia({
+      final constraints = {
         'video': {
           'facingMode': _isFrontCamera ? 'user' : 'environment',
           'width': {'ideal': 640},
           'height': {'ideal': 480},
         },
         'audio': false,
-      });
+      }.jsify() as web.MediaStreamConstraints;
+      final stream = await mediaDevices.getUserMedia(constraints).toDart;
 
       _stream = stream;
 
-      final video = html.VideoElement()
+      final video = web.HTMLVideoElement()
         ..srcObject = stream
         ..autoplay = true
         ..muted = true
@@ -253,7 +255,7 @@ class _TakeScreenState extends ConsumerState<TakeScreen>
           setState(() => _cameraReady = true);
         }
       });
-    } on html.DomException catch (e) {
+    } on web.DOMException catch (e) {
       debugPrint('Camera DomException: ${e.name}: ${e.message}');
       String msg;
       if (e.name == 'NotAllowedError' || e.name == 'PermissionDeniedError') {
@@ -282,10 +284,8 @@ class _TakeScreenState extends ConsumerState<TakeScreen>
         _videoElement!.load();
         _videoElement!.srcObject = null;
       }
-      _stream?.getTracks().forEach((track) {
-        try {
-          (track as dynamic).stop();
-        } catch (_) {}
+      _stream?.getTracks().toDart.forEach((track) {
+        track.stop();
       });
       stopARTracker();
       _stream = null;
@@ -348,7 +348,7 @@ class _TakeScreenState extends ConsumerState<TakeScreen>
       _capturedImageBytes = null;
       _capturedVideoBytes = null;
       if (_previewVideoUrl != null) {
-        html.Url.revokeObjectUrl(_previewVideoUrl!);
+        web.URL.revokeObjectURL(_previewVideoUrl!);
         _previewVideoUrl = null;
       }
       _previewViewType = null;
@@ -992,7 +992,10 @@ class _TakeScreenState extends ConsumerState<TakeScreen>
 
     // Render the live HTML AR Canvas element
     // Note: Color matrix is applied via JS SVG filter
-    return HtmlElementView(viewType: _arViewType!);
+    return HtmlElementView(
+      key: ValueKey(_arViewType!),
+      viewType: _arViewType!,
+    );
   }
 
   // ── Permission denied screen helper ──────────────────────────────────────────
@@ -1157,16 +1160,14 @@ class _TakeScreenState extends ConsumerState<TakeScreen>
       final canvasStream = _arCanvasElement!.captureStream(30);
       
       // Use MediaRecorder without forcing mimeType for broader browser support
-      _mediaRecorder = html.MediaRecorder(canvasStream, {
-        'videoBitsPerSecond': 800000,
-      });
+      _mediaRecorder = web.MediaRecorder(canvasStream, web.MediaRecorderOptions(videoBitsPerSecond: 800000));
       
-      _mediaRecorder!.addEventListener('dataavailable', (event) {
-        final e = event as html.BlobEvent;
-        if (e.data != null && e.data!.size > 0) {
-          _videoChunks.add(e.data!);
+      _mediaRecorder!.addEventListener('dataavailable', (web.Event event) {
+        final e = event as web.BlobEvent;
+        if (e.data.size > 0) {
+          _videoChunks.add(e.data);
         }
-      });
+      }.toJS);
       
       _mediaRecorder!.start(1000); // collect data every second
       
@@ -1201,7 +1202,7 @@ class _TakeScreenState extends ConsumerState<TakeScreen>
     }
     
     final completer = Completer<void>();
-    _mediaRecorder!.addEventListener('stop', (_) => completer.complete());
+    _mediaRecorder!.addEventListener('stop', ((web.Event _) => completer.complete()).toJS);
     _mediaRecorder!.stop();
     
     await completer.future;
@@ -1213,12 +1214,16 @@ class _TakeScreenState extends ConsumerState<TakeScreen>
     }
     
     // Combine all chunks into one blob
-    final videoBlob = html.Blob(_videoChunks, 'video/webm');
+    final videoBlob = web.Blob(_videoChunks.toJS, web.BlobPropertyBag(type: 'video/webm'));
+    
+    // Revoke previous URL if exists
+    if (_previewVideoUrl != null) web.URL.revokeObjectURL(_previewVideoUrl!);
+    
+    final videoUrl = web.URL.createObjectURL(videoBlob);
     
     // Create instant preview video element
-    final videoUrl = html.Url.createObjectUrlFromBlob(videoBlob);
     final previewType = 'preview-video-${DateTime.now().millisecondsSinceEpoch}';
-    final videoEl = html.VideoElement()
+    final videoEl = web.HTMLVideoElement()
       ..src = videoUrl
       ..autoplay = true
       ..loop = true
@@ -1235,10 +1240,15 @@ class _TakeScreenState extends ConsumerState<TakeScreen>
       (int id) => videoEl,
     );
 
-    final reader = html.FileReader();
+    final reader = web.FileReader();
     reader.readAsArrayBuffer(videoBlob);
-    await reader.onLoad.first;
-    final videoBytes = Uint8List.fromList(reader.result as List<int>);
+    
+    final loadCompleter = Completer<void>();
+    reader.addEventListener('load', ((web.Event _) => loadCompleter.complete()).toJS);
+    await loadCompleter.future;
+    
+    final result = reader.result as JSArrayBuffer;
+    final videoBytes = result.toDart.asUint8List();
     
     setState(() {
       _isRecording = false;

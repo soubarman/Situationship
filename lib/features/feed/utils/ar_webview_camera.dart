@@ -201,28 +201,6 @@ class ARWebViewCameraState extends State<ARWebViewCamera> {
       );
     }
 
-    return Stack(
-      fit: StackFit.expand,
-      children: [
-        WebViewWidget(controller: _controller!),
-        if (!_ready)
-          Container(
-            color: Colors.black,
-            child: const Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  CircularProgressIndicator(color: Colors.white54),
-                  SizedBox(height: 12),
-                  Text(
-                    'Loading AR...',
-                    style: TextStyle(color: Colors.white54, fontSize: 13),
-                  ),
-                ],
-              ),
-            ),
-          ),
-      ],
-    );
+    return WebViewWidget(controller: _controller!);
   }
 }

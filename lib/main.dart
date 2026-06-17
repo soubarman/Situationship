@@ -72,14 +72,21 @@ class SituationshipApp extends ConsumerWidget {
       themeMode: themeMode,
       routerConfig: router,
       // Lock text scale factor — prevents mid-session font-size jank
-      builder: (context, child) => MediaQuery(
-        data: MediaQuery.of(context).copyWith(
-          textScaler: TextScaler.linear(
-            MediaQuery.of(context).textScaleFactor.clamp(0.85, 1.15),
+      builder: (context, child) {
+        // Force exactly 1.0 — no OS font-size scaling, consistent across all devices
+        return MediaQuery(
+          data: MediaQuery.of(context).copyWith(
+            textScaler: TextScaler.noScaling,
           ),
-        ),
-        child: child!,
-      ),
+          child: SafeArea(
+            top: false,
+            left: false,
+            right: false,
+            bottom: true,
+            child: child!,
+          ),
+        );
+      },
     );
   }
 }

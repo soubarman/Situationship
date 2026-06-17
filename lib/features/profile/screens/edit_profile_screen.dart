@@ -299,7 +299,7 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
                 );
               }).toList(),
             ),
-            const SizedBox(height: 100), // Padding for scroll
+            SizedBox(height: MediaQuery.of(context).padding.bottom + 120), // Padding for scroll
           ],
         ),
       ),

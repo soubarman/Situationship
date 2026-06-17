@@ -214,15 +214,13 @@ class _QuickPostBoxState extends ConsumerState<QuickPostBox> {
       duration: const Duration(milliseconds: 220),
       margin: const EdgeInsets.fromLTRB(16, 12, 16, 6),
       decoration: BoxDecoration(
-        color: isDark
-            ? Colors.white.withOpacity(0.06)
-            : Colors.white.withOpacity(0.88),
+        color: isDark ? AppTheme.darkCard : Colors.white,
         borderRadius: BorderRadius.circular(24),
         border: Border.all(
           color: _isFocused
               ? AppTheme.primaryBlue.withOpacity(0.5)
               : (isDark
-                  ? Colors.white.withOpacity(0.1)
+                  ? Colors.white.withOpacity(0.08)
                   : Colors.black.withOpacity(0.06)),
           width: _isFocused ? 1.5 : 1.0,
         ),
@@ -230,9 +228,9 @@ class _QuickPostBoxState extends ConsumerState<QuickPostBox> {
           BoxShadow(
             color: _isFocused
                 ? AppTheme.primaryBlue.withOpacity(0.12)
-                : Colors.black.withOpacity(isDark ? 0.2 : 0.05),
-            blurRadius: _isFocused ? 20 : 14,
-            offset: const Offset(0, 4),
+                : Colors.black.withOpacity(isDark ? 0.25 : 0.06),
+            blurRadius: _isFocused ? 20 : 10,
+            offset: const Offset(0, 3),
           ),
         ],
       ),

@@ -212,7 +212,7 @@ class _MatchScreenState extends ConsumerState<MatchScreen>
                                 titleColor: const Color(0xFF6B4EE6),
                               ),
                               _buildNearbyList(nearbyUsers),
-                              const SizedBox(height: 100),
+                              SizedBox(height: MediaQuery.of(context).padding.bottom + 120),
                             ],
                           ),
                         ),

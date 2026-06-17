@@ -99,24 +99,7 @@ final currentUserProvider = Provider<UserModel>((ref) {
 
 const int _postsPageSize = 20;
 
-final postsStreamProvider = StreamProvider<List<PostModel>>((ref) {
-  final authState = ref.watch(authStateChangesProvider);
-  if (authState.value == null) {
-    return Stream.value([]);
-  }
 
-  return firestoreProvider
-      .collection('posts')
-      .orderBy('createdAt', descending: true)
-      .limit(_postsPageSize) // Limit to prevent loading all posts
-      .snapshots()
-      .map((snapshot) {
-        return snapshot.docs.map((doc) => PostModel.fromMap(doc.data())).toList();
-      })
-      .handleError((err) {
-        throw err;
-      });
-});
 
 // Pagination state
 class PostsPaginationNotifier extends StateNotifier<AsyncValue<List<PostModel>>> {
@@ -602,7 +585,7 @@ final matchQueueProvider =
 final feedFilterProvider = StateProvider<String>((ref) => 'all');
 
 final filteredPostsProvider = Provider<List<PostModel>>((ref) {
-  final streamPosts = ref.watch(postsStreamProvider).asData?.value ?? [];
+  final streamPosts = ref.watch(postsPaginationProvider).asData?.value ?? [];
   final localPosts = ref.watch(postsProvider);
   final communities = ref.watch(communitiesProvider).asData?.value ?? [];
 
@@ -671,7 +654,7 @@ final filteredPostsProvider = Provider<List<PostModel>>((ref) {
 
 // Whether the posts stream is still in its initial loading state
 final postsLoadingProvider = Provider<bool>((ref) {
-  return ref.watch(postsStreamProvider).isLoading;
+  return ref.watch(postsPaginationProvider).isLoading;
 });
 
 // ─── Comments & Messaging (Mocking for now to avoid logic bloat) ───────────────

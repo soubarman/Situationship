@@ -1,40 +1,44 @@
-// Web-only AR interop using dart:js_util (no package:js required)
-// This file is only compiled when dart.library.html is available (web).
+// Web-only AR interop using dart:js_interop (Wasm compatible)
 // ignore_for_file: avoid_web_libraries_in_flutter
 
-import 'dart:html' as html;
-import 'dart:js_util' as js_util;
+import 'package:web/web.dart' as web;
+import 'dart:js_interop';
 
-html.CanvasElement initializeARTracker(html.VideoElement videoElement, String facingMode) {
-  final tracker = js_util.getProperty<Object>(html.window, 'arTracker');
-  return js_util.callMethod<html.CanvasElement>(tracker, 'initialize', [videoElement, facingMode]);
+@JS('arTracker.initialize')
+external web.HTMLCanvasElement _initializeARTracker(web.HTMLVideoElement videoElement, JSString facingMode);
+
+web.HTMLCanvasElement initializeARTracker(web.HTMLVideoElement videoElement, String facingMode) {
+  return _initializeARTracker(videoElement, facingMode.toJS);
 }
+
+@JS('arTracker.setFilter')
+external void _setARFilter(JSString filterName);
 
 void setARFilter(String filterName) {
-  final tracker = js_util.getProperty<Object>(html.window, 'arTracker');
-  js_util.callMethod<void>(tracker, 'setFilter', [filterName]);
+  _setARFilter(filterName.toJS);
 }
 
-void stopARTracker() {
-  final tracker = js_util.getProperty<Object>(html.window, 'arTracker');
-  js_util.callMethod<void>(tracker, 'stop', []);
+@JS('arTracker.stop')
+external void stopARTracker();
+
+@JS('arTracker.updateFilterConfig')
+external void _updateFilterConfig(JSString filterName, JSNumber scale, JSNumber offsetX, JSNumber offsetY);
+
+void updateARFilterConfig(String filterName, double scale, double offsetX, double offsetY) {
+  _updateFilterConfig(filterName.toJS, scale.toJS, offsetX.toJS, offsetY.toJS);
 }
 
-void updateARFilterConfig(
-  String filterName,
-  double scale,
-  double offsetX,
-  double offsetY,
-) {
-  final tracker = js_util.getProperty<Object>(html.window, 'arTracker');
-  js_util.callMethod<void>(tracker, 'updateFilterConfig', [filterName, scale, offsetX, offsetY]);
-}
+@JS('applyColorMatrix')
+external void _applyColorMatrixJS(JSArray<JSNumber> matrix, JSNumber blurRadius);
 
 void applyColorMatrixJS(List<double> matrix, double blurRadius) {
-  js_util.callMethod<void>(html.window, 'applyColorMatrix', [matrix, blurRadius]);
+  final jsMatrix = matrix.map((e) => e.toJS).toList().toJS;
+  _applyColorMatrixJS(jsMatrix, blurRadius.toJS);
 }
 
+@JS('arTracker.setBeautyIntensity')
+external void _setBeautyIntensity(JSNumber intensity);
+
 void applyBeautyFilterJS(double intensity) {
-  final tracker = js_util.getProperty<Object>(html.window, 'arTracker');
-  js_util.callMethod<void>(tracker, 'setBeautyIntensity', [intensity]);
+  _setBeautyIntensity(intensity.toJS);
 }

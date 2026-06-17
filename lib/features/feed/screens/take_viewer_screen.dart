@@ -1,5 +1,5 @@
-// ignore_for_file: avoid_web_libraries_in_flutter
-import 'package:universal_html/html.dart' as html;
+import 'package:web/web.dart' as web;
+import 'dart:js_interop';
 import '../utils/ui_web_shim.dart' as ui_web;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -43,7 +43,7 @@ class _TakeViewerScreenState extends ConsumerState<TakeViewerScreen>
   bool _isMuted = true;
   String _activeTab = 'For you';
   final _tabs = ['For you', 'Following', 'Nearby'];
-  final Map<String, html.VideoElement> _videoElements = {};
+  final Map<String, web.HTMLVideoElement> _videoElements = {};
 
   @override
   void initState() {
@@ -102,7 +102,7 @@ class _TakeViewerScreenState extends ConsumerState<TakeViewerScreen>
 
   void _registerVideo(String url, String viewId) {
     if (!_videoElements.containsKey(url)) {
-      final video = html.VideoElement()
+      final video = web.HTMLVideoElement()
         ..src = url
         ..autoplay = true
         ..loop = true

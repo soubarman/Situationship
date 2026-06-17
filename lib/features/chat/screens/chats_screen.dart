@@ -149,7 +149,7 @@ class _ChatsScreenState extends ConsumerState<ChatsScreen> with SingleTickerProv
           _sectionHeader('Expired', context),
           ...expiredChats.map((chat) => _ChatTile(chat: chat, isExpired: true, isRequest: isRequest)),
         ],
-        const SizedBox(height: 100),
+        SizedBox(height: MediaQuery.of(context).padding.bottom + 120),
       ],
     );
   }
@@ -390,7 +390,7 @@ class _ChatsScreenState extends ConsumerState<ChatsScreen> with SingleTickerProv
           _sectionHeader('Expired Secret Messages', context),
           ...expiredChats.map((chat) => _ChatTile(chat: chat, isExpired: true, isConfessionView: true)),
         ],
-        const SizedBox(height: 100),
+        SizedBox(height: MediaQuery.of(context).padding.bottom + 120),
       ],
     );
   }

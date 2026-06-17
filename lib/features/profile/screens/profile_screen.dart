@@ -179,7 +179,7 @@ class ProfileScreen extends ConsumerWidget {
     final user = ref.watch(currentUserProvider);
     
     // Fetch all posts belonging to the user directly, independent of the active Feed filter
-    final streamPosts = ref.watch(postsStreamProvider).asData?.value ?? [];
+    final streamPosts = ref.watch(postsPaginationProvider).asData?.value ?? [];
     final localPosts = ref.watch(postsProvider);
     final List<PostModel> posts = [];
     final Set<String> seenIds = {};
@@ -240,7 +240,7 @@ class ProfileScreen extends ConsumerWidget {
               ),
               
               _buildPostsGrid(posts, context, isDark, ref),
-              const SliverPadding(padding: EdgeInsets.only(bottom: 100)),
+              SliverPadding(padding: EdgeInsets.only(bottom: MediaQuery.of(context).padding.bottom + 120)),
             ],
           ),
 

@@ -2,11 +2,13 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:situationship/core/theme/app_theme.dart';
 import 'package:situationship/core/providers/app_state_provider.dart';
 import '../models/spotlight_model.dart';
 import '../providers/spotlight_provider.dart';
-import '../widgets/spotlight_card.dart'; // Old one? No, I need to make a new Podium card
+import '../providers/location_provider.dart';
+import '../widgets/spotlight_card.dart';
 import '../widgets/bid_bottom_sheet.dart';
 
 class SpotlightScreen extends ConsumerStatefulWidget {
@@ -38,9 +40,22 @@ class _SpotlightScreenState extends ConsumerState<SpotlightScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final sessionAsync = ref.watch(spotlightSessionProvider);
+    final locationAsync = ref.watch(locationProvider);
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final currentUser = ref.watch(currentUserProvider);
+
+    return locationAsync.when(
+      loading: () => Scaffold(
+        backgroundColor: isDark ? const Color(0xFF0D0B14) : const Color(0xFFF8FAFC),
+        body: const Center(child: CircularProgressIndicator()),
+      ),
+      error: (_, __) => const SizedBox.shrink(),
+      data: (locState) {
+        if (locState.status != LocationStatus.granted) {
+          return _SpotlightLocationGate(isDark: isDark, locState: locState);
+        }
+
+        final sessionAsync = ref.watch(spotlightSessionProvider);
 
     return Scaffold(
       backgroundColor: isDark ? const Color(0xFF0D0B14) : const Color(0xFFF8FAFC),
@@ -207,7 +222,7 @@ class _SpotlightScreenState extends ConsumerState<SpotlightScreen> {
                             return _SpotlightListItem(bid: remaining[index], isDark: isDark);
                           },
                         ),
-                        const SizedBox(height: 40),
+                        SizedBox(height: MediaQuery.of(context).padding.bottom + 100),
                       ]
                     ],
                   ),
@@ -218,6 +233,8 @@ class _SpotlightScreenState extends ConsumerState<SpotlightScreen> {
         },
       ),
     );
+      }, // end data
+    ); // end locationAsync.when
   }
 
   Widget _buildLiveSlotCard(SpotlightSession session) {
@@ -565,6 +582,123 @@ class _SpotlightListItem extends StatelessWidget {
           )
         ],
       ),
+      ),
+    );
+  }
+}
+
+// ─── Full-screen location gate for SpotlightScreen ────────────────────────────
+
+class _SpotlightLocationGate extends StatelessWidget {
+  final bool isDark;
+  final LocationState locState;
+
+  const _SpotlightLocationGate({
+    required this.isDark,
+    required this.locState,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final isPermanent = locState.status == LocationStatus.deniedForever;
+    final isService   = locState.status == LocationStatus.serviceDisabled;
+
+    return Scaffold(
+      backgroundColor: isDark ? const Color(0xFF0D0B14) : const Color(0xFFF8FAFC),
+      appBar: AppBar(
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        leading: IconButton(
+          icon: Icon(Icons.arrow_back_rounded, color: isDark ? Colors.white : Colors.black),
+          onPressed: () => context.pop(),
+        ),
+        title: Text(
+          'SPOTLIGHT',
+          style: TextStyle(
+            fontSize: 14, fontWeight: FontWeight.w900, letterSpacing: 1.5,
+            color: isDark ? Colors.white : Colors.black,
+          ),
+        ),
+        centerTitle: true,
+      ),
+      body: Center(
+        child: Padding(
+          padding: const EdgeInsets.all(32),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              // Icon
+              Container(
+                width: 90, height: 90,
+                decoration: BoxDecoration(
+                  gradient: AppTheme.primaryGradient,
+                  shape: BoxShape.circle,
+                  boxShadow: [
+                    BoxShadow(color: AppTheme.primaryBlue.withOpacity(0.4), blurRadius: 30, spreadRadius: 4),
+                  ],
+                ),
+                child: const Icon(Icons.location_on_rounded, color: Colors.white, size: 42),
+              ),
+              const SizedBox(height: 28),
+
+              // Title
+              ShaderMask(
+                shaderCallback: (b) => AppTheme.primaryGradient.createShader(b),
+                child: Text(
+                  isService ? 'Location Services Off' : 'Location Required',
+                  style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w900, color: Colors.white),
+                  textAlign: TextAlign.center,
+                ),
+              ),
+              const SizedBox(height: 12),
+
+              // Body
+              Text(
+                isService
+                    ? 'Turn on your device\'s location services to see Spotlight in your area.'
+                    : isPermanent
+                        ? 'You\'ve permanently blocked location access. Open Settings to enable it and join your local Spotlight.'
+                        : 'Spotlight shows the most popular people near you.\nEnable location to see who\'s trending in your area!',
+                style: TextStyle(
+                  fontSize: 14,
+                  height: 1.6,
+                  color: isDark ? Colors.white54 : AppTheme.textSecondary,
+                ),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 32),
+
+              // CTA button
+              GestureDetector(
+                onTap: () async {
+                  if (isService) {
+                    await Geolocator.openLocationSettings();
+                  } else if (isPermanent) {
+                    await Geolocator.openAppSettings();
+                  } else {
+                    await Geolocator.requestPermission();
+                  }
+                },
+                child: Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  decoration: BoxDecoration(
+                    gradient: AppTheme.primaryGradient,
+                    borderRadius: BorderRadius.circular(50),
+                    boxShadow: [
+                      BoxShadow(color: AppTheme.primaryBlue.withOpacity(0.4), blurRadius: 16, offset: const Offset(0, 6)),
+                    ],
+                  ),
+                  child: Text(
+                    isService ? 'Open Location Settings' : isPermanent ? 'Open App Settings' : 'Enable Location',
+                    style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 16),
+                    textAlign: TextAlign.center,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }

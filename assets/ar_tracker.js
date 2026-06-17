@@ -57,36 +57,42 @@ window.arTracker = {
         return this.filterConfigs[key] || { scale: 1.0, noseScale: 1.0, offsetX: 0, offsetY: 0 };
     },
 
-    // ---- Filter image assets ----
-    loadImages: function() {
-        if (!this.images) this.images = {};
-        
-        // Native WebView uses ar_webview.html and injects images via base64 to avoid CORS/tainting.
-        // Flutter Web uses index.html and must fetch images manually.
+    // ---- Filter image assets (lazy-loaded per filter on demand) ----
+    loadImage: function(key, src) {
+        if (this.images[key]) return; // already loaded
         if (!window.location.href.includes('ar_webview.html')) {
-            const assets = {
-                dog:        'assets/filters/dog_filter.png',
-                thugLife:   'assets/filters/thug_life.png',
-                flowerCrown:'assets/filters/flower_crown.png',
-                cat:        'assets/filters/cat_filter.png',
-                devil:      'assets/filters/devil_horns.png',
-                bunny:      'assets/filters/bunny_filter.png',
-                halo:       'assets/filters/angel_halo.png',
-                hearts:     'assets/filters/heart_eyes.png',
-                clown:      'assets/filters/clown_filter.png',
-                crown:      'assets/filters/crown_filter.png',
-            };
-            for (const [key, src] of Object.entries(assets)) {
-                fetch(src)
-                    .then(res => res.blob())
-                    .then(blob => {
-                        const img = new Image();
-                        img.src = URL.createObjectURL(blob);
-                        this.images[key] = img;
-                    })
-                    .catch(err => console.error('Failed to load filter image:', src, err));
-            }
+            // In Flutter Web, the asset directory itself is served under /assets/
+            const fetchSrc = 'assets/' + src;
+            fetch(fetchSrc)
+                .then(res => res.blob())
+                .then(blob => {
+                    const img = new Image();
+                    img.src = URL.createObjectURL(blob);
+                    this.images[key] = img;
+                })
+                .catch(err => console.error('Failed to load filter image:', fetchSrc, err));
         }
+    },
+
+    _ensureFilterImage: function(filterName) {
+        const map = {
+            'Thug Life':    { key: 'thugLife',    src: 'assets/filters/thug_life.png' },
+            'Dog':          { key: 'dog',          src: 'assets/filters/dog_filter.png' },
+            'Cat':          { key: 'cat',          src: 'assets/filters/cat_filter.png' },
+            'Bunny':        { key: 'bunny',        src: 'assets/filters/bunny_filter.png' },
+            'Devil':        { key: 'devil',        src: 'assets/filters/devil_horns.png' },
+            'Angel':        { key: 'halo',         src: 'assets/filters/angel_halo.png' },
+            'Crown':        { key: 'crown',        src: 'assets/filters/crown_filter.png' },
+            'Flower Crown': { key: 'flowerCrown',  src: 'assets/filters/flower_crown.png' },
+            'Heart Eyes':   { key: 'hearts',       src: 'assets/filters/heart_eyes.png' },
+            'Clown':        { key: 'clown',        src: 'assets/filters/clown_filter.png' },
+        };
+        const entry = map[filterName];
+        if (entry) this.loadImage(entry.key, entry.src);
+    },
+
+    loadImages: function() {
+        // No-op: images now loaded lazily on first filter selection
     },
 
     initialize: function(videoElement, facingMode = 'user') {
@@ -105,9 +111,12 @@ window.arTracker = {
             stop: () => { this.isRunning = false; },
             start: () => {
                 this.isRunning = true;
+                let _frameSkip = 0;
                 const loop = async () => {
                     if (!this.isRunning) return;
-                    if (this.videoElement.readyState >= 2) {
+                    // Throttle to ~30fps: skip every other frame
+                    _frameSkip = (_frameSkip + 1) % 2;
+                    if (_frameSkip === 0 && this.videoElement.readyState >= 2) {
                         try {
                             await this.faceMesh.send({ image: this.videoElement });
                         } catch (e) {
@@ -131,7 +140,10 @@ window.arTracker = {
         return this.canvasElement;
     },
 
-    setFilter: function(filterName) { this.activeFilter = filterName; },
+    setFilter: function(filterName) {
+        this._ensureFilterImage(filterName);
+        this.activeFilter = filterName;
+    },
     stop: function() {
         if (this.camera) this.camera.stop();
         if (this.faceMesh) this.faceMesh.close();

@@ -1,17 +1,36 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/spotlight_model.dart';
+import 'location_provider.dart';
 import 'package:situationship/core/providers/app_state_provider.dart';
 
+// ─── Helper: get session ID from location state ───────────────────────────────
+
+/// Returns null if location not yet resolved or denied.
+final _sessionIdProvider = Provider<String?>((ref) {
+  final locationAsync = ref.watch(locationProvider);
+  return locationAsync.when(
+    data: (state) => state.sessionId, // null if denied
+    loading: () => null,
+    error: (_, __) => null,
+  );
+});
+
+// ─── Session stream ───────────────────────────────────────────────────────────
+
 final spotlightSessionProvider = StreamProvider<SpotlightSession?>((ref) {
+  final sessionId = ref.watch(_sessionIdProvider);
+  if (sessionId == null) return const Stream.empty();
+
   return FirebaseFirestore.instance
       .collection('spotlight_sessions')
-      .doc('live_session')
+      .doc(sessionId)
       .snapshots()
       .map((snapshot) {
     if (!snapshot.exists) {
+      // Auto-create a virtual session for this zone (no write needed — bids create it)
       return SpotlightSession(
-        id: 'live_session',
+        id: sessionId,
         startTime: DateTime.now(),
         endTime: DateTime.now().add(const Duration(hours: 1)),
         prizePool: 0,
@@ -24,20 +43,23 @@ final spotlightSessionProvider = StreamProvider<SpotlightSession?>((ref) {
   });
 });
 
-final spotlightBidsProvider = StreamProvider.family<List<SpotlightBid>, String>((ref, sessionId) {
+// ─── Bids stream ─────────────────────────────────────────────────────────────
+
+final spotlightBidsProvider =
+    StreamProvider.family<List<SpotlightBid>, String>((ref, sessionId) {
   return FirebaseFirestore.instance
       .collection('spotlight_sessions')
-      .doc('live_session')
+      .doc(sessionId)
       .collection('bids')
       .orderBy('amount', descending: true)
       .orderBy('timestamp', descending: false)
-      .limit(20)
+      .limit(30)
       .snapshots()
       .map((snapshot) {
     final bids = snapshot.docs
         .map((doc) => SpotlightBid.fromMap(doc.id, doc.data()))
         .toList();
-    
+
     // Assign ranks locally based on the sorted order
     for (int i = 0; i < bids.length; i++) {
       bids[i] = SpotlightBid(
@@ -56,11 +78,15 @@ final spotlightBidsProvider = StreamProvider.family<List<SpotlightBid>, String>(
   });
 });
 
+// ─── Notifier ─────────────────────────────────────────────────────────────────
+
 final spotlightNotifierProvider = Provider((ref) => SpotlightNotifier(ref));
 
 class SpotlightNotifier {
   final Ref _ref;
   SpotlightNotifier(this._ref);
+
+  String? get _sessionId => _ref.read(_sessionIdProvider);
 
   int getNextValidBid(int currentHighestBid) {
     if (currentHighestBid < 1000) return currentHighestBid + 50;
@@ -75,33 +101,47 @@ class SpotlightNotifier {
     final user = _ref.read(currentUserProvider);
     if (user == null) return;
 
+    final resolvedSessionId = _sessionId ?? sessionId;
+
     final sessionRef = FirebaseFirestore.instance
         .collection('spotlight_sessions')
-        .doc('live_session');
-    
+        .doc(resolvedSessionId);
+
     final bidRef = sessionRef.collection('bids').doc(user.id);
+    final userRef = FirebaseFirestore.instance.collection('users').doc(user.id);
 
     await FirebaseFirestore.instance.runTransaction((transaction) async {
-      // Simulate real transaction logic
+      final userDoc = await transaction.get(userRef);
+      if (!userDoc.exists) throw Exception('User not found');
+      
+      final currentCoins = userDoc.data()?['coins'] as int? ?? 0;
+      if (currentCoins < amount) {
+        throw Exception('Insufficient balance. You need ₹$amount to place this bid.');
+      }
+
+      // Deduct coins from user
+      transaction.update(userRef, {
+        'coins': FieldValue.increment(-amount),
+      });
+
       transaction.set(bidRef, {
-        'sessionId': sessionId,
+        'sessionId': resolvedSessionId,
         'userId': user.id,
         'username': user.name,
         'profileImageUrl': user.avatarUrl ?? '',
         'isVerified': user.isVerified,
         'amount': amount,
         'timestamp': FieldValue.serverTimestamp(),
-        'rank': 999, // Will be computed on read
+        'rank': 999,
       });
 
-      // Ensure the session doc exists
+      // Ensure the session doc exists with zone metadata
       transaction.set(sessionRef, {
         'isActive': true,
         'prizePool': FieldValue.increment(amount),
         'minStartingBid': 100,
+        'sessionId': resolvedSessionId,
       }, SetOptions(merge: true));
     });
   }
-
-  // Removed createMockSession
 }

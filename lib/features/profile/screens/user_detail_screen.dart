@@ -2001,7 +2001,7 @@ class _UserDetailScreenState extends ConsumerState<UserDetailScreen> {
   }
 
   Widget _buildPostsList(UserModel user, bool isDark) {
-    final streamPosts = ref.watch(postsStreamProvider).asData?.value ?? [];
+    final streamPosts = ref.watch(postsPaginationProvider).asData?.value ?? [];
     final localPosts = ref.watch(postsProvider);
     
     final List<PostModel> posts = [];

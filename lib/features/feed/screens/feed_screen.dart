@@ -31,7 +31,7 @@ class FeedScreen extends ConsumerStatefulWidget {
 class _FeedScreenState extends ConsumerState<FeedScreen> {
   @override
   Widget build(BuildContext context) {
-    final postsStream = ref.watch(postsStreamProvider);
+    final postsStream = ref.watch(postsPaginationProvider);
     final isLoading   = postsStream.isLoading;
     final posts       = ref.watch(filteredPostsProvider);
     final activeFilter= ref.watch(feedFilterProvider);
@@ -39,11 +39,8 @@ class _FeedScreenState extends ConsumerState<FeedScreen> {
     final currentUser = ref.watch(currentUserProvider);
 
     return Scaffold(
-      backgroundColor: isDark ? AppTheme.darkBg : const Color(0xFFF8FAFC),
-      body: Stack(
-        children: [
-          const BackgroundOrbs(),
-          RefreshIndicator(
+      backgroundColor: isDark ? AppTheme.darkBg : const Color(0xFFF5F5F7),
+      body: RefreshIndicator(
             onRefresh: () async {
               await ref.read(postsPaginationProvider.notifier).refresh();
             },
@@ -53,27 +50,24 @@ class _FeedScreenState extends ConsumerState<FeedScreen> {
               physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
               slivers: [
                 _buildAppBar(context, isDark, currentUser, ref),
+                const SliverToBoxAdapter(child: SizedBox(height: 16)),
                 const SliverToBoxAdapter(child: StoriesRow()),
-    
-                const SliverToBoxAdapter(
-                  child: SpotlightFeedSection(),
-                ),
 
-                // ── Feed filter chips ──────────────────────────────────────────
+                // ── Feed filter chips (ABOVE spotlight) ───────────────────────
                 SliverToBoxAdapter(
                   child: Padding(
-                    padding: const EdgeInsets.fromLTRB(20, 16, 20, 10),
+                    padding: const EdgeInsets.fromLTRB(16, 10, 16, 6),
                     child: SingleChildScrollView(
                       scrollDirection: Axis.horizontal,
                       physics: const BouncingScrollPhysics(),
                       child: Row(
                         children: [
                           _TabChip(label: 'All',         isSelected: activeFilter == 'all',         onTap: () => ref.read(feedFilterProvider.notifier).state = 'all'),
-                          const SizedBox(width: 8),
+                          const SizedBox(width: 6),
                           _TabChip(label: 'Following',   isSelected: activeFilter == 'following',   onTap: () => ref.read(feedFilterProvider.notifier).state = 'following'),
-                          const SizedBox(width: 8),
+                          const SizedBox(width: 6),
                           _TabChip(label: 'Trending',    isSelected: activeFilter == 'trending',    onTap: () => ref.read(feedFilterProvider.notifier).state = 'trending'),
-                          const SizedBox(width: 8),
+                          const SizedBox(width: 6),
                           _TabChip(label: 'Communities', isSelected: activeFilter == 'communities', onTap: () => ref.read(feedFilterProvider.notifier).state = 'communities'),
                         ],
                       ),
@@ -81,6 +75,12 @@ class _FeedScreenState extends ConsumerState<FeedScreen> {
                   ),
                 ),
 
+                const SliverToBoxAdapter(
+                  child: SpotlightFeedSection(),
+                ),
+
+                // spacing so spotlight and posts don't look merged
+                const SliverToBoxAdapter(child: SizedBox(height: 36)),
     
                 // ── Firestore error banner ─────────────────────────────────────
                 if (postsStream.hasError)
@@ -146,15 +146,14 @@ class _FeedScreenState extends ConsumerState<FeedScreen> {
                     ),
                 ],
     
-                const SliverPadding(padding: EdgeInsets.only(bottom: 120)),
+                SliverPadding(padding: EdgeInsets.only(bottom: MediaQuery.of(context).padding.bottom + 120)),
               ],
             ),
           ),
-        ],
-      ),
       floatingActionButton: Padding(
         padding: const EdgeInsets.only(bottom: 80.0),
         child: FloatingActionButton(
+          shape: const CircleBorder(),
           onPressed: () {
             showModalBottomSheet(
               context: context,
@@ -172,7 +171,7 @@ class _FeedScreenState extends ConsumerState<FeedScreen> {
             );
           },
           backgroundColor: AppTheme.primaryBlue,
-          child: const Icon(Icons.add_rounded, color: Colors.white, size: 32),
+          child: const Icon(Icons.add_rounded, color: Colors.white, size: 28),
         ),
       ),
     );
@@ -186,19 +185,31 @@ class _FeedScreenState extends ConsumerState<FeedScreen> {
       snap: true,
       elevation: 0,
       scrolledUnderElevation: 0,
-      backgroundColor: Colors.transparent,
-      title: Text(
-        'Situationship',
-        style: TextStyle(
-          fontSize: 26,
-          fontWeight: FontWeight.w900,
-          letterSpacing: -0.8,
-          foreground: Paint()
-            ..shader = LinearGradient(
-              colors: isDark 
-                  ? [Colors.white, Colors.white.withOpacity(0.8)] 
-                  : [AppTheme.primaryBlue, AppTheme.accentPurple],
-            ).createShader(const Rect.fromLTWH(0.0, 0.0, 200.0, 30.0)),
+      backgroundColor: isDark ? AppTheme.darkBg : const Color(0xFFF5F5F7),
+      bottom: PreferredSize(
+        preferredSize: const Size.fromHeight(1),
+        child: Divider(
+          height: 1,
+          thickness: 0.5,
+          color: isDark ? Colors.white12 : Colors.black12,
+        ),
+      ),
+      title: FittedBox(
+        fit: BoxFit.scaleDown,
+        alignment: Alignment.centerLeft,
+        child: Text(
+          'Situationship',
+          style: TextStyle(
+            fontSize: 22,
+            fontWeight: FontWeight.w900,
+            letterSpacing: -0.5,
+            foreground: Paint()
+              ..shader = LinearGradient(
+                colors: isDark 
+                    ? [Colors.white, Colors.white.withOpacity(0.8)] 
+                    : [AppTheme.primaryBlue, AppTheme.accentPurple],
+              ).createShader(const Rect.fromLTWH(0.0, 0.0, 200.0, 30.0)),
+          ),
         ),
       ),
       actions: [
@@ -607,7 +618,7 @@ class _TabChip extends StatelessWidget {
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 220),
         curve: Curves.easeOutCubic,
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
         decoration: BoxDecoration(
           gradient: isSelected ? AppTheme.primaryGradient : null,
           color: isSelected
@@ -621,13 +632,13 @@ class _TabChip extends StatelessWidget {
             width: 1.0,
           ),
           boxShadow: isSelected
-              ? [BoxShadow(color: AppTheme.primaryBlue.withOpacity(0.3), blurRadius: 10, offset: const Offset(0, 3))]
+              ? [BoxShadow(color: AppTheme.primaryBlue.withOpacity(0.3), blurRadius: 8, offset: const Offset(0, 2))]
               : [],
         ),
         child: Text(
           label,
           style: TextStyle(
-            fontSize: 13,
+            fontSize: 12,
             fontWeight: FontWeight.w700,
             color: isSelected ? Colors.white : (isDark ? Colors.white60 : AppTheme.textSecondary),
           ),

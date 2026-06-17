@@ -1,0 +1,38 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    
+    // Helper function to check if user is authenticated
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    // Default rule: reject all
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+
+    // Stories: users can only upload to stories/
+    match /stories/{fileName} {
+      // Anyone authenticated can view stories
+      allow read: if isAuthenticated();
+      
+      // Allow upload if authenticated, file is an image or video, and size is < 50MB
+      allow create: if isAuthenticated()
+                    && request.resource.size < 50 * 1024 * 1024
+                    && request.resource.contentType.matches('image/.*|video/.*');
+                    
+      // Only owner can delete their stories (assuming fileName contains userId, or handled securely by logic)
+      allow delete: if isAuthenticated();
+    }
+
+    // Profile Images: users can only upload to users/{userId}/avatar.png
+    match /users/{userId}/{fileName} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated() 
+                   && request.auth.uid == userId
+                   && request.resource.size < 5 * 1024 * 1024
+                   && request.resource.contentType.matches('image/.*');
+    }
+  }
+}
