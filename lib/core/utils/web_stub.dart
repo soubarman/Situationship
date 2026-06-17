@@ -1,5 +1,18 @@
 // Empty implementations of web types to satisfy the compiler on native platforms.
 
+class Event {}
+
+class BlobEvent extends Event {
+  dynamic get data => null;
+}
+
+class FileReader {
+  dynamic get result => null;
+  void addEventListener(String type, dynamic listener) {}
+  void readAsArrayBuffer(dynamic blob) {}
+  void readAsDataURL(dynamic blob) {}
+}
+
 class HTMLVideoElement {
   set srcObject(dynamic value) {}
   set src(String value) {}
@@ -25,23 +38,33 @@ class MediaStream {
   dynamic getTracks() => [];
 }
 
+class MediaRecorderOptions {
+  MediaRecorderOptions({int? videoBitsPerSecond});
+}
+
 class MediaRecorder {
-  MediaRecorder(dynamic stream) {}
-  void start() {}
+  MediaRecorder(dynamic stream, [dynamic options]) {}
+  void start([int? timeslice]) {}
   void stop() {}
+  void addEventListener(String type, dynamic listener) {}
   dynamic get ondataavailable => null;
   dynamic get onstop => null;
 }
 
+class BlobPropertyBag {
+  BlobPropertyBag({String? type});
+}
+
 class Blob {
-  Blob(List<dynamic> parts, [Map<String, dynamic>? options]) {}
+  Blob(dynamic parts, [dynamic options]) {}
 }
 
 class HTMLCanvasElement {
-  set width(String value) {}
-  set height(String value) {}
+  set width(dynamic value) {}
+  set height(dynamic value) {}
   dynamic get style => _Style();
   String toDataUrl(String type, double quality) => '';
+  dynamic captureStream([int? frameRate]) => null;
 }
 
 class DOMException implements Exception {
