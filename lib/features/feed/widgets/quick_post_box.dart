@@ -68,6 +68,9 @@ class _QuickPostBoxState extends ConsumerState<QuickPostBox> {
   final _focusNode = FocusNode();
   String? _selectedMoodEmoji;
   String? _selectedMoodLabel;
+  String? _planTitle;
+  String? _planTime;
+  String? _planLocation;
   XFile? _imageFile;
   bool _isSaving = false;
   bool _isFocused = false;
@@ -103,6 +106,24 @@ class _QuickPostBoxState extends ConsumerState<QuickPostBox> {
             _selectedMoodLabel = label;
           });
           Navigator.of(context, rootNavigator: true).pop();
+        },
+      ),
+    );
+  }
+
+  // ── Plan dialog ────────────────────────────────────────────────────────────
+
+  Future<void> _openPlanDialog() async {
+    await showDialog(
+      context: context,
+      useRootNavigator: true,
+      builder: (context) => _PlanDialog(
+        onAttach: (title, time, loc) {
+          setState(() {
+            _planTitle = title;
+            _planTime = time;
+            _planLocation = loc;
+          });
         },
       ),
     );
@@ -149,6 +170,14 @@ class _QuickPostBoxState extends ConsumerState<QuickPostBox> {
           ? '$_selectedMoodEmoji $_selectedMoodLabel'
           : null;
 
+      String finalCaption = text.isEmpty ? '' : text;
+      if (_planTitle != null) {
+        final planStr = '\n\n🗓️ Plan: $_planTitle'
+            '${_planTime!.isNotEmpty ? '\n⏰ Time: $_planTime' : ''}'
+            '${_planLocation!.isNotEmpty ? '\n📍 Where: $_planLocation' : ''}';
+        finalCaption += planStr;
+      }
+
       final post = PostModel(
         id: postId,
         userId: currentUser.id,
@@ -156,7 +185,7 @@ class _QuickPostBoxState extends ConsumerState<QuickPostBox> {
         userAvatar: currentUser.avatarUrl,
         isUserVerified: currentUser.isVerified,
         imageUrl: imageUrl,
-        caption: text.isEmpty ? '' : text,
+        caption: finalCaption.trim(),
         createdAt: DateTime.now(),
         mood: moodString,
         communityId: widget.communityId,
@@ -173,6 +202,9 @@ class _QuickPostBoxState extends ConsumerState<QuickPostBox> {
         setState(() {
           _selectedMoodEmoji = null;
           _selectedMoodLabel = null;
+          _planTitle = null;
+          _planTime = null;
+          _planLocation = null;
           _imageFile = null;
           _isSaving = false;
         });
@@ -238,9 +270,42 @@ class _QuickPostBoxState extends ConsumerState<QuickPostBox> {
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          // ── Handle and Close Button ─────────────────────────────────────
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+               const SizedBox(width: 48), // Balance the close button
+               // Drag handle
+               Container(
+                 margin: const EdgeInsets.only(top: 10),
+                 width: 36,
+                 height: 4,
+                 decoration: BoxDecoration(
+                   color: isDark ? Colors.white24 : Colors.black12,
+                   borderRadius: BorderRadius.circular(2),
+                 ),
+               ),
+               Padding(
+                 padding: const EdgeInsets.only(top: 6, right: 6),
+                 child: GestureDetector(
+                   onTap: () => Navigator.of(context).pop(),
+                   child: Container(
+                     padding: const EdgeInsets.all(4),
+                     decoration: BoxDecoration(
+                       shape: BoxShape.circle,
+                       border: Border.all(color: isDark ? Colors.white24 : Colors.black12),
+                     ),
+                     child: Icon(Icons.close_rounded, color: isDark ? Colors.white70 : Colors.black87, size: 16),
+                   ),
+                 ),
+               ),
+            ],
+          ),
+
           // ── Text input row ──────────────────────────────────────────────
           Padding(
-            padding: const EdgeInsets.fromLTRB(16, 14, 16, 0),
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 0),
             child: TextField(
               controller: _captionCtrl,
               focusNode: _focusNode,
@@ -304,6 +369,48 @@ class _QuickPostBoxState extends ConsumerState<QuickPostBox> {
               ),
             ),
 
+          // ── Plan chip (when selected) ────────────────────────────────────
+          if (_planTitle != null)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 10, 16, 0),
+              child: Container(
+                padding: const EdgeInsets.fromLTRB(10, 6, 6, 6),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF4EAE8D).withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: const Color(0xFF4EAE8D).withOpacity(0.3)),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(Icons.calendar_today_outlined, size: 14, color: Color(0xFF4EAE8D)),
+                    const SizedBox(width: 6),
+                    Flexible(
+                      child: Text(
+                        _planTitle!,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontSize: 12.5,
+                          fontWeight: FontWeight.w600,
+                          color: Color(0xFF4EAE8D),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    GestureDetector(
+                      onTap: () => setState(() {
+                        _planTitle = null;
+                        _planTime = null;
+                        _planLocation = null;
+                      }),
+                      child: const Icon(Icons.close_rounded, size: 14, color: Color(0xFF4EAE8D)),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+
           // ── Image preview ────────────────────────────────────────────────
           if (_imageFile != null)
             Padding(
@@ -342,40 +449,69 @@ class _QuickPostBoxState extends ConsumerState<QuickPostBox> {
               ),
             ),
 
-          // ── Divider ──────────────────────────────────────────────────────
-          const SizedBox(height: 12),
-          Divider(
-            height: 1,
-            thickness: 1,
-            color: isDark
-                ? Colors.white.withOpacity(0.06)
-                : const Color(0xFFEEF0F5),
-          ),
-
           // ── Action bar ───────────────────────────────────────────────────
-          Padding(
-            padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
+          const SizedBox(height: 16),
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            physics: const BouncingScrollPhysics(),
+            padding: const EdgeInsets.symmetric(horizontal: 16),
             child: Row(
               children: [
-                // Photo
                 _ToolBtn(
                   icon: Icons.image_outlined,
-                  label: 'Photo',
-                  color: AppTheme.primaryBlue,
-                  isDark: isDark,
+                  label: 'Upload',
+                  color: const Color(0xFF4CA0DB),
                   onTap: _pickPhoto,
                 ),
-                const SizedBox(width: 4),
-                // Mood
+                const SizedBox(width: 8),
+                _ToolBtn(
+                  icon: Icons.mic_none,
+                  label: 'Voice',
+                  color: const Color(0xFFD66B7C),
+                  onTap: () => _snack('Voice notes coming soon!'),
+                ),
+                const SizedBox(width: 8),
+                _ToolBtn(
+                  icon: Icons.camera_alt_outlined,
+                  label: 'Take',
+                  color: const Color(0xFFE5B945),
+                  onTap: () => _snack('Take coming soon!'),
+                ),
+                const SizedBox(width: 8),
+                _ToolBtn(
+                  icon: Icons.calendar_today_outlined,
+                  label: 'Plan',
+                  color: const Color(0xFF4EAE8D),
+                  onTap: _openPlanDialog,
+                ),
+                const SizedBox(width: 8),
                 _ToolBtn(
                   icon: Icons.sentiment_satisfied_alt_outlined,
                   label: 'Mood',
-                  color: AppTheme.primaryBlue,
-                  isDark: isDark,
+                  color: const Color(0xFFA17EC7),
                   onTap: _openMoodPicker,
                 ),
+              ],
+            ),
+          ),
+          
+          const SizedBox(height: 16),
+          
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+            child: Row(
+              children: [
+                const Icon(Icons.bolt_rounded, color: Color(0xFFD1A041), size: 18),
+                const SizedBox(width: 6),
+                Text(
+                  '+5 aura on first post today',
+                  style: TextStyle(
+                    fontSize: 12.5,
+                    fontWeight: FontWeight.w600,
+                    color: isDark ? Colors.white70 : Colors.black87,
+                  ),
+                ),
                 const Spacer(),
-                // Post button — gradient pill
                 _PostButton(
                   isSaving: _isSaving,
                   enabled: hasContent || !_isSaving,
@@ -396,41 +532,43 @@ class _ToolBtn extends StatelessWidget {
   final IconData icon;
   final String label;
   final Color color;
-  final bool isDark;
   final VoidCallback onTap;
 
   const _ToolBtn({
     required this.icon,
     required this.label,
     required this.color,
-    required this.isDark,
     required this.onTap,
   });
 
   @override
   Widget build(BuildContext context) {
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        borderRadius: BorderRadius.circular(10),
-        onTap: onTap,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(icon, color: color, size: 19),
-              const SizedBox(width: 5),
-              Text(
-                label,
-                style: TextStyle(
-                  color: color,
-                  fontWeight: FontWeight.w600,
-                  fontSize: 13.5,
-                ),
-              ),
-            ],
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+        decoration: BoxDecoration(
+          color: color.withOpacity(0.12),
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(
+            color: color.withOpacity(0.3),
+            width: 1,
           ),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, color: color, size: 16),
+            const SizedBox(width: 6),
+            Text(
+              label,
+              style: TextStyle(
+                color: color,
+                fontWeight: FontWeight.bold,
+                fontSize: 13,
+              ),
+            ),
+          ],
         ),
       ),
     );
@@ -743,6 +881,134 @@ Widget _buildEmojiImage(String emoji, {double size = 20}) {
       style: TextStyle(
         fontSize: size,
         fontFamilyFallback: const ['Apple Color Emoji', 'Segoe UI Emoji', 'Noto Color Emoji', 'Android Emoji'],
+      ),
+    );
+  }
+}
+
+// ─── Plan dialog ───────────────────────────────────────────────────────────────
+
+class _PlanDialog extends StatefulWidget {
+  final Function(String title, String time, String location) onAttach;
+  const _PlanDialog({required this.onAttach});
+  @override
+  State<_PlanDialog> createState() => _PlanDialogState();
+}
+
+class _PlanDialogState extends State<_PlanDialog> {
+  final _titleCtrl = TextEditingController();
+  final _timeCtrl = TextEditingController();
+  final _whereCtrl = TextEditingController();
+
+  @override
+  void dispose() {
+    _titleCtrl.dispose();
+    _timeCtrl.dispose();
+    _whereCtrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    
+    return Dialog(
+      backgroundColor: Colors.transparent,
+      insetPadding: const EdgeInsets.symmetric(horizontal: 24),
+      child: Container(
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(
+          color: isDark ? const Color(0xFF1A1D2D) : Colors.white,
+          borderRadius: BorderRadius.circular(24),
+          border: Border.all(color: isDark ? Colors.white12 : Colors.black12),
+          boxShadow: [
+            BoxShadow(color: Colors.black.withOpacity(0.3), blurRadius: 20, offset: const Offset(0, 10)),
+          ]
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Make a plan', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: isDark ? Colors.white : Colors.black)),
+            const SizedBox(height: 16),
+            TextField(
+              controller: _titleCtrl,
+              decoration: InputDecoration(
+                hintText: 'e.g. Rooftop sunset hang',
+                hintStyle: TextStyle(color: isDark ? Colors.white38 : Colors.black38, fontSize: 14),
+                filled: true,
+                fillColor: isDark ? Colors.white.withOpacity(0.05) : Colors.black.withOpacity(0.05),
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+                contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+              ),
+              style: TextStyle(color: isDark ? Colors.white : Colors.black, fontSize: 14),
+            ),
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                Expanded(
+                  flex: 3,
+                  child: TextField(
+                    controller: _timeCtrl,
+                    decoration: InputDecoration(
+                      hintText: 'Fri 7:00 PM',
+                      hintStyle: TextStyle(color: isDark ? Colors.white38 : Colors.black38, fontSize: 14),
+                      filled: true,
+                      fillColor: isDark ? Colors.white.withOpacity(0.05) : Colors.black.withOpacity(0.05),
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                    ),
+                    style: TextStyle(color: isDark ? Colors.white : Colors.black, fontSize: 14),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  flex: 4,
+                  child: TextField(
+                    controller: _whereCtrl,
+                    decoration: InputDecoration(
+                      hintText: 'Where',
+                      hintStyle: TextStyle(color: isDark ? Colors.white38 : Colors.black38, fontSize: 14),
+                      filled: true,
+                      fillColor: isDark ? Colors.white.withOpacity(0.05) : Colors.black.withOpacity(0.05),
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                    ),
+                    style: TextStyle(color: isDark ? Colors.white : Colors.black, fontSize: 14),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 20),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: Text('Cancel', style: TextStyle(color: isDark ? Colors.white70 : Colors.black87)),
+                ),
+                const SizedBox(width: 8),
+                ElevatedButton(
+                  onPressed: () {
+                    final t = _titleCtrl.text.trim();
+                    if (t.isNotEmpty) {
+                      widget.onAttach(t, _timeCtrl.text.trim(), _whereCtrl.text.trim());
+                      Navigator.pop(context);
+                    }
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF6B5A96),
+                    foregroundColor: Colors.white,
+                    elevation: 0,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                  ),
+                  child: const Text('Attach', style: TextStyle(fontWeight: FontWeight.bold)),
+                ),
+              ],
+            ),
+          ],
+        ),
       ),
     );
   }

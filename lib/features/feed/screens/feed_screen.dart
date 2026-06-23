@@ -57,20 +57,16 @@ class _FeedScreenState extends ConsumerState<FeedScreen> {
                 SliverToBoxAdapter(
                   child: Padding(
                     padding: const EdgeInsets.fromLTRB(16, 10, 16, 6),
-                    child: SingleChildScrollView(
-                      scrollDirection: Axis.horizontal,
-                      physics: const BouncingScrollPhysics(),
-                      child: Row(
-                        children: [
-                          _TabChip(label: 'All',         isSelected: activeFilter == 'all',         onTap: () => ref.read(feedFilterProvider.notifier).state = 'all'),
-                          const SizedBox(width: 6),
-                          _TabChip(label: 'Following',   isSelected: activeFilter == 'following',   onTap: () => ref.read(feedFilterProvider.notifier).state = 'following'),
-                          const SizedBox(width: 6),
-                          _TabChip(label: 'Trending',    isSelected: activeFilter == 'trending',    onTap: () => ref.read(feedFilterProvider.notifier).state = 'trending'),
-                          const SizedBox(width: 6),
-                          _TabChip(label: 'Communities', isSelected: activeFilter == 'communities', onTap: () => ref.read(feedFilterProvider.notifier).state = 'communities'),
-                        ],
-                      ),
+                    child: Row(
+                      children: [
+                        Expanded(child: _TabChip(label: 'All',         isSelected: activeFilter == 'all',         onTap: () => ref.read(feedFilterProvider.notifier).state = 'all')),
+                        const SizedBox(width: 6),
+                        Expanded(child: _TabChip(label: 'Following',   isSelected: activeFilter == 'following',   onTap: () => ref.read(feedFilterProvider.notifier).state = 'following')),
+                        const SizedBox(width: 6),
+                        Expanded(child: _TabChip(label: 'Trending',    isSelected: activeFilter == 'trending',    onTap: () => ref.read(feedFilterProvider.notifier).state = 'trending')),
+                        const SizedBox(width: 6),
+                        Expanded(child: _TabChip(label: 'Communities', isSelected: activeFilter == 'communities', onTap: () => ref.read(feedFilterProvider.notifier).state = 'communities')),
+                      ],
                     ),
                   ),
                 ),
@@ -618,7 +614,8 @@ class _TabChip extends StatelessWidget {
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 220),
         curve: Curves.easeOutCubic,
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        alignment: Alignment.center,
+        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 6),
         decoration: BoxDecoration(
           gradient: isSelected ? AppTheme.primaryGradient : null,
           color: isSelected
@@ -635,12 +632,15 @@ class _TabChip extends StatelessWidget {
               ? [BoxShadow(color: AppTheme.primaryBlue.withOpacity(0.3), blurRadius: 8, offset: const Offset(0, 2))]
               : [],
         ),
-        child: Text(
-          label,
-          style: TextStyle(
-            fontSize: 12,
-            fontWeight: FontWeight.w700,
-            color: isSelected ? Colors.white : (isDark ? Colors.white60 : AppTheme.textSecondary),
+        child: FittedBox(
+          fit: BoxFit.scaleDown,
+          child: Text(
+            label,
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w700,
+              color: isSelected ? Colors.white : (isDark ? Colors.white60 : AppTheme.textSecondary),
+            ),
           ),
         ),
       ),
