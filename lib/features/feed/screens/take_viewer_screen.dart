@@ -2,7 +2,7 @@ import '../../../core/utils/web_stub.dart' if (dart.library.html) 'package:web/w
 import '../utils/ui_web_shim.dart' as ui_web;
 import 'dart:ui' as ui;
 import 'dart:async';
-import 'dart:js_interop';
+import '../../../core/utils/js_interop_stub.dart' if (dart.library.js_interop) 'dart:js_interop';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
