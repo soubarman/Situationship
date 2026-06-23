@@ -1,9 +1,14 @@
 // Empty implementations of web types to satisfy the compiler on native platforms.
+// On web, these are replaced by package:web/web.dart via conditional imports.
 
 class Event {}
 
 class BlobEvent extends Event {
-  dynamic get data => null;
+  dynamic get data => _Blob();
+}
+
+class _Blob {
+  int get size => 0;
 }
 
 class FileReader {
@@ -21,10 +26,20 @@ class HTMLVideoElement {
   set loop(bool value) {}
   void setAttribute(String name, String value) {}
   void pause() {}
+  void play() {}
   void removeAttribute(String name) {}
   void load() {}
-  dynamic get onPlaying => null;
+  dynamic get onPlaying => _EventStream();
   dynamic get style => _Style();
+  int get videoWidth => 0;
+  int get videoHeight => 0;
+  double get duration => 0.0;
+  double currentTime = 0.0;
+  void addEventListener(String type, dynamic listener) {}
+}
+
+class _EventStream {
+  Future<dynamic> get first => Future.value(null);
 }
 
 class _Style {
@@ -56,19 +71,30 @@ class BlobPropertyBag {
 }
 
 class Blob {
+  int get size => 0;
   Blob(dynamic parts, [dynamic options]) {}
 }
 
 class HTMLCanvasElement {
-  set width(dynamic value) {}
-  set height(dynamic value) {}
+  int width  = 0;
+  int height = 0;
   dynamic get style => _Style();
-  String toDataUrl(String type, double quality) => '';
+  String toDataUrl(String type, [double quality = 0.92]) => '';
   dynamic captureStream([int? frameRate]) => null;
+  dynamic getContext(String contextId) => _CanvasRenderingContext2D();
 }
 
+class _CanvasRenderingContext2D {
+  void translate(num x, num y) {}
+  void scale(num x, num y) {}
+  void drawImage(dynamic image, num dx, num dy) {}
+}
+
+// Alias so cast syntax works: `as CanvasRenderingContext2D`
+typedef CanvasRenderingContext2D = _CanvasRenderingContext2D;
+
 class DOMException implements Exception {
-  final String name = '';
+  final String name    = '';
   final String message = '';
 }
 

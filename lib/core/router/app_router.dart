@@ -5,6 +5,7 @@ import '../../features/auth/screens/splash_screen.dart';
 import '../../features/auth/screens/login_screen.dart';
 import '../../features/auth/screens/signup_screen.dart';
 import '../../features/auth/screens/complete_profile_screen.dart';
+import '../../features/auth/screens/permissions_screen.dart';
 import '../../features/shell/main_shell.dart';
 import '../../features/feed/screens/feed_screen.dart';
 import '../../features/feed/screens/search_screen.dart';
@@ -25,6 +26,7 @@ import '../../features/feed/screens/take_viewer_screen.dart';
 import '../../features/spotlight/screens/spotlight_screen.dart';
 import '../providers/firebase_auth_provider.dart';
 import '../providers/app_state_provider.dart';
+import '../providers/shared_prefs_provider.dart';
 
 final appRouterProvider = Provider<GoRouter>((ref) {
   final router = GoRouter(
@@ -60,11 +62,25 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           (user.bio?.isEmpty ?? true) || 
           user.avatarUrl == null;
 
-      // Logged in & on auth / splash screens → send to feed/complete-profile.
+      // 5. ONBOARDING PERMISSIONS GUARD
+      final prefs = ref.read(sharedPreferencesProvider);
+      final hasRequestedPermissions = prefs.getBool('permissionsRequested') ?? false;
+      final isPermissionsScreen = state.matchedLocation == '/permissions';
+
+      if (!hasRequestedPermissions && !isProfileIncomplete) {
+        if (!isPermissionsScreen) {
+          return '/permissions';
+        }
+        return null;
+      }
+
+      // Logged in & on auth / splash screens → send to feed/complete-profile/permissions.
       if (state.matchedLocation == '/login' ||
           state.matchedLocation == '/login/signup' ||
           state.matchedLocation == '/splash') {
-        return isProfileIncomplete ? '/complete-profile' : '/feed';
+        if (isProfileIncomplete) return '/complete-profile';
+        if (!hasRequestedPermissions) return '/permissions';
+        return '/feed';
       }
 
       // If logged in but profile is still incomplete, force them back to onboarding.
@@ -96,6 +112,11 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         path: '/complete-profile',
         name: 'complete-profile',
         builder: (context, state) => const CompleteProfileScreen(),
+      ),
+      GoRoute(
+        path: '/permissions',
+        name: 'permissions',
+        builder: (context, state) => const PermissionsScreen(),
       ),
       GoRoute(
         path: '/search',

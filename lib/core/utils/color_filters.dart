@@ -203,6 +203,20 @@ class AppColorFilters {
   /// Returns the color matrix for a given filter name.
   static List<double> get(String name) => _matrices[name] ?? _matrices['Normal']!;
   
+  /// Returns a CSS filter string (using an SVG data URI) equivalent to the color matrix.
+  static String getCssFilter(String name) {
+    if (name == 'Normal') return 'none';
+    final m = get(name);
+    final svg = '<svg xmlns="http://www.w3.org/2000/svg"><filter id="f"><feColorMatrix type="matrix" values="'
+      '${m[0]} ${m[1]} ${m[2]} ${m[3]} ${m[4]/255} '
+      '${m[5]} ${m[6]} ${m[7]} ${m[8]} ${m[9]/255} '
+      '${m[10]} ${m[11]} ${m[12]} ${m[13]} ${m[14]/255} '
+      '${m[15]} ${m[16]} ${m[17]} ${m[18]} ${m[19]/255}'
+      '"/></filter></svg>';
+    final encoded = Uri.encodeComponent(svg);
+    return 'url("data:image/svg+xml;utf8,$encoded#f")';
+  }
+
   /// Returns a list of all available filter names.
   static List<String> get names => _matrices.keys.toList();
 

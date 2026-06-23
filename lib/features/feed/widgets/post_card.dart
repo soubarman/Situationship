@@ -358,53 +358,47 @@ class _PostCardState extends ConsumerState<PostCard>
         alignment: Alignment.center,
         children: [
           Container(
-            margin: const EdgeInsets.symmetric(horizontal: 10),
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(20),
-              child: SizedBox(
-                width: double.infinity,
-                child: AspectRatio(
-                  aspectRatio: 1,
-                  child: widget.post.imageUrl != null
-                      ? GestureDetector(
-                          onTap: () {
-                            Navigator.of(context).push(
-                              MaterialPageRoute(
-                                builder: (context) => FullScreenImageViewer(
-                                  imageUrl: widget.post.imageUrl!,
-                                  heroTag: '${widget.post.id}_image',
+            width: double.infinity,
+            margin: const EdgeInsets.symmetric(vertical: 4),
+            child: widget.post.imageUrl != null
+                ? GestureDetector(
+                    onTap: () {
+                      Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (context) => FullScreenImageViewer(
+                            imageUrl: widget.post.imageUrl!,
+                            heroTag: '${widget.post.id}_image',
+                          ),
+                        ),
+                      );
+                    },
+                    child: Hero(
+                      tag: '${widget.post.id}_image',
+                      child: ConstrainedBox(
+                        constraints: BoxConstraints(
+                          maxHeight: MediaQuery.of(context).size.height * 0.75,
+                        ),
+                        child: CachedNetworkImage(
+                          imageUrl: widget.post.imageUrl!,
+                          fit: BoxFit.contain,
+                          memCacheWidth: 800,
+                          progressIndicatorBuilder: (context, url, progress) {
+                            return SizedBox(
+                              height: 300,
+                              child: Center(
+                                child: CircularProgressIndicator(
+                                  value: progress.progress,
+                                  strokeWidth: 2,
+                                  color: AppTheme.primaryBlue,
                                 ),
                               ),
                             );
                           },
-                          child: Hero(
-                            tag: '${widget.post.id}_image',
-                            child: CachedNetworkImage(
-                              imageUrl: widget.post.imageUrl!,
-                              fit: BoxFit.cover,
-                              memCacheWidth: 600, // Reasonable max width for feed images
-                              progressIndicatorBuilder: (context, url, progress) {
-                                return Container(
-                                  color: Theme.of(context).colorScheme.surfaceContainerHighest,
-                                  child: Center(
-                                    child: CircularProgressIndicator(
-                                      value: progress.progress,
-                                      strokeWidth: 2,
-                                      color: AppTheme.primaryBlue,
-                                    ),
-                                  ),
-                                );
-                              },
-                            ),
-                          ),
-                        )
-                      : Container(
-                          color: Theme.of(context).colorScheme.surfaceContainerHighest,
-                          child: const Center(child: Icon(Icons.image_rounded, size: 48)),
                         ),
-                ),
-              ),
-            ),
+                      ),
+                    ),
+                  )
+                : const SizedBox.shrink(),
           ),
           if (widget.post.musicTrack != null)
             Positioned(

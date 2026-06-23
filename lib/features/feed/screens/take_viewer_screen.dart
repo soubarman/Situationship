@@ -1,6 +1,9 @@
 import '../../../core/utils/web_stub.dart' if (dart.library.html) 'package:web/web.dart' as web;
-import '../../../core/utils/js_interop_stub.dart' if (dart.library.html) 'dart:js_interop';
 import '../utils/ui_web_shim.dart' as ui_web;
+import 'dart:ui' as ui;
+import 'dart:async';
+import 'dart:js_interop';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -9,8 +12,10 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:video_player/video_player.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/providers/app_state_provider.dart';
+import '../../../core/utils/color_filters.dart';
 
 final _db = FirebaseFirestore.instanceFor(
   app: Firebase.app(),
@@ -43,16 +48,33 @@ class _TakeViewerScreenState extends ConsumerState<TakeViewerScreen>
   bool _isMuted = true;
   String _activeTab = 'For you';
   final _tabs = ['For you', 'Following', 'Nearby'];
-  final Map<String, web.HTMLVideoElement> _videoElements = {};
+
+  // Web: keyed by URL
+  final Map<String, web.HTMLVideoElement> _webVideoElements = {};
+  // Native: keyed by URL
+  final Map<String, VideoPlayerController> _nativeVideoControllers = {};
+  
+  Timer? _countdownTimer;
 
   @override
   void initState() {
     super.initState();
+    _countdownTimer = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (mounted) setState(() {});
+    });
     _progressCtrl = AnimationController(
       vsync: this,
       duration: const Duration(seconds: 8),
     )..addStatusListener((s) {
-        if (s == AnimationStatus.completed) _next();
+        if (s == AnimationStatus.completed) {
+          if (_takes.isEmpty) return;
+          final isVideo = _takes[_currentIndex]['videoUrl'] != null;
+          if (isVideo) {
+            _startTimer();
+          } else {
+            _next();
+          }
+        }
       });
     WidgetsBinding.instance.addPostFrameCallback((_) => _loadTakes());
   }
@@ -78,7 +100,7 @@ class _TakeViewerScreenState extends ConsumerState<TakeViewerScreen>
       setState(() => _currentIndex++);
       _startTimer();
     } else {
-      if (mounted) context.pop();
+      _startTimer();
     }
   }
 
@@ -91,17 +113,23 @@ class _TakeViewerScreenState extends ConsumerState<TakeViewerScreen>
 
   @override
   void dispose() {
+    _countdownTimer?.cancel();
     _progressCtrl.dispose();
-    for (final v in _videoElements.values) {
+    // Dispose web elements
+    for (final v in _webVideoElements.values) {
       v.pause();
       v.removeAttribute('src');
       v.load();
     }
+    // Dispose native video controllers
+    for (final ctrl in _nativeVideoControllers.values) {
+      ctrl.dispose();
+    }
     super.dispose();
   }
 
-  void _registerVideo(String url, String viewId) {
-    if (!_videoElements.containsKey(url)) {
+  void _registerWebVideo(String url, String viewId, {bool mirrored = false, double trimStart = 0.0, double trimEnd = 0.0, String filter = 'Normal'}) {
+    if (!_webVideoElements.containsKey(url)) {
       final video = web.HTMLVideoElement()
         ..src = url
         ..autoplay = true
@@ -111,16 +139,35 @@ class _TakeViewerScreenState extends ConsumerState<TakeViewerScreen>
         ..style.width = '100%'
         ..style.height = '100%'
         ..style.objectFit = 'cover'
-        ..style.transform = 'scaleX(-1)'; // mirror like camera
+        ..style.transform = mirrored ? 'scaleX(-1)' : 'none'
+        ..style.filter = AppColorFilters.getCssFilter(filter);
+
+      video.addEventListener('timeupdate', ((web.Event _) {
+        if (trimEnd > 0) {
+          if (video.currentTime >= trimEnd) {
+            video.currentTime = trimStart;
+            video.play();
+          }
+        } else if (trimStart > 0 && video.currentTime < trimStart - 0.1) {
+          video.currentTime = trimStart;
+        }
+      }).toJS);
+
+      // Explicitly call play() — browser autoplay policy may block autoplay attr
+      video.play();
 
       // ignore: undefined_prefixed_name
       ui_web.platformViewRegistry.registerViewFactory(
         viewId,
         (int viewId) => video,
       );
-      _videoElements[url] = video;
+      _webVideoElements[url] = video;
     } else {
-      _videoElements[url]!.muted = _isMuted;
+      final video = _webVideoElements[url]!;
+      video.muted = _isMuted;
+      video.style.filter = AppColorFilters.getCssFilter(filter);
+      // Ensure it's playing (e.g. after tab switch)
+      video.play();
     }
   }
 
@@ -620,9 +667,182 @@ class _TakeViewerScreenState extends ConsumerState<TakeViewerScreen>
     final createdAt = take['createdAt'] != null
         ? DateTime.fromMillisecondsSinceEpoch(take['createdAt'] as int)
         : DateTime.now();
+    
+    // Fading Timer Logic
+    final expiresAt = createdAt.add(const Duration(hours: 24));
+    final remaining = expiresAt.difference(DateTime.now());
+    final isFading = remaining.inHours < 2;
+    
+    String remainingStr;
+    if (remaining.isNegative) {
+      remainingStr = '0m 0s';
+    } else if (remaining.inHours > 0) {
+      final mins = remaining.inMinutes % 60;
+      remainingStr = '${remaining.inHours}h ${mins}m';
+    } else {
+      final secs = remaining.inSeconds % 60;
+      remainingStr = '${remaining.inMinutes}m ${secs}s';
+    }
+    
+    final progressVal = remaining.inMilliseconds / const Duration(hours: 24).inMilliseconds;
+
     final likes = List<String>.from(take['likes'] ?? []);
     final isLiked = currentUid != null && likes.contains(currentUid);
     final isOwner = take['userId'] == currentUid;
+
+    final cropAspectStr = take['cropAspect'] as String? ?? 'Original';
+    final cropZoom = (take['cropZoom'] as num?)?.toDouble() ?? 1.0;
+    final cropX = (take['cropX'] as num?)?.toDouble() ?? 0.0;
+    final cropY = (take['cropY'] as num?)?.toDouble() ?? 0.0;
+
+    double? cropRatioValue;
+    switch (cropAspectStr) {
+      case '1:1': cropRatioValue = 1.0; break;
+      case '4:5': cropRatioValue = 4.0 / 5.0; break;
+      case '9:16': cropRatioValue = 9.0 / 16.0; break;
+      case '16:9': cropRatioValue = 16.0 / 9.0; break;
+    }
+
+    Widget mediaContent;
+    if (take['videoUrl'] != null) {
+      Widget videoPlayer;
+      if (kIsWeb) {
+        final vUrl     = take['videoUrl'] as String;
+        final mirrored = take['mirrored'] as bool? ?? false;
+        final tStart   = (take['trimStart'] as num?)?.toDouble() ?? 0.0;
+        final tEnd     = (take['trimEnd'] as num?)?.toDouble() ?? 0.0;
+        final filter   = take['filter'] as String? ?? 'Normal';
+        final viewId   = 'video-view-$vUrl';
+        _registerWebVideo(vUrl, viewId, mirrored: mirrored, trimStart: tStart, trimEnd: tEnd, filter: filter);
+        videoPlayer = HtmlElementView(viewType: viewId);
+      } else {
+        videoPlayer = _NativeVideoPlayer(
+          url:              take['videoUrl'] as String,
+          isMuted:          _isMuted,
+          mirrored:         take['mirrored'] as bool? ?? false,
+          trimStart:        (take['trimStart'] as num?)?.toDouble() ?? 0.0,
+          trimEnd:          (take['trimEnd'] as num?)?.toDouble() ?? 0.0,
+          controllerCache:  _nativeVideoControllers,
+        );
+      }
+      
+      if (cropZoom != 1.0 || cropX != 0.0 || cropY != 0.0) {
+        mediaContent = ClipRect(
+          child: FractionalTranslation(
+            translation: Offset(cropX, cropY),
+            child: Transform.scale(
+              scale: cropZoom,
+              child: videoPlayer,
+            ),
+          ),
+        );
+      } else {
+        mediaContent = videoPlayer;
+      }
+    } else if (imageUrl != null) {
+      mediaContent = CachedNetworkImage(
+        imageUrl: imageUrl,
+        fit: BoxFit.cover,
+        placeholder: (_, __) => const ColoredBox(
+          color: Colors.black,
+          child: Center(child: CircularProgressIndicator(color: Colors.white38)),
+        ),
+        errorWidget: (_, __, ___) => const ColoredBox(
+          color: Colors.black87,
+          child: Center(
+            child: Icon(Icons.broken_image_rounded, color: Colors.white38, size: 80),
+          ),
+        ),
+      );
+    } else {
+      mediaContent = Container(
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            colors: [AppTheme.primaryBlue, AppTheme.accentPurple],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          ),
+        ),
+        child: const Center(child: Text('✨', style: TextStyle(fontSize: 80))),
+      );
+    }
+
+    final filter = take['filter'] as String? ?? 'Normal';
+    if (filter != 'Normal') {
+      mediaContent = ColorFiltered(
+        colorFilter: ColorFilter.matrix(AppColorFilters.get(filter)),
+        child: mediaContent,
+      );
+    }
+
+    Widget mediaAndOverlays = Stack(
+      fit: StackFit.expand,
+      children: [
+        mediaContent,
+        if (take['overlays'] != null)
+          ...((take['overlays'] as Map<String, dynamic>).values.map((o) {
+            final isText = o['isText'] == true;
+            final scale = (o['scale'] as num?)?.toDouble() ?? 1.0;
+            final rotation = (o['rotation'] as num?)?.toDouble() ?? 0.0;
+            final fontFamily = o['fontFamily'] as String? ?? 'Inter';
+            final colorValue = o['color'] as int?;
+            final color = colorValue != null ? Color(colorValue) : Colors.white;
+            final hasBackground = o['hasBackground'] == true;
+
+            Widget child = isText
+                ? Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    decoration: hasBackground
+                        ? BoxDecoration(
+                            color: color == Colors.white || color == Colors.transparent 
+                                ? Colors.black87 
+                                : Colors.white,
+                            borderRadius: BorderRadius.circular(12),
+                          )
+                        : null,
+                    child: Text(
+                      o['content'] as String,
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        fontFamily: fontFamily,
+                        fontSize: 32,
+                        fontWeight: FontWeight.bold,
+                        color: hasBackground && color == Colors.white ? Colors.black : color,
+                        shadows: hasBackground ? null : const [
+                          Shadow(color: Colors.black54, blurRadius: 8, offset: Offset(0, 2))
+                        ],
+                        decoration: TextDecoration.none,
+                      ),
+                    ),
+                  )
+                : Text(
+                    o['content'] as String,
+                    style: const TextStyle(fontSize: 48, decoration: TextDecoration.none),
+                  );
+
+            return Positioned(
+              left: (o['dx'] as num).toDouble(),
+              top: (o['dy'] as num).toDouble(),
+              child: Transform.scale(
+                scale: scale,
+                child: Transform.rotate(
+                  angle: rotation,
+                  child: child,
+                ),
+              ),
+            );
+          })),
+      ],
+    );
+
+    if (cropRatioValue != null) {
+      mediaAndOverlays = Center(
+        child: AspectRatio(
+          aspectRatio: cropRatioValue,
+          child: ClipRect(child: mediaAndOverlays),
+        ),
+      );
+    }
 
     return Scaffold(
       backgroundColor: Colors.black,
@@ -640,99 +860,7 @@ class _TakeViewerScreenState extends ConsumerState<TakeViewerScreen>
         child: Stack(
           fit: StackFit.expand,
           children: [
-            // ── Full screen image / video ──────────────────────────────────────────
-            if (take['videoUrl'] != null) ...[
-              Builder(builder: (context) {
-                final vUrl = take['videoUrl'] as String;
-                final viewId = 'video-view-$vUrl';
-                _registerVideo(vUrl, viewId);
-                return HtmlElementView(viewType: viewId);
-              })
-            ] else if (imageUrl != null) ...[
-              CachedNetworkImage(
-                imageUrl: imageUrl,
-                fit: BoxFit.cover,
-                placeholder: (_, __) => const ColoredBox(
-                  color: Colors.black,
-                  child: Center(child: CircularProgressIndicator(color: Colors.white38)),
-                ),
-                errorWidget: (_, __, ___) => const ColoredBox(
-                  color: Colors.black87,
-                  child: Center(
-                    child: Icon(Icons.broken_image_rounded,
-                        color: Colors.white38, size: 80),
-                  ),
-                ),
-              )
-            ] else ...[
-              Container(
-                decoration: const BoxDecoration(
-                  gradient: LinearGradient(
-                    colors: [AppTheme.primaryBlue, AppTheme.accentPurple],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                  ),
-                ),
-                child: const Center(child: Text('✨', style: TextStyle(fontSize: 80))),
-              ),
-            ],
-
-            // ── Render Overlays ────────────────────────────────────────────────
-            if (take['overlays'] != null)
-              ...((take['overlays'] as Map<String, dynamic>).values.map((o) {
-                final isText = o['isText'] == true;
-                final scale = (o['scale'] as num?)?.toDouble() ?? 1.0;
-                final rotation = (o['rotation'] as num?)?.toDouble() ?? 0.0;
-                final fontFamily = o['fontFamily'] as String? ?? 'Inter';
-                final colorValue = o['color'] as int?;
-                final color = colorValue != null ? Color(colorValue) : Colors.white;
-                final hasBackground = o['hasBackground'] == true;
-
-                Widget child = isText
-                    ? Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                        decoration: hasBackground
-                            ? BoxDecoration(
-                                color: color == Colors.white || color == Colors.transparent 
-                                    ? Colors.black87 
-                                    : Colors.white,
-                                borderRadius: BorderRadius.circular(12),
-                              )
-                            : null,
-                        child: Text(
-                          o['content'] as String,
-                          textAlign: TextAlign.center,
-                          style: TextStyle(
-                            fontFamily: fontFamily,
-                            fontSize: 32,
-                            fontWeight: FontWeight.bold,
-                            color: hasBackground && color == Colors.white
-                                ? Colors.black
-                                : color,
-                            shadows: hasBackground ? null : const [
-                              Shadow(color: Colors.black54, blurRadius: 8, offset: Offset(0, 2))
-                            ],
-                            decoration: TextDecoration.none,
-                          ),
-                        ),
-                      )
-                    : Text(
-                        o['content'] as String,
-                        style: const TextStyle(fontSize: 48, decoration: TextDecoration.none),
-                      );
-
-                return Positioned(
-                  left: (o['dx'] as num).toDouble(),
-                  top: (o['dy'] as num).toDouble(),
-                  child: Transform.scale(
-                    scale: scale,
-                    child: Transform.rotate(
-                      angle: rotation,
-                      child: child,
-                    ),
-                  ),
-                );
-              })),
+            mediaAndOverlays,
 
             // ── Gradient overlays ─────────────────────────────────────────
             const Positioned(
@@ -832,8 +960,13 @@ class _TakeViewerScreenState extends ConsumerState<TakeViewerScreen>
                           GestureDetector(
                             onTap: () {
                               setState(() => _isMuted = !_isMuted);
-                              for (final v in _videoElements.values) {
+                              // Web: update all registered HTML video elements
+                              for (final v in _webVideoElements.values) {
                                 v.muted = _isMuted;
+                              }
+                              // Native: update all video player controllers
+                              for (final ctrl in _nativeVideoControllers.values) {
+                                ctrl.setVolume(_isMuted ? 0.0 : 1.0);
                               }
                             },
                             child: Container(
@@ -869,51 +1002,37 @@ class _TakeViewerScreenState extends ConsumerState<TakeViewerScreen>
                     ),
                   ),
 
-                  // Progress bars
-                  Positioned(
-                    top: 52,
-                    left: 16,
-                    right: 16,
-                    child: Row(
-                      children: List.generate(_takes.length, (i) {
-                        return Expanded(
-                          child: Padding(
-                            padding: EdgeInsets.only(left: i == 0 ? 0 : 4),
-                            child: ClipRRect(
-                              borderRadius: BorderRadius.circular(99),
-                              child: i < _currentIndex
-                                  ? const LinearProgressIndicator(
-                                      value: 1.0,
-                                      backgroundColor: Colors.white24,
-                                      valueColor:
-                                          AlwaysStoppedAnimation<Color>(Colors.white),
-                                      minHeight: 2,
-                                    )
-                                  : i == _currentIndex
-                                      ? AnimatedBuilder(
-                                          animation: _progressCtrl,
-                                          builder: (_, __) => LinearProgressIndicator(
-                                            value: _progressCtrl.value,
-                                            backgroundColor: Colors.white24,
-                                            valueColor:
-                                                const AlwaysStoppedAnimation<Color>(
-                                                    Colors.white),
-                                            minHeight: 2,
-                                          ),
-                                        )
-                                      : const LinearProgressIndicator(
-                                          value: 0.0,
-                                          backgroundColor: Colors.white24,
-                                          valueColor:
-                                              AlwaysStoppedAnimation<Color>(Colors.white),
-                                          minHeight: 2,
-                                        ),
-                            ),
+                  // Fading Pill at top (if fading)
+                  if (isFading)
+                    Positioned(
+                      top: 60,
+                      left: 0,
+                      right: 0,
+                      child: Center(
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFC33149).withOpacity(0.9),
+                            borderRadius: BorderRadius.circular(20),
                           ),
-                        );
-                      }),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Icon(Icons.timer_outlined, color: Colors.white, size: 14),
+                              const SizedBox(width: 6),
+                              Text(
+                                'Fading in $remainingStr',
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 12,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
                     ),
-                  ),
 
                   // RIGHT SIDE: Action buttons
                   Positioned(
@@ -1119,78 +1238,73 @@ class _TakeViewerScreenState extends ConsumerState<TakeViewerScreen>
                             padding: const EdgeInsets.symmetric(
                                 horizontal: 10, vertical: 5),
                             decoration: BoxDecoration(
-                              color: Colors.white.withOpacity(0.15),
+                              color: const Color(0xFF3B2117), // dark brown
                               borderRadius: BorderRadius.circular(20),
-                              border: Border.all(color: Colors.white24),
+                              border: Border.all(color: const Color(0xFFD67341)), // orange border
                             ),
                             child: Row(
                               mainAxisSize: MainAxisSize.min,
                               children: [
-                                const Icon(Icons.camera_alt_rounded,
-                                    color: Colors.white70, size: 14),
+                                const Icon(Icons.undo_rounded,
+                                    color: Colors.white, size: 12),
                                 const SizedBox(width: 4),
                                 Text(
                                   '${_takes.length} take back',
                                   style: const TextStyle(
-                                    color: Colors.white70,
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.w500,
+                                    color: Colors.white,
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.bold,
                                   ),
                                 ),
                               ],
                             ),
                           ),
                           const SizedBox(height: 12),
-                          // Sign in to record / Progress bar
-                          Container(
-                            height: 48,
-                            decoration: BoxDecoration(
-                              color: Colors.white.withOpacity(0.1),
-                              borderRadius: BorderRadius.circular(24),
-                              border: Border.all(color: Colors.white24),
-                            ),
+                          // Fading/Live Text Row
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Text(
+                                isFading ? 'Fading soon' : 'Live',
+                                style: TextStyle(
+                                  color: isFading ? const Color(0xFFFF2D55) : Colors.white70,
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                              Text(
+                                remainingStr,
+                                style: TextStyle(
+                                  color: isFading ? const Color(0xFFFF2D55) : Colors.white70,
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 4),
+                          // Progress Bar & Sign In Button
+                          SizedBox(
+                            height: 36, // height for the button to center on the line
                             child: Stack(
+                              alignment: Alignment.centerLeft,
                               children: [
-                                // Progress indicator
-                                AnimatedBuilder(
-                                  animation: _progressCtrl,
-                                  builder: (_, __) => FractionallySizedBox(
-                                    widthFactor: _progressCtrl.value,
-                                    child: Container(
-                                      decoration: BoxDecoration(
-                                        gradient: const LinearGradient(
-                                          colors: [
-                                            AppTheme.accentPurple,
-                                            AppTheme.primaryBlue,
-                                          ],
-                                        ),
-                                        borderRadius: BorderRadius.circular(24),
-                                      ),
-                                    ),
+                                // Thin line background
+                                Container(
+                                  height: 3,
+                                  width: double.infinity,
+                                  decoration: BoxDecoration(
+                                    color: Colors.white24,
+                                    borderRadius: BorderRadius.circular(2),
                                   ),
                                 ),
-                                Center(
-                                  child: GestureDetector(
-                                    onTap: () {
-                                      context.pop();
-                                      context.push('/take/create');
-                                    },
-                                    child: const Row(
-                                      mainAxisAlignment: MainAxisAlignment.center,
-                                      children: [
-                                        Icon(Icons.camera_alt_rounded,
-                                            color: Colors.white70, size: 16),
-                                        SizedBox(width: 6),
-                                        Text(
-                                          'Tap to record your take',
-                                          style: TextStyle(
-                                            color: Colors.white,
-                                            fontWeight: FontWeight.w600,
-                                            fontSize: 13,
-                                          ),
-                                        ),
-                                      ],
-                                    ),
+                                // Active line
+                                Container(
+                                  height: 3,
+                                  width: MediaQuery.of(context).size.width * progressVal.clamp(0.0, 1.0),
+                                  decoration: BoxDecoration(
+                                    color: isFading ? const Color(0xFFFF2D55) : const Color(0xFF00E5FF),
+                                    borderRadius: BorderRadius.circular(2),
                                   ),
                                 ),
                               ],
@@ -1229,6 +1343,155 @@ class _TakeViewerScreenState extends ConsumerState<TakeViewerScreen>
                     fontWeight: FontWeight.w500)),
           ],
         ],
+      ),
+    );
+  }
+}
+
+// ─── Cross-platform Native Video Player Widget ─────────────────────────────────
+// Used on Android / iOS to play video takes from a network URL.
+// On Web, HtmlElementView + HTMLVideoElement is used instead.
+class _NativeVideoPlayer extends StatefulWidget {
+  final String url;
+  final bool isMuted;
+  final bool mirrored;
+  final double trimStart;
+  final double trimEnd;
+  final Map<String, VideoPlayerController> controllerCache;
+
+  const _NativeVideoPlayer({
+    required this.url,
+    required this.isMuted,
+    required this.mirrored,
+    this.trimStart = 0.0,
+    this.trimEnd = 0.0,
+    required this.controllerCache,
+  });
+
+  @override
+  State<_NativeVideoPlayer> createState() => _NativeVideoPlayerState();
+}
+
+class _NativeVideoPlayerState extends State<_NativeVideoPlayer> {
+  VideoPlayerController? _ctrl;
+  bool _loading = true;
+  bool _hasError = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _initPlayer();
+  }
+
+  @override
+  void didUpdateWidget(_NativeVideoPlayer old) {
+    super.didUpdateWidget(old);
+    if (old.url != widget.url) {
+      _initPlayer();
+    } else if (old.isMuted != widget.isMuted && _ctrl != null) {
+      _ctrl!.setVolume(widget.isMuted ? 0.0 : 1.0);
+    }
+  }
+
+  void _onTick() {
+    if (_ctrl == null || !_ctrl!.value.isInitialized) return;
+    
+    final posMs = _ctrl!.value.position.inMilliseconds;
+    final endMs = (widget.trimEnd * 1000).toInt();
+    final startMs = (widget.trimStart * 1000).toInt();
+    
+    if (widget.trimEnd > 0) {
+      if (posMs >= endMs) {
+        _ctrl!.seekTo(Duration(milliseconds: startMs));
+        if (!_ctrl!.value.isPlaying) _ctrl!.play();
+      }
+    } else if (widget.trimStart > 0 && posMs < startMs - 100) {
+      _ctrl!.seekTo(Duration(milliseconds: startMs));
+    }
+  }
+
+  Future<void> _initPlayer() async {
+    if (mounted) setState(() { _loading = true; _hasError = false; });
+
+    // Reuse cached controller if available
+    if (widget.controllerCache.containsKey(widget.url)) {
+      final cached = widget.controllerCache[widget.url]!;
+      cached.removeListener(_onTick);
+      cached.addListener(_onTick);
+      await cached.setLooping(true);
+      await cached.setVolume(widget.isMuted ? 0.0 : 1.0);
+      
+      if (widget.trimStart > 0) {
+        final pos = cached.value.position.inMilliseconds;
+        final startMs = (widget.trimStart * 1000).toInt();
+        if (pos < startMs - 200 || (widget.trimEnd > 0 && pos > (widget.trimEnd * 1000).toInt())) {
+          await cached.seekTo(Duration(milliseconds: startMs));
+        }
+      }
+      
+      if (!cached.value.isPlaying) await cached.play();
+      if (mounted) setState(() { _ctrl = cached; _loading = false; });
+      return;
+    }
+
+    try {
+      final ctrl = VideoPlayerController.networkUrl(Uri.parse(widget.url));
+      await ctrl.initialize();
+      ctrl.addListener(_onTick);
+      await ctrl.setLooping(true);   // ← loop forever
+      await ctrl.setVolume(widget.isMuted ? 0.0 : 1.0);
+      
+      if (widget.trimStart > 0) {
+        await ctrl.seekTo(Duration(milliseconds: (widget.trimStart * 1000).toInt()));
+      }
+      
+      await ctrl.play();             // ← start immediately
+      widget.controllerCache[widget.url] = ctrl;
+      if (mounted) setState(() { _ctrl = ctrl; _loading = false; });
+    } catch (e) {
+      debugPrint('_NativeVideoPlayer error: $e');
+      if (mounted) setState(() { _loading = false; _hasError = true; });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_loading) {
+      return Container(
+        color: Colors.black,
+        child: const Center(
+          child: CircularProgressIndicator(color: Colors.white54, strokeWidth: 2),
+        ),
+      );
+    }
+    if (_hasError || _ctrl == null) {
+      return Container(
+        color: Colors.black87,
+        child: const Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.broken_image_rounded, color: Colors.white38, size: 64),
+              SizedBox(height: 12),
+              Text('Video unavailable',
+                  style: TextStyle(color: Colors.white38, fontSize: 13)),
+            ],
+          ),
+        ),
+      );
+    }
+    return FittedBox(
+      fit: BoxFit.cover,
+      child: SizedBox(
+        width:  _ctrl!.value.size.width,
+        height: _ctrl!.value.size.height,
+        child: widget.mirrored
+            ? Transform(
+                alignment: Alignment.center,
+                transform: Matrix4.identity()..scale(-1.0, 1.0),
+                child: VideoPlayer(_ctrl!),
+              )
+            : VideoPlayer(_ctrl!),
       ),
     );
   }
