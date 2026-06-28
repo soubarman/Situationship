@@ -1,4 +1,4 @@
-import 'dart:async';
+﻿import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:firebase_core/firebase_core.dart';
@@ -14,7 +14,7 @@ import '../../../core/theme/app_theme.dart';
 import '../../../core/providers/app_state_provider.dart';
 import '../../../core/models/post_model.dart';
 
-// ─── Mood data ────────────────────────────────────────────────────────────────
+// â”€â”€â”€ Mood data â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 class _MoodItem {
   final String emoji;
@@ -23,35 +23,35 @@ class _MoodItem {
 }
 
 const _moods = [
-  _MoodItem('❤️', 'Flirty'),
-  _MoodItem('😍', "Crushin'"),
-  _MoodItem('✨', "Vibin'"),
-  _MoodItem('🥺', 'Feeling cute'),
-  _MoodItem('🔥', 'In the mood'),
-  _MoodItem('💌', 'Manifesting love'),
-  _MoodItem('😎', 'Chill'),
-  _MoodItem('🌙', 'Lost in thoughts'),
-  _MoodItem('☁️', 'Daydreaming'),
-  _MoodItem('🎵', 'Vibing with music'),
-  _MoodItem('🛋️', 'Just chilling'),
-  _MoodItem('🤔', 'Confused'),
-  _MoodItem('😄', "It's complicated"),
-  _MoodItem('🦋', 'Mixed feelings'),
-  _MoodItem('💭', 'Missing someone'),
-  _MoodItem('📵', 'On read'),
-  _MoodItem('🚀', 'Excited'),
-  _MoodItem('🌍', 'Adventurous'),
-  _MoodItem('🎉', 'Party mood'),
+  _MoodItem('â¤ï¸', 'Flirty'),
+  _MoodItem('ðŸ˜', "Crushin'"),
+  _MoodItem('âœ¨', "Vibin'"),
+  _MoodItem('ðŸ¥º', 'Feeling cute'),
+  _MoodItem('ðŸ”¥', 'In the mood'),
+  _MoodItem('ðŸ’Œ', 'Manifesting love'),
+  _MoodItem('ðŸ˜Ž', 'Chill'),
+  _MoodItem('ðŸŒ™', 'Lost in thoughts'),
+  _MoodItem('â˜ï¸', 'Daydreaming'),
+  _MoodItem('ðŸŽµ', 'Vibing with music'),
+  _MoodItem('ðŸ›‹ï¸', 'Just chilling'),
+  _MoodItem('ðŸ¤”', 'Confused'),
+  _MoodItem('ðŸ˜„', "It's complicated"),
+  _MoodItem('ðŸ¦‹', 'Mixed feelings'),
+  _MoodItem('ðŸ’­', 'Missing someone'),
+  _MoodItem('ðŸ“µ', 'On read'),
+  _MoodItem('ðŸš€', 'Excited'),
+  _MoodItem('ðŸŒ', 'Adventurous'),
+  _MoodItem('ðŸŽ‰', 'Party mood'),
 ];
 
-// ─── Firestore ────────────────────────────────────────────────────────────────
+// â”€â”€â”€ Firestore â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 final _db = FirebaseFirestore.instanceFor(
   app: Firebase.app(),
   databaseId: 'default',
 );
 
-// ─── Quick Post Box ───────────────────────────────────────────────────────────
+// â”€â”€â”€ Quick Post Box â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 class QuickPostBox extends ConsumerStatefulWidget {
   final String? communityId;
@@ -94,7 +94,7 @@ class _QuickPostBoxState extends ConsumerState<QuickPostBox> {
     super.dispose();
   }
 
-  // ── Mood picker ────────────────────────────────────────────────────────────
+  // â”€â”€ Mood picker â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   Future<void> _openMoodPicker() async {
     await showModalBottomSheet(
@@ -115,7 +115,7 @@ class _QuickPostBoxState extends ConsumerState<QuickPostBox> {
     );
   }
 
-  // ── Plan dialog ────────────────────────────────────────────────────────────
+  // â”€â”€ Plan dialog â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   Future<void> _openPlanDialog() async {
     await showDialog(
@@ -133,7 +133,7 @@ class _QuickPostBoxState extends ConsumerState<QuickPostBox> {
     );
   }
 
-  // ── Take (camera) ───────────────────────────────────────────────────────────
+  // â”€â”€ Take (camera) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   void _openTake() {
     // Close the sheet first, then navigate to the camera
@@ -141,7 +141,7 @@ class _QuickPostBoxState extends ConsumerState<QuickPostBox> {
     Future.microtask(() => context.push('/take/create'));
   }
 
-  // ── Voice recorder ──────────────────────────────────────────────────────
+  // â”€â”€ Voice recorder â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   Future<void> _openVoiceRecorder() async {
     await showModalBottomSheet(
@@ -151,19 +151,16 @@ class _QuickPostBoxState extends ConsumerState<QuickPostBox> {
       backgroundColor: Colors.transparent,
       builder: (_) => _VoiceRecorderSheet(
         onRecorded: (audioPath) async {
-          // Upload the audio file to Firebase Storage and attach to the post
           final postId = DateTime.now().millisecondsSinceEpoch.toString();
           final storageRef = FirebaseStorage.instance.ref('voice_notes/$postId.m4a');
           await storageRef.putFile(File(audioPath));
-          final audioUrl = await storageRef.getDownloadURL();
-          // Append the voice note info to caption
+          await storageRef.getDownloadURL();
           if (mounted) {
             setState(() {
               final existing = _captionCtrl.text;
               _captionCtrl.text = existing.isEmpty
                   ? '🎤 Voice note attached'
-                  : '$existing
-🎤 Voice note attached';
+                  : existing + '\n🎤 Voice note attached';
             });
           }
           _snack('🎤 Voice note attached!', isSuccess: true);
@@ -172,7 +169,7 @@ class _QuickPostBoxState extends ConsumerState<QuickPostBox> {
     );
   }
 
-  // ── Image picker ────────────────────────────────────────────────────────────
+  // â”€â”€ Image picker â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   Future<void> _pickPhoto() async {
     final picked = await ImagePicker().pickImage(
@@ -183,12 +180,12 @@ class _QuickPostBoxState extends ConsumerState<QuickPostBox> {
     if (picked != null) setState(() => _imageFile = picked);
   }
 
-  // ── Post ────────────────────────────────────────────────────────────────────
+  // â”€â”€ Post â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   Future<void> _post() async {
     final text = _captionCtrl.text.trim();
     if (text.isEmpty && _imageFile == null && _selectedMoodLabel == null) {
-      _snack('Say something first 💬');
+      _snack('Say something first ðŸ’¬');
       return;
     }
     _focusNode.unfocus();
@@ -215,9 +212,9 @@ class _QuickPostBoxState extends ConsumerState<QuickPostBox> {
 
       String finalCaption = text.isEmpty ? '' : text;
       if (_planTitle != null) {
-        final planStr = '\n\n🗓️ Plan: $_planTitle'
-            '${_planTime!.isNotEmpty ? '\n⏰ Time: $_planTime' : ''}'
-            '${_planLocation!.isNotEmpty ? '\n📍 Where: $_planLocation' : ''}';
+        final planStr = '\n\nðŸ—“ï¸ Plan: $_planTitle'
+            '${_planTime!.isNotEmpty ? '\nâ° Time: $_planTime' : ''}'
+            '${_planLocation!.isNotEmpty ? '\nðŸ“ Where: $_planLocation' : ''}';
         finalCaption += planStr;
       }
 
@@ -251,7 +248,7 @@ class _QuickPostBoxState extends ConsumerState<QuickPostBox> {
           _imageFile = null;
           _isSaving = false;
         });
-        _snack('Posted! 🎉', isSuccess: true);
+        _snack('Posted! ðŸŽ‰', isSuccess: true);
       }
     } catch (e) {
       if (mounted) {
@@ -274,7 +271,7 @@ class _QuickPostBoxState extends ConsumerState<QuickPostBox> {
     ));
   }
 
-  // ── Build ───────────────────────────────────────────────────────────────────
+  // â”€â”€ Build â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   @override
   Widget build(BuildContext context) {
@@ -313,7 +310,7 @@ class _QuickPostBoxState extends ConsumerState<QuickPostBox> {
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // ── Handle and Close Button ─────────────────────────────────────
+          // â”€â”€ Handle and Close Button â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -346,7 +343,7 @@ class _QuickPostBoxState extends ConsumerState<QuickPostBox> {
             ],
           ),
 
-          // ── Text input row ──────────────────────────────────────────────
+          // â”€â”€ Text input row â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 0, 16, 0),
             child: TextField(
@@ -383,7 +380,7 @@ class _QuickPostBoxState extends ConsumerState<QuickPostBox> {
             ),
           ),
 
-          // ── Mood chip (when selected) ────────────────────────────────────
+          // â”€â”€ Mood chip (when selected) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
           if (hasMood)
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 10, 16, 0),
@@ -412,7 +409,7 @@ class _QuickPostBoxState extends ConsumerState<QuickPostBox> {
               ),
             ),
 
-          // ── Plan chip (when selected) ────────────────────────────────────
+          // â”€â”€ Plan chip (when selected) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
           if (_planTitle != null)
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 10, 16, 0),
@@ -454,7 +451,7 @@ class _QuickPostBoxState extends ConsumerState<QuickPostBox> {
               ),
             ),
 
-          // ── Image preview ────────────────────────────────────────────────
+          // â”€â”€ Image preview â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
           if (_imageFile != null)
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 10, 16, 0),
@@ -492,7 +489,7 @@ class _QuickPostBoxState extends ConsumerState<QuickPostBox> {
               ),
             ),
 
-          // ── Action bar ───────────────────────────────────────────────────
+          // â”€â”€ Action bar â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
           const SizedBox(height: 16),
           SingleChildScrollView(
             scrollDirection: Axis.horizontal,
@@ -569,7 +566,7 @@ class _QuickPostBoxState extends ConsumerState<QuickPostBox> {
   }
 }
 
-// ─── Tool button (Photo / Mood) ────────────────────────────────────────────────
+// â”€â”€â”€ Tool button (Photo / Mood) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 class _ToolBtn extends StatelessWidget {
   final IconData icon;
@@ -618,7 +615,7 @@ class _ToolBtn extends StatelessWidget {
   }
 }
 
-// ─── Post button ───────────────────────────────────────────────────────────────
+// â”€â”€â”€ Post button â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 class _PostButton extends StatefulWidget {
   final bool isSaving;
@@ -692,7 +689,7 @@ class _PostButtonState extends State<_PostButton> {
   }
 }
 
-// ─── Mood chip ─────────────────────────────────────────────────────────────────
+// â”€â”€â”€ Mood chip â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 class _MoodChip extends StatelessWidget {
   final String emoji;
@@ -744,7 +741,7 @@ class _MoodChip extends StatelessWidget {
   }
 }
 
-// ─── Mood picker sheet ─────────────────────────────────────────────────────────
+// â”€â”€â”€ Mood picker sheet â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 class _MoodPickerSheet extends StatefulWidget {
   final String? selectedLabel;
@@ -929,7 +926,7 @@ Widget _buildEmojiImage(String emoji, {double size = 20}) {
   }
 }
 
-// ─── Plan dialog ───────────────────────────────────────────────────────────────
+// â”€â”€â”€ Plan dialog â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 class _PlanDialog extends StatefulWidget {
   final Function(String title, String time, String location) onAttach;
@@ -1149,3 +1146,4 @@ class _VoiceRecorderSheetState extends State<_VoiceRecorderSheet>
     );
   }
 }
+
