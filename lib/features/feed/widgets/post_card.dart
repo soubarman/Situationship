@@ -5,6 +5,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'dart:ui';
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:video_player/video_player.dart';
+import 'dart:io';
 import '../../../core/models/post_model.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/constants/app_constants.dart';
@@ -38,6 +40,9 @@ class _PostCardState extends ConsumerState<PostCard>
   bool _isBookmarked = false;
   final GlobalKey<PopupMenuButtonState<String>> _reactKey = GlobalKey();
   OverlayEntry? _reactionOverlayEntry;
+  VideoPlayerController? _voiceCtrl;
+  bool _isVoicePlaying = false;
+  bool _isVoiceLoading = false;
 
   @override
   void initState() {
@@ -71,6 +76,7 @@ class _PostCardState extends ConsumerState<PostCard>
   void dispose() {
     _hideReactionPopup();
     _heartController.dispose();
+    _voiceCtrl?.dispose();
     super.dispose();
   }
 
@@ -173,6 +179,8 @@ class _PostCardState extends ConsumerState<PostCard>
             if (widget.post.caption.isNotEmpty &&
                 widget.post.caption != widget.post.mood)
               _buildCaption(isDark),
+            if (widget.post.voiceUrl != null)
+              _buildVoicePlayer(isDark),
             if (widget.post.imageUrl != null) _buildImage(),
             if (widget.post.imageUrl == null &&
                 widget.post.mood != null &&
@@ -185,6 +193,129 @@ class _PostCardState extends ConsumerState<PostCard>
           ],
         ),
       );
+  }
+
+  Future<void> _toggleVoicePlay() async {
+    final voiceUrl = widget.post.voiceUrl;
+    if (voiceUrl == null) return;
+
+    if (_voiceCtrl != null) {
+      if (_voiceCtrl!.value.isPlaying) {
+        await _voiceCtrl!.pause();
+        setState(() => _isVoicePlaying = false);
+      } else {
+        await _voiceCtrl!.play();
+        setState(() => _isVoicePlaying = true);
+      }
+    } else {
+      setState(() {
+        _isVoiceLoading = true;
+      });
+      try {
+        final ctrl = VideoPlayerController.networkUrl(Uri.parse(voiceUrl));
+        await ctrl.initialize();
+        ctrl.setLooping(false);
+        ctrl.addListener(() {
+          if (mounted) {
+            setState(() {
+              _isVoicePlaying = ctrl.value.isPlaying;
+            });
+            if (ctrl.value.position >= ctrl.value.duration) {
+              setState(() {
+                _isVoicePlaying = false;
+              });
+              ctrl.seekTo(Duration.zero);
+            }
+          }
+        });
+        _voiceCtrl = ctrl;
+        await _voiceCtrl!.play();
+        setState(() {
+          _isVoicePlaying = true;
+          _isVoiceLoading = false;
+        });
+      } catch (e) {
+        setState(() {
+          _isVoiceLoading = false;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to play voice note: $e')),
+        );
+      }
+    }
+  }
+
+  Widget _buildVoicePlayer(bool isDark) {
+    final currentPos = _voiceCtrl?.value.position.inMilliseconds.toDouble() ?? 0.0;
+    final totalDuration = _voiceCtrl?.value.duration.inMilliseconds.toDouble() ?? 100.0;
+    final progress = (totalDuration > 0) ? (currentPos / totalDuration).clamp(0.0, 1.0) : 0.0;
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 8),
+      child: Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: isDark ? const Color(0xFF231E3D) : const Color(0xFFF3F2F8),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: isDark ? Colors.white12 : Colors.black12,
+          ),
+        ),
+        child: Row(
+          children: [
+            GestureDetector(
+              onTap: _toggleVoicePlay,
+              child: Container(
+                width: 40,
+                height: 40,
+                decoration: const BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: Color(0xFFD66B7C),
+                ),
+                child: _isVoiceLoading
+                    ? const Padding(
+                        padding: EdgeInsets.all(10.0),
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: Colors.white,
+                        ),
+                      )
+                    : Icon(
+                        _isVoicePlaying ? Icons.pause_rounded : Icons.play_arrow_rounded,
+                        color: Colors.white,
+                      ),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Voice Note',
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.bold,
+                      color: isDark ? Colors.white70 : Colors.black87,
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(2),
+                    child: LinearProgressIndicator(
+                      value: progress,
+                      backgroundColor: isDark ? Colors.white10 : Colors.black10,
+                      valueColor: const AlwaysStoppedAnimation<Color>(Color(0xFFD66B7C)),
+                      minHeight: 4,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   Widget _buildHeader(bool isDark, String displayName, String displayAvatar) {

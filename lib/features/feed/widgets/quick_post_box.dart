@@ -1,4 +1,4 @@
-﻿import 'dart:async';
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:firebase_core/firebase_core.dart';
@@ -9,6 +9,7 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:go_router/go_router.dart';
 import 'package:record/record.dart';
 import 'package:path_provider/path_provider.dart';
+import 'package:video_player/video_player.dart';
 import 'dart:io';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/providers/app_state_provider.dart';
@@ -76,6 +77,7 @@ class _QuickPostBoxState extends ConsumerState<QuickPostBox> {
   String? _planTime;
   String? _planLocation;
   XFile? _imageFile;
+  String? _attachedVoicePath;
   bool _isSaving = false;
   bool _isFocused = false;
 
@@ -151,16 +153,9 @@ class _QuickPostBoxState extends ConsumerState<QuickPostBox> {
       backgroundColor: Colors.transparent,
       builder: (_) => _VoiceRecorderSheet(
         onRecorded: (audioPath) async {
-          final postId = DateTime.now().millisecondsSinceEpoch.toString();
-          final storageRef = FirebaseStorage.instance.ref('voice_notes/$postId.m4a');
-          await storageRef.putFile(File(audioPath));
-          await storageRef.getDownloadURL();
           if (mounted) {
             setState(() {
-              final existing = _captionCtrl.text;
-              _captionCtrl.text = existing.isEmpty
-                  ? '🎤 Voice note attached'
-                  : existing + '\n🎤 Voice note attached';
+              _attachedVoicePath = audioPath;
             });
           }
           _snack('🎤 Voice note attached!', isSuccess: true);
@@ -218,6 +213,13 @@ class _QuickPostBoxState extends ConsumerState<QuickPostBox> {
         finalCaption += planStr;
       }
 
+      String? voiceUrl;
+      if (_attachedVoicePath != null) {
+        final storageRef = FirebaseStorage.instance.ref('voice_notes/$postId.m4a');
+        await storageRef.putFile(File(_attachedVoicePath!));
+        voiceUrl = await storageRef.getDownloadURL();
+      }
+
       final post = PostModel(
         id: postId,
         userId: currentUser.id,
@@ -230,6 +232,7 @@ class _QuickPostBoxState extends ConsumerState<QuickPostBox> {
         mood: moodString,
         communityId: widget.communityId,
         communityName: widget.communityName,
+        voiceUrl: voiceUrl,
       );
 
       await _db.collection('posts').doc(postId).set(post.toMap());
@@ -246,6 +249,7 @@ class _QuickPostBoxState extends ConsumerState<QuickPostBox> {
           _planTime = null;
           _planLocation = null;
           _imageFile = null;
+          _attachedVoicePath = null;
           _isSaving = false;
         });
         _snack('Posted! ðŸŽ‰', isSuccess: true);
@@ -445,6 +449,42 @@ class _QuickPostBoxState extends ConsumerState<QuickPostBox> {
                         _planLocation = null;
                       }),
                       child: const Icon(Icons.close_rounded, size: 14, color: Color(0xFF4EAE8D)),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+
+          // ── Voice chip (when selected) ───────────────────────────────────
+          if (_attachedVoicePath != null)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 10, 16, 0),
+              child: Container(
+                padding: const EdgeInsets.fromLTRB(10, 6, 6, 6),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFD66B7C).withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: const Color(0xFFD66B7C).withOpacity(0.3)),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(Icons.mic_rounded, size: 14, color: Color(0xFFD66B7C)),
+                    const SizedBox(width: 6),
+                    const Text(
+                      'Voice Note',
+                      style: TextStyle(
+                        fontSize: 12.5,
+                        fontWeight: FontWeight.w600,
+                        color: Color(0xFFD66B7C),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    GestureDetector(
+                      onTap: () => setState(() {
+                        _attachedVoicePath = null;
+                      }),
+                      child: const Icon(Icons.close_rounded, size: 14, color: Color(0xFFD66B7C)),
                     ),
                   ],
                 ),
@@ -1073,6 +1113,8 @@ class _VoiceRecorderSheetState extends State<_VoiceRecorderSheet>
   int _seconds = 0;
   Timer? _timer;
   late AnimationController _pulseCtrl;
+  VideoPlayerController? _previewAudioCtrl;
+  bool _isPlayingPreview = false;
 
   @override
   void initState() {
@@ -1085,6 +1127,7 @@ class _VoiceRecorderSheetState extends State<_VoiceRecorderSheet>
     _recorder.dispose();
     _timer?.cancel();
     _pulseCtrl.dispose();
+    _previewAudioCtrl?.dispose();
     super.dispose();
   }
 
@@ -1104,9 +1147,42 @@ class _VoiceRecorderSheetState extends State<_VoiceRecorderSheet>
 
   Future<void> _stopRecording() async {
     _timer?.cancel();
-    await _recorder.stop();
+    final path = await _recorder.stop();
     _pulseCtrl.stop(); _pulseCtrl.reset();
-    setState(() { _isRecording = false; _hasRecording = true; });
+    setState(() { 
+      _isRecording = false; 
+      _hasRecording = true; 
+      _filePath = path;
+    });
+  }
+
+  Future<void> _togglePreviewPlay() async {
+    if (_filePath == null) return;
+    if (_isPlayingPreview) {
+      await _previewAudioCtrl?.pause();
+      setState(() => _isPlayingPreview = false);
+    } else {
+      if (_previewAudioCtrl == null) {
+        _previewAudioCtrl = VideoPlayerController.file(File(_filePath!));
+        await _previewAudioCtrl!.initialize();
+        _previewAudioCtrl!.setLooping(false);
+        _previewAudioCtrl!.addListener(() {
+          if (mounted) {
+            setState(() {
+              _isPlayingPreview = _previewAudioCtrl!.value.isPlaying;
+            });
+            if (_previewAudioCtrl!.value.position >= _previewAudioCtrl!.value.duration) {
+              setState(() {
+                _isPlayingPreview = false;
+              });
+            }
+          }
+        });
+      }
+      await _previewAudioCtrl!.seekTo(Duration.zero);
+      await _previewAudioCtrl!.play();
+      setState(() => _isPlayingPreview = true);
+    }
   }
 
   String _fmt(int s) => '${(s ~/ 60).toString().padLeft(2, '0')}:${(s % 60).toString().padLeft(2, '0')}';
@@ -1136,12 +1212,55 @@ class _VoiceRecorderSheetState extends State<_VoiceRecorderSheet>
         const SizedBox(height: 20),
         Text(_isRecording ? 'REC  ${_fmt(_seconds)}' : _hasRecording ? 'Done  ${_fmt(_seconds)} recorded' : 'Tap to start recording', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: _isRecording ? const Color(0xFFD66B7C) : (isDark ? Colors.white70 : Colors.black54))),
         const SizedBox(height: 32),
-        if (_hasRecording) Row(children: [
-          Expanded(child: OutlinedButton.icon(onPressed: () => setState(() { _hasRecording = false; _seconds = 0; _filePath = null; }), icon: const Icon(Icons.refresh_rounded), label: const Text('Re-record'), style: OutlinedButton.styleFrom(foregroundColor: isDark ? Colors.white70 : Colors.black54, side: BorderSide(color: isDark ? Colors.white24 : Colors.black12), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)), padding: const EdgeInsets.symmetric(vertical: 14)))),
-          const SizedBox(width: 12),
-          Expanded(child: ElevatedButton.icon(onPressed: () async { Navigator.pop(context); if (_filePath != null) await widget.onRecorded(_filePath!); }, icon: const Icon(Icons.attach_file_rounded), label: const Text('Attach'), style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFD66B7C), foregroundColor: Colors.white, elevation: 0, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)), padding: const EdgeInsets.symmetric(vertical: 14)))),
-        ])
-        else SizedBox(width: double.infinity, child: OutlinedButton(onPressed: () => Navigator.pop(context), style: OutlinedButton.styleFrom(foregroundColor: isDark ? Colors.white70 : Colors.black54, side: BorderSide(color: isDark ? Colors.white24 : Colors.black12), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)), padding: const EdgeInsets.symmetric(vertical: 14)), child: const Text('Cancel'))),
+        if (_hasRecording) ...[
+          GestureDetector(
+            onTap: _togglePreviewPlay,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              decoration: BoxDecoration(
+                color: const Color(0xFFD66B7C).withOpacity(0.1),
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: const Color(0xFFD66B7C).withOpacity(0.3)),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    _isPlayingPreview ? Icons.pause_rounded : Icons.play_arrow_rounded,
+                    color: const Color(0xFFD66B7C),
+                  ),
+                  const SizedBox(width: 8),
+                  const Text(
+                    'Listen to Recording',
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      color: Color(0xFFD66B7C),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 20),
+          Row(children: [
+            Expanded(child: OutlinedButton.icon(
+              onPressed: () async {
+                await _previewAudioCtrl?.dispose();
+                _previewAudioCtrl = null;
+                setState(() {
+                  _hasRecording = false;
+                  _seconds = 0;
+                  _filePath = null;
+                  _isPlayingPreview = false;
+                });
+              },
+              icon: const Icon(Icons.refresh_rounded),
+              label: const Text('Re-record'),
+              style: OutlinedButton.styleFrom(foregroundColor: isDark ? Colors.white70 : Colors.black54, side: BorderSide(color: isDark ? Colors.white24 : Colors.black12), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)), padding: const EdgeInsets.symmetric(vertical: 14)))),
+            const SizedBox(width: 12),
+            Expanded(child: ElevatedButton.icon(onPressed: () async { Navigator.pop(context); if (_filePath != null) await widget.onRecorded(_filePath!); }, icon: const Icon(Icons.attach_file_rounded), label: const Text('Attach'), style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFD66B7C), foregroundColor: Colors.white, elevation: 0, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)), padding: const EdgeInsets.symmetric(vertical: 14)))),
+          ]),
+        ] else SizedBox(width: double.infinity, child: OutlinedButton(onPressed: () => Navigator.pop(context), style: OutlinedButton.styleFrom(foregroundColor: isDark ? Colors.white70 : Colors.black54, side: BorderSide(color: isDark ? Colors.white24 : Colors.black12), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)), padding: const EdgeInsets.symmetric(vertical: 14)), child: const Text('Cancel'))),
       ]),
     );
   }

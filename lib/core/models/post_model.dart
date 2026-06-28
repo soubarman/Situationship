@@ -18,6 +18,7 @@ class PostModel {
   final Map<String, String> reactions; // userId -> emoji
   final String? communityId;
   final String? communityName;
+  final String? voiceUrl;
   
   // New Flow Fields
   final String? musicTrack;
@@ -46,6 +47,7 @@ class PostModel {
     this.reactions = const {},
     this.communityId,
     this.communityName,
+    this.voiceUrl,
     this.musicTrack,
     this.musicArtist,
     this.isPinned = false,
@@ -78,6 +80,7 @@ class PostModel {
       reactions: Map<String, String>.from(map['reactions'] ?? {}),
       communityId: map['communityId'],
       communityName: map['communityName'],
+      voiceUrl: map['voiceUrl'],
       musicTrack: map['musicTrack'],
       musicArtist: map['musicArtist'],
       isPinned: map['isPinned'] ?? false,
@@ -107,6 +110,7 @@ class PostModel {
       'reactions': reactions,
       'communityId': communityId,
       'communityName': communityName,
+      'voiceUrl': voiceUrl,
       'musicTrack': musicTrack,
       'musicArtist': musicArtist,
       'isPinned': isPinned,
@@ -135,6 +139,7 @@ class PostModel {
     Map<String, String>? reactions,
     String? communityId,
     String? communityName,
+    String? voiceUrl,
     String? musicTrack,
     String? musicArtist,
     bool? isPinned,
@@ -161,6 +166,7 @@ class PostModel {
       reactions: reactions ?? this.reactions,
       communityId: communityId ?? this.communityId,
       communityName: communityName ?? this.communityName,
+      voiceUrl: voiceUrl ?? this.voiceUrl,
       musicTrack: musicTrack ?? this.musicTrack,
       musicArtist: musicArtist ?? this.musicArtist,
       isPinned: isPinned ?? this.isPinned,

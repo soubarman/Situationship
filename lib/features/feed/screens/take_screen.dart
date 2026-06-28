@@ -1090,25 +1090,24 @@ class _TakeScreenState extends ConsumerState<TakeScreen>
         );
       }
 
-      // Live camera preview (native) — fill the screen edge-to-edge
+      // Live camera preview (native) — fill the screen edge-to-edge without extreme zoom
       return LayoutBuilder(
         builder: (context, constraints) {
-          final camAspect = _camCtrl!.value.aspectRatio; // e.g. 9/16 portrait = 0.5625
-          final screenAspect = constraints.maxWidth / constraints.maxHeight;
-          double scale;
-          if (camAspect < screenAspect) {
-            // camera is taller → scale so width fills
-            scale = screenAspect / camAspect;
-          } else {
-            // camera is wider → scale so height fills
-            scale = camAspect / screenAspect;
-          }
+          final cameraAspect = 1.0 / _camCtrl!.value.aspectRatio;
+          final containerAspect = constraints.maxWidth / constraints.maxHeight;
+          final scale = containerAspect > cameraAspect 
+              ? containerAspect / cameraAspect 
+              : cameraAspect / containerAspect;
+
           return ClipRect(
-            child: OverflowBox(
-              alignment: Alignment.center,
-              maxWidth: constraints.maxWidth * scale,
-              maxHeight: constraints.maxHeight * scale,
-              child: CameraPreview(_camCtrl!),
+            child: Transform.scale(
+              scale: scale,
+              child: Center(
+                child: AspectRatio(
+                  aspectRatio: cameraAspect,
+                  child: CameraPreview(_camCtrl!),
+                ),
+              ),
             ),
           );
         },
