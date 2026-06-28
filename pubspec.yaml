@@ -48,7 +48,7 @@ dependencies:
   geolocator_web: ^4.1.4
   video_player: 2.10.1
   record: 6.2.1
-  path_provider: ^2.1.6
+  path_provider: 2.1.5
 dev_dependencies:
   flutter_test:
     sdk: flutter
