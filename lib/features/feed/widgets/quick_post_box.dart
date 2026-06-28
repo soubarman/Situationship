@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:firebase_core/firebase_core.dart';
@@ -5,6 +6,9 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:go_router/go_router.dart';
+import 'package:record/record.dart';
+import 'package:path_provider/path_provider.dart';
 import 'dart:io';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/providers/app_state_provider.dart';
@@ -124,6 +128,45 @@ class _QuickPostBoxState extends ConsumerState<QuickPostBox> {
             _planTime = time;
             _planLocation = loc;
           });
+        },
+      ),
+    );
+  }
+
+  // ── Take (camera) ───────────────────────────────────────────────────────────
+
+  void _openTake() {
+    // Close the sheet first, then navigate to the camera
+    Navigator.of(context, rootNavigator: true).pop();
+    Future.microtask(() => context.push('/take/create'));
+  }
+
+  // ── Voice recorder ──────────────────────────────────────────────────────
+
+  Future<void> _openVoiceRecorder() async {
+    await showModalBottomSheet(
+      context: context,
+      useRootNavigator: true,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => _VoiceRecorderSheet(
+        onRecorded: (audioPath) async {
+          // Upload the audio file to Firebase Storage and attach to the post
+          final postId = DateTime.now().millisecondsSinceEpoch.toString();
+          final storageRef = FirebaseStorage.instance.ref('voice_notes/$postId.m4a');
+          await storageRef.putFile(File(audioPath));
+          final audioUrl = await storageRef.getDownloadURL();
+          // Append the voice note info to caption
+          if (mounted) {
+            setState(() {
+              final existing = _captionCtrl.text;
+              _captionCtrl.text = existing.isEmpty
+                  ? '🎤 Voice note attached'
+                  : '$existing
+🎤 Voice note attached';
+            });
+          }
+          _snack('🎤 Voice note attached!', isSuccess: true);
         },
       ),
     );
@@ -468,14 +511,14 @@ class _QuickPostBoxState extends ConsumerState<QuickPostBox> {
                   icon: Icons.mic_none,
                   label: 'Voice',
                   color: const Color(0xFFD66B7C),
-                  onTap: () => _snack('Voice notes coming soon!'),
+                  onTap: kIsWeb ? () => _snack('Voice recording not supported on web') : _openVoiceRecorder,
                 ),
                 const SizedBox(width: 8),
                 _ToolBtn(
                   icon: Icons.camera_alt_outlined,
                   label: 'Take',
                   color: const Color(0xFFE5B945),
-                  onTap: () => _snack('Take coming soon!'),
+                  onTap: _openTake,
                 ),
                 const SizedBox(width: 8),
                 _ToolBtn(
@@ -1010,6 +1053,99 @@ class _PlanDialogState extends State<_PlanDialog> {
           ],
         ),
       ),
+    );
+  }
+}
+
+// --- Voice Recorder Sheet ---
+
+class _VoiceRecorderSheet extends StatefulWidget {
+  final Future<void> Function(String path) onRecorded;
+  const _VoiceRecorderSheet({required this.onRecorded});
+
+  @override
+  State<_VoiceRecorderSheet> createState() => _VoiceRecorderSheetState();
+}
+
+class _VoiceRecorderSheetState extends State<_VoiceRecorderSheet>
+    with SingleTickerProviderStateMixin {
+  final _recorder = AudioRecorder();
+  bool _isRecording = false;
+  bool _hasRecording = false;
+  String? _filePath;
+  int _seconds = 0;
+  Timer? _timer;
+  late AnimationController _pulseCtrl;
+
+  @override
+  void initState() {
+    super.initState();
+    _pulseCtrl = AnimationController(vsync: this, duration: const Duration(milliseconds: 800));
+  }
+
+  @override
+  void dispose() {
+    _recorder.dispose();
+    _timer?.cancel();
+    _pulseCtrl.dispose();
+    super.dispose();
+  }
+
+  Future<void> _startRecording() async {
+    final hasPermission = await _recorder.hasPermission();
+    if (!hasPermission) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Microphone permission denied'), backgroundColor: Colors.red));
+      return;
+    }
+    final dir = await getTemporaryDirectory();
+    final path = '${dir.path}/voice_${DateTime.now().millisecondsSinceEpoch}.m4a';
+    await _recorder.start(const RecordConfig(encoder: AudioEncoder.aacLc, bitRate: 128000), path: path);
+    setState(() { _isRecording = true; _hasRecording = false; _seconds = 0; _filePath = path; });
+    _pulseCtrl.repeat(reverse: true);
+    _timer = Timer.periodic(const Duration(seconds: 1), (_) { if (mounted) setState(() => _seconds++); });
+  }
+
+  Future<void> _stopRecording() async {
+    _timer?.cancel();
+    await _recorder.stop();
+    _pulseCtrl.stop(); _pulseCtrl.reset();
+    setState(() { _isRecording = false; _hasRecording = true; });
+  }
+
+  String _fmt(int s) => '${(s ~/ 60).toString().padLeft(2, '0')}:${(s % 60).toString().padLeft(2, '0')}';
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    return Container(
+      padding: const EdgeInsets.fromLTRB(24, 16, 24, 40),
+      decoration: BoxDecoration(color: isDark ? const Color(0xFF1A1D2D) : Colors.white, borderRadius: const BorderRadius.vertical(top: Radius.circular(28))),
+      child: Column(mainAxisSize: MainAxisSize.min, children: [
+        Container(width: 36, height: 4, margin: const EdgeInsets.only(bottom: 20), decoration: BoxDecoration(color: isDark ? Colors.white24 : Colors.black12, borderRadius: BorderRadius.circular(2))),
+        Text('Voice Note', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: isDark ? Colors.white : Colors.black)),
+        const SizedBox(height: 32),
+        AnimatedBuilder(
+          animation: _pulseCtrl,
+          builder: (_, child) => Transform.scale(scale: _isRecording ? (1.0 + _pulseCtrl.value * 0.25) : 1.0, child: child),
+          child: GestureDetector(
+            onTap: _isRecording ? _stopRecording : _startRecording,
+            child: Container(
+              width: 88, height: 88,
+              decoration: BoxDecoration(shape: BoxShape.circle, color: _isRecording ? const Color(0xFFD66B7C) : const Color(0xFFD66B7C).withOpacity(0.15), border: Border.all(color: const Color(0xFFD66B7C), width: 2.5), boxShadow: _isRecording ? [BoxShadow(color: const Color(0xFFD66B7C).withOpacity(0.45), blurRadius: 24, spreadRadius: 4)] : []),
+              child: Icon(_isRecording ? Icons.stop_rounded : Icons.mic_rounded, size: 40, color: _isRecording ? Colors.white : const Color(0xFFD66B7C)),
+            ),
+          ),
+        ),
+        const SizedBox(height: 20),
+        Text(_isRecording ? 'REC  ${_fmt(_seconds)}' : _hasRecording ? 'Done  ${_fmt(_seconds)} recorded' : 'Tap to start recording', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: _isRecording ? const Color(0xFFD66B7C) : (isDark ? Colors.white70 : Colors.black54))),
+        const SizedBox(height: 32),
+        if (_hasRecording) Row(children: [
+          Expanded(child: OutlinedButton.icon(onPressed: () => setState(() { _hasRecording = false; _seconds = 0; _filePath = null; }), icon: const Icon(Icons.refresh_rounded), label: const Text('Re-record'), style: OutlinedButton.styleFrom(foregroundColor: isDark ? Colors.white70 : Colors.black54, side: BorderSide(color: isDark ? Colors.white24 : Colors.black12), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)), padding: const EdgeInsets.symmetric(vertical: 14)))),
+          const SizedBox(width: 12),
+          Expanded(child: ElevatedButton.icon(onPressed: () async { Navigator.pop(context); if (_filePath != null) await widget.onRecorded(_filePath!); }, icon: const Icon(Icons.attach_file_rounded), label: const Text('Attach'), style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFD66B7C), foregroundColor: Colors.white, elevation: 0, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)), padding: const EdgeInsets.symmetric(vertical: 14)))),
+        ])
+        else SizedBox(width: double.infinity, child: OutlinedButton(onPressed: () => Navigator.pop(context), style: OutlinedButton.styleFrom(foregroundColor: isDark ? Colors.white70 : Colors.black54, side: BorderSide(color: isDark ? Colors.white24 : Colors.black12), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)), padding: const EdgeInsets.symmetric(vertical: 14)), child: const Text('Cancel'))),
+      ]),
     );
   }
 }

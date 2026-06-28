@@ -1,6 +1,7 @@
 // ignore_for_file: avoid_web_libraries_in_flutter
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 import '../../../core/utils/web_stub.dart' if (dart.library.html) 'package:web/web.dart' as web;
 import '../../../core/utils/js_interop_stub.dart' if (dart.library.html) 'dart:js_interop';
 import 'dart:typed_data';
@@ -381,18 +382,17 @@ class _TakeScreenState extends ConsumerState<TakeScreen>
     _recordTimer?.cancel();
 
     if (!kIsWeb) {
-          // Native
+      // Native
       if (_camCtrl == null) { setState(() => _isRecording = false); return; }
       try {
         final xFile = await _camCtrl!.stopVideoRecording();
+        // Read bytes for upload
         final bytes = await xFile.readAsBytes();
-        // Build a looping preview player using the file path
-        final ctrl = VideoPlayerController.networkUrl(
-          Uri.file(xFile.path), // works on Android/iOS using file:// URI
-        );
+        // Build a looping preview player — use file() on native platforms
+        final ctrl = VideoPlayerController.file(File(xFile.path));
         await ctrl.initialize();
         ctrl.setLooping(true);
-        ctrl.setVolume(0.0);
+        ctrl.setVolume(1.0); // audible preview
         ctrl.play();
         ctrl.addListener(_onPreviewPlayerTick);
         if (mounted) {
@@ -1090,11 +1090,28 @@ class _TakeScreenState extends ConsumerState<TakeScreen>
         );
       }
 
-      // Live camera preview (native)
-      return Transform(
-        alignment: Alignment.center,
-        transform: Matrix4.identity(), // CameraPreview handles mirroring internally
-        child: CameraPreview(_camCtrl!),
+      // Live camera preview (native) — fill the screen edge-to-edge
+      return LayoutBuilder(
+        builder: (context, constraints) {
+          final camAspect = _camCtrl!.value.aspectRatio; // e.g. 9/16 portrait = 0.5625
+          final screenAspect = constraints.maxWidth / constraints.maxHeight;
+          double scale;
+          if (camAspect < screenAspect) {
+            // camera is taller → scale so width fills
+            scale = screenAspect / camAspect;
+          } else {
+            // camera is wider → scale so height fills
+            scale = camAspect / screenAspect;
+          }
+          return ClipRect(
+            child: OverflowBox(
+              alignment: Alignment.center,
+              maxWidth: constraints.maxWidth * scale,
+              maxHeight: constraints.maxHeight * scale,
+              child: CameraPreview(_camCtrl!),
+            ),
+          );
+        },
       );
     }
 
