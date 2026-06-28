@@ -304,7 +304,7 @@ class _PostCardState extends ConsumerState<PostCard>
                     borderRadius: BorderRadius.circular(2),
                     child: LinearProgressIndicator(
                       value: progress,
-                      backgroundColor: isDark ? Colors.white10 : Colors.black10,
+                      backgroundColor: isDark ? Colors.white10 : Colors.black12,
                       valueColor: const AlwaysStoppedAnimation<Color>(Color(0xFFD66B7C)),
                       minHeight: 4,
                     ),
