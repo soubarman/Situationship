@@ -1019,42 +1019,277 @@ class _PostCardState extends ConsumerState<PostCard>
 
   Widget _buildCaption(bool isDark) {
     final caption = widget.post.caption;
-    final isLongCaption = caption.length > 100;
-    final displayCaption = isLongCaption && !_isExpanded ? '${caption.substring(0, 100)}...' : caption;
+
+    // ── Parse plan metadata from caption lines ─────────────────────────────
+    // Strategy: scan every line. Lines that contain "Plan:", "Time:", "Where:"
+    // are treated as plan metadata. All other non-empty lines form the user caption.
+    // This approach is intentionally emoji-agnostic and newline-variant-agnostic.
+    String? planTitle, planTime, planLocation;
+    final captionLines = <String>[];
+
+    for (final rawLine in caption.split(RegExp(r'\r?\n'))) {
+      final stripped = rawLine.trim();
+      if (stripped.isEmpty) continue; // skip blank lines
+
+      final planIdx   = stripped.indexOf('Plan:');
+      final timeIdx   = stripped.indexOf('Time:');
+      final whereIdx  = stripped.indexOf('Where:');
+
+      if (planIdx != -1 && planTitle == null) {
+        planTitle = stripped.substring(planIdx + 5).trim();
+      } else if (timeIdx != -1 && planTime == null) {
+        planTime = stripped.substring(timeIdx + 5).trim();
+      } else if (whereIdx != -1 && planLocation == null) {
+        planLocation = stripped.substring(whereIdx + 6).trim();
+      } else {
+        captionLines.add(stripped);
+      }
+    }
+
+    final mainCaption = captionLines.join('\n');
+    final isLongCaption = mainCaption.length > 120;
+    final displayCaption =
+        isLongCaption && !_isExpanded ? '${mainCaption.substring(0, 120)}...' : mainCaption;
 
     return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 4, 20, 12),
-      child: GestureDetector(
-        onTap: () {
-          if (isLongCaption) setState(() => _isExpanded = !_isExpanded);
-        },
-        child: RichText(
-          text: TextSpan(
-            children: [
-              TextSpan(
-                text: displayCaption,
-                style: TextStyle(
-                  fontSize: 15,
-                  fontWeight: FontWeight.w400,
-                  color: isDark ? Colors.white.withOpacity(0.9) : Colors.black87,
-                  height: 1.4,
+      padding: const EdgeInsets.fromLTRB(18, 4, 18, 10),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // ── Regular caption text ─────────────────────────────────────────
+          if (mainCaption.isNotEmpty)
+            GestureDetector(
+              onTap: () {
+                if (isLongCaption) setState(() => _isExpanded = !_isExpanded);
+              },
+              child: RichText(
+                text: TextSpan(
+                  children: [
+                    TextSpan(
+                      text: displayCaption,
+                      style: TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w400,
+                        color: isDark ? Colors.white.withOpacity(0.9) : Colors.black87,
+                        height: 1.5,
+                      ),
+                    ),
+                    if (isLongCaption)
+                      TextSpan(
+                        text: _isExpanded ? ' See less' : ' See more',
+                        style: const TextStyle(
+                          fontSize: 14.5,
+                          color: AppTheme.primaryBlue,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                  ],
                 ),
               ),
-              if (isLongCaption)
-                TextSpan(
-                  text: _isExpanded ? ' See less' : ' See more',
-                  style: TextStyle(
-                    fontSize: 14.5,
-                    color: AppTheme.primaryBlue,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-            ],
-          ),
-        ),
+            ),
+
+          // ── Plan Card ────────────────────────────────────────────────────
+          if (planTitle != null) ...[
+            if (mainCaption.isNotEmpty) const SizedBox(height: 12),
+            _buildPlanCard(isDark, planTitle, planTime, planLocation),
+          ],
+        ],
       ),
     );
   }
+
+  Widget _buildPlanCard(
+    bool isDark,
+    String title,
+    String? time,
+    String? location,
+  ) {
+    return Container(
+      width: double.infinity,
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(20),
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: isDark
+              ? [
+                  const Color(0xFF1E2A4A),
+                  const Color(0xFF251E4A),
+                ]
+              : [
+                  const Color(0xFFEEF4FF),
+                  const Color(0xFFF3EEFF),
+                ],
+        ),
+        border: Border.all(
+          color: isDark
+              ? AppTheme.primaryBlue.withOpacity(0.25)
+              : AppTheme.primaryBlue.withOpacity(0.20),
+          width: 1.2,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: AppTheme.primaryBlue.withOpacity(isDark ? 0.12 : 0.08),
+            blurRadius: 16,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Stack(
+        children: [
+          // Subtle shimmer circle in the top-right corner
+          Positioned(
+            top: -20,
+            right: -20,
+            child: Container(
+              width: 80,
+              height: 80,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                gradient: RadialGradient(
+                  colors: [
+                    AppTheme.accentPurple.withOpacity(isDark ? 0.18 : 0.12),
+                    Colors.transparent,
+                  ],
+                ),
+              ),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Header row with icon + "Plan" label
+                Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        gradient: const LinearGradient(
+                          colors: [AppTheme.primaryBlue, AppTheme.accentPurple],
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                        ),
+                        borderRadius: BorderRadius.circular(12),
+                        boxShadow: [
+                          BoxShadow(
+                            color: AppTheme.primaryBlue.withOpacity(0.30),
+                            blurRadius: 8,
+                            offset: const Offset(0, 3),
+                          ),
+                        ],
+                      ),
+                      child: const Icon(
+                        Icons.calendar_today_rounded,
+                        size: 16,
+                        color: Colors.white,
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    ShaderMask(
+                      shaderCallback: (b) =>
+                          AppTheme.primaryGradient.createShader(b),
+                      child: const Text(
+                        'PLAN',
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w900,
+                          letterSpacing: 1.8,
+                          color: Colors.white,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+
+                const SizedBox(height: 12),
+
+                // Plan title
+                Text(
+                  title,
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w800,
+                    color: isDark ? Colors.white : const Color(0xFF1A1035),
+                    letterSpacing: -0.3,
+                  ),
+                ),
+
+                // Time & Location rows
+                if ((time != null && time.isNotEmpty) ||
+                    (location != null && location.isNotEmpty)) ...[
+                  const SizedBox(height: 12),
+                  Container(
+                    height: 0.8,
+                    color: isDark
+                        ? Colors.white.withOpacity(0.08)
+                        : Colors.black.withOpacity(0.06),
+                  ),
+                  const SizedBox(height: 12),
+                  Wrap(
+                    spacing: 16,
+                    runSpacing: 8,
+                    children: [
+                      if (time != null && time.isNotEmpty)
+                        _planDetail(
+                          isDark: isDark,
+                          icon: Icons.schedule_rounded,
+                          iconColor: const Color(0xFF6ECBF5),
+                          label: time,
+                        ),
+                      if (location != null && location.isNotEmpty)
+                        _planDetail(
+                          isDark: isDark,
+                          icon: Icons.location_on_rounded,
+                          iconColor: const Color(0xFFFF6B9D),
+                          label: location,
+                        ),
+                    ],
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _planDetail({
+    required bool isDark,
+    required IconData icon,
+    required Color iconColor,
+    required String label,
+  }) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          padding: const EdgeInsets.all(5),
+          decoration: BoxDecoration(
+            color: iconColor.withOpacity(0.12),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Icon(icon, size: 13, color: iconColor),
+        ),
+        const SizedBox(width: 6),
+        Flexible(
+          child: Text(
+            label,
+            style: TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+              color: isDark ? Colors.white70 : const Color(0xFF3D3D5C),
+            ),
+            overflow: TextOverflow.ellipsis,
+          ),
+        ),
+      ],
+    );
+  }
+
+
 
   // Mood-only posts get a gradient hero card instead of a blank image slot
   Widget _buildMoodHero(bool isDark) {

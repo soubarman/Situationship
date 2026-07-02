@@ -103,6 +103,7 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
 
       // Save to Firestore
       await _db.collection('posts').doc(postId).set(post.toMap());
+      ref.read(postsProvider.notifier).addPost(post);
 
       // Increment user's postCount
       await _db.collection('users').doc(currentUser.id).update({
