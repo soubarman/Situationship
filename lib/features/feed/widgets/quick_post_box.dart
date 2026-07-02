@@ -414,80 +414,231 @@ class _QuickPostBoxState extends ConsumerState<QuickPostBox> {
               ),
             ),
 
-          // ── Plan chip (when selected) ────────────────────────────────────
+          // ── Plan preview card (when selected) ───────────────────────────
           if (_planTitle != null)
             Padding(
-              padding: const EdgeInsets.fromLTRB(16, 10, 16, 0),
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
               child: Container(
-                padding: const EdgeInsets.fromLTRB(10, 6, 6, 6),
+                width: double.infinity,
                 decoration: BoxDecoration(
-                  color: const Color(0xFF4EAE8D).withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: const Color(0xFF4EAE8D).withOpacity(0.3)),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const Icon(Icons.calendar_today_outlined, size: 14, color: Color(0xFF4EAE8D)),
-                    const SizedBox(width: 6),
-                    Flexible(
-                      child: Text(
-                        _planTitle!,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          fontSize: 12.5,
-                          fontWeight: FontWeight.w600,
-                          color: Color(0xFF4EAE8D),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    GestureDetector(
-                      onTap: () => setState(() {
-                        _planTitle = null;
-                        _planTime = null;
-                        _planLocation = null;
-                      }),
-                      child: const Icon(Icons.close_rounded, size: 14, color: Color(0xFF4EAE8D)),
+                  gradient: LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: isDark
+                        ? [const Color(0xFF1A2E28), const Color(0xFF1E2E28)]
+                        : [const Color(0xFFEAF7F2), const Color(0xFFE8F5F0)],
+                  ),
+                  borderRadius: BorderRadius.circular(18),
+                  border: Border.all(
+                    color: const Color(0xFF4EAE8D).withOpacity(0.35),
+                    width: 1.2,
+                  ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: const Color(0xFF4EAE8D).withOpacity(0.12),
+                      blurRadius: 12,
+                      offset: const Offset(0, 4),
                     ),
                   ],
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.all(14),
+                  child: Row(
+                    children: [
+                      // Gradient icon bubble
+                      Container(
+                        padding: const EdgeInsets.all(10),
+                        decoration: BoxDecoration(
+                          gradient: const LinearGradient(
+                            colors: [Color(0xFF4EAE8D), Color(0xFF38A07C)],
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                          ),
+                          borderRadius: BorderRadius.circular(13),
+                          boxShadow: [
+                            BoxShadow(
+                              color: const Color(0xFF4EAE8D).withOpacity(0.35),
+                              blurRadius: 8,
+                              offset: const Offset(0, 3),
+                            ),
+                          ],
+                        ),
+                        child: const Icon(Icons.calendar_today_rounded, size: 18, color: Colors.white),
+                      ),
+                      const SizedBox(width: 12),
+                      // Plan details
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              _planTitle!,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w800,
+                                color: isDark ? Colors.white : const Color(0xFF1A3028),
+                                letterSpacing: -0.2,
+                              ),
+                            ),
+                            if ((_planTime != null && _planTime!.isNotEmpty) ||
+                                (_planLocation != null && _planLocation!.isNotEmpty))
+                              const SizedBox(height: 4),
+                            if (_planTime != null && _planTime!.isNotEmpty)
+                              Row(
+                                children: [
+                                  const Icon(Icons.schedule_rounded, size: 11, color: Color(0xFF4EAE8D)),
+                                  const SizedBox(width: 4),
+                                  Text(
+                                    _planTime!,
+                                    style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w600, color: Color(0xFF4EAE8D)),
+                                  ),
+                                ],
+                              ),
+                            if (_planLocation != null && _planLocation!.isNotEmpty)
+                              Row(
+                                children: [
+                                  const Icon(Icons.location_on_rounded, size: 11, color: Color(0xFF38A07C)),
+                                  const SizedBox(width: 4),
+                                  Flexible(
+                                    child: Text(
+                                      _planLocation!,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w600, color: Color(0xFF38A07C)),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      // Remove button
+                      GestureDetector(
+                        onTap: () => setState(() {
+                          _planTitle = null;
+                          _planTime = null;
+                          _planLocation = null;
+                        }),
+                        child: Container(
+                          padding: const EdgeInsets.all(6),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF4EAE8D).withOpacity(0.15),
+                            shape: BoxShape.circle,
+                          ),
+                          child: const Icon(Icons.close_rounded, size: 14, color: Color(0xFF4EAE8D)),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ),
 
-          // ── Voice chip (when selected) ───────────────────────────────────
+          // ── Voice preview card (when selected) ──────────────────────────
           if (_attachedVoicePath != null)
             Padding(
-              padding: const EdgeInsets.fromLTRB(16, 10, 16, 0),
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
               child: Container(
-                padding: const EdgeInsets.fromLTRB(10, 6, 6, 6),
+                width: double.infinity,
                 decoration: BoxDecoration(
-                  color: const Color(0xFFD66B7C).withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: const Color(0xFFD66B7C).withOpacity(0.3)),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const Icon(Icons.mic_rounded, size: 14, color: Color(0xFFD66B7C)),
-                    const SizedBox(width: 6),
-                    const Text(
-                      'Voice Note',
-                      style: TextStyle(
-                        fontSize: 12.5,
-                        fontWeight: FontWeight.w600,
-                        color: Color(0xFFD66B7C),
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    GestureDetector(
-                      onTap: () => setState(() {
-                        _attachedVoicePath = null;
-                      }),
-                      child: const Icon(Icons.close_rounded, size: 14, color: Color(0xFFD66B7C)),
+                  gradient: LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: isDark
+                        ? [const Color(0xFF2E1A20), const Color(0xFF2A1A22)]
+                        : [const Color(0xFFFFF0F3), const Color(0xFFFFEBEF)],
+                  ),
+                  borderRadius: BorderRadius.circular(18),
+                  border: Border.all(
+                    color: const Color(0xFFD66B7C).withOpacity(0.35),
+                    width: 1.2,
+                  ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: const Color(0xFFD66B7C).withOpacity(0.12),
+                      blurRadius: 12,
+                      offset: const Offset(0, 4),
                     ),
                   ],
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.all(14),
+                  child: Row(
+                    children: [
+                      // Gradient mic bubble
+                      Container(
+                        padding: const EdgeInsets.all(10),
+                        decoration: BoxDecoration(
+                          gradient: const LinearGradient(
+                            colors: [Color(0xFFD66B7C), Color(0xFFE8526A)],
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                          ),
+                          borderRadius: BorderRadius.circular(13),
+                          boxShadow: [
+                            BoxShadow(
+                              color: const Color(0xFFD66B7C).withOpacity(0.35),
+                              blurRadius: 8,
+                              offset: const Offset(0, 3),
+                            ),
+                          ],
+                        ),
+                        child: const Icon(Icons.mic_rounded, size: 18, color: Colors.white),
+                      ),
+                      const SizedBox(width: 12),
+                      // Waveform bars + label
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Voice Note',
+                              style: TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w800,
+                                color: isDark ? Colors.white : const Color(0xFF3A1020),
+                                letterSpacing: -0.2,
+                              ),
+                            ),
+                            const SizedBox(height: 6),
+                            // Decorative waveform bars
+                            Row(
+                              children: List.generate(18, (i) {
+                                final heights = [8.0, 14.0, 10.0, 18.0, 12.0, 20.0, 10.0, 16.0, 8.0, 14.0, 12.0, 18.0, 10.0, 16.0, 8.0, 12.0, 14.0, 10.0];
+                                return Container(
+                                  width: 3,
+                                  height: heights[i % heights.length],
+                                  margin: const EdgeInsets.only(right: 2),
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFFD66B7C).withOpacity(0.6 + (i % 3) * 0.13),
+                                    borderRadius: BorderRadius.circular(2),
+                                  ),
+                                );
+                              }),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      // Remove button
+                      GestureDetector(
+                        onTap: () => setState(() {
+                          _attachedVoicePath = null;
+                        }),
+                        child: Container(
+                          padding: const EdgeInsets.all(6),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFD66B7C).withOpacity(0.15),
+                            shape: BoxShape.circle,
+                          ),
+                          child: const Icon(Icons.close_rounded, size: 14, color: Color(0xFFD66B7C)),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ),
