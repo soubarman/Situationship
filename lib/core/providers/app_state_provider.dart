@@ -11,6 +11,8 @@ import '../models/community_model.dart';
 import '../models/notification_model.dart';
 import 'firebase_auth_provider.dart';
 import 'firestore_provider.dart';
+import '../../features/boost/providers/boost_provider.dart';
+import '../../features/boost/models/boost_constants.dart';
 
 // ─── Auth State ──────────────────────────────────────────────────────────────
 
@@ -647,6 +649,44 @@ final filteredPostsProvider = Provider<List<PostModel>>((ref) {
   } else {
     // Always newest-first for other feeds (pinned posts should not float to top of global feed)
     result.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+  }
+
+  // Apply Boost Ranking
+  final boostedIds = ref.watch(boostedPostIdsProvider);
+  if (boostedIds.isNotEmpty) {
+    final boostedPosts = <PostModel>[];
+    final organicPosts = <PostModel>[];
+
+    for (var p in result) {
+      if (boostedIds.contains(p.id)) {
+        boostedPosts.add(p);
+      } else {
+        organicPosts.add(p);
+      }
+    }
+
+    if (boostedPosts.length > BoostConstants.maxBoostSlots) {
+      organicPosts.addAll(boostedPosts.sublist(BoostConstants.maxBoostSlots));
+      boostedPosts.removeRange(BoostConstants.maxBoostSlots, boostedPosts.length);
+    }
+
+    final interleaved = <PostModel>[];
+    int bIdx = 0;
+    int oIdx = 0;
+    int count = 0;
+
+    while (bIdx < boostedPosts.length || oIdx < organicPosts.length) {
+      if (bIdx < boostedPosts.length && count % 3 == 0) {
+        interleaved.add(boostedPosts[bIdx++]);
+      } else if (oIdx < organicPosts.length) {
+        interleaved.add(organicPosts[oIdx++]);
+      } else if (bIdx < boostedPosts.length) {
+        interleaved.add(boostedPosts[bIdx++]);
+      }
+      count++;
+    }
+
+    result = interleaved;
   }
 
   return result;

@@ -17,6 +17,9 @@ import '../../../core/models/comment_model.dart';
 import '../screens/comments_screen.dart';
 import '../screens/edit_post_screen.dart';
 import '../../../core/widgets/full_screen_image_viewer.dart';
+import '../../boost/widgets/boost_badge.dart';
+import '../../boost/screens/boost_screen.dart';
+import '../../boost/providers/boost_provider.dart';
 class PostCard extends ConsumerStatefulWidget {
   final PostModel post;
   final VoidCallback onLike;
@@ -319,6 +322,7 @@ class _PostCardState extends ConsumerState<PostCard>
   }
 
   Widget _buildHeader(bool isDark, String displayName, String displayAvatar) {
+    final boostStatus = ref.watch(contentBoostStatusProvider(widget.post.id));
     return Padding(
       padding: const EdgeInsets.fromLTRB(18, 16, 18, 10),
       child: Row(
@@ -413,6 +417,10 @@ class _PostCardState extends ConsumerState<PostCard>
                                 ],
                               ),
                             ),
+                          ],
+                          if (boostStatus != null) ...[
+                            const SizedBox(width: 8),
+                            BoostBadge(isPremium: boostStatus.boostTier == 'premium'),
                           ],
                         ],
                       ),
@@ -1410,6 +1418,9 @@ class _PostCardState extends ConsumerState<PostCard>
 
   void _showPostOptionsSheet(BuildContext context, bool isDark) {
     final isOwnPost = widget.post.userId == _currentUserId;
+    // Plans always contain all three structured fields in the caption
+    final caption = widget.post.caption;
+    final isPlan = caption.contains('Plan:') && (caption.contains('Time:') || caption.contains('Where:'));
 
     showModalBottomSheet(
       context: context,
@@ -1437,6 +1448,16 @@ class _PostCardState extends ConsumerState<PostCard>
                 ),
               ),
               if (isOwnPost) ...[
+                if (!isPlan)
+                  ListTile(
+                    leading: const Icon(Icons.bolt, color: Colors.amber),
+                    title: const Text('Boost Post', style: TextStyle(fontWeight: FontWeight.w700)),
+                    subtitle: const Text('Get more visibility on campus or city'),
+                    onTap: () {
+                      Navigator.pop(context);
+                      BoostScreen.show(context, widget.post);
+                    },
+                  ),
                 ListTile(
                   leading: const Icon(Icons.edit_outlined, color: AppTheme.primaryBlue),
                   title: const Text('Edit Post', style: TextStyle(fontWeight: FontWeight.w700)),

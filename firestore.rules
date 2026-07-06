@@ -90,6 +90,18 @@ service cloud.firestore {
       allow create: if isAuthenticated();
     }
 
+    // ── Boosts ──────────────────────────────────────────────────────────────────
+    match /boosts/{boostId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated() && request.resource.data.ownerUserId == request.auth.uid && request.resource.data.contentType != 'plan';
+      allow update, delete: if isAuthenticated() && resource.data.ownerUserId == request.auth.uid;
+
+      match /boost_analytics/{eventId} {
+        allow read: if isAuthenticated() && get(/databases/$(database)/documents/boosts/$(boostId)).data.ownerUserId == request.auth.uid;
+        allow create: if isAuthenticated();
+      }
+    }
+
     // ── Spotlight ──────────────────────────────────────────────────────────────
     match /spotlight_sessions/{sessionId} {
       allow read: if isAuthenticated();

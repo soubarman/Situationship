@@ -46,7 +46,6 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
   @override
   void initState() {
     super.initState();
-    // Load existing profile data
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final user = ref.read(currentUserProvider);
       setState(() {
@@ -55,7 +54,6 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
         _locationCtrl.text = user.location ?? '';
         _currentAvatarUrl = user.avatarUrl;
         
-        // Re-add emoji prefixes for display
         _selectedInterests = user.interests.map((interestText) {
           final match = _allInterests.firstWhere(
             (i) => i.substring(3) == interestText,
@@ -105,12 +103,18 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
         photoUrl = await ref.getDownloadURL();
       }
 
+      // Use the location text field as the city for Boost — simple and consistent
+      final locationText = _locationCtrl.text.trim();
+      final cityId = locationText.isEmpty ? null : locationText.toLowerCase().replaceAll(' ', '_');
+
       final updates = <String, dynamic>{
         'name': _nameCtrl.text.trim(),
         'bio': _bioCtrl.text.trim(),
-        'location': _locationCtrl.text.trim().isEmpty ? null : _locationCtrl.text.trim(),
+        'location': locationText.isEmpty ? null : locationText,
         'avatarUrl': photoUrl,
         'interests': _selectedInterests.map((i) => i.substring(3)).toList(),
+        // Use location as city for Boost scope — users just type their city naturally
+        'currentCityId': cityId,
       };
 
       if (photoUrl != null) {
@@ -239,10 +243,18 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
             _buildField(_bioCtrl, 'A bit about you...', isDark, maxLines: 4),
             const SizedBox(height: 20),
             
-            _label('Location'),
+            _label('Your City'),
+            const SizedBox(height: 4),
+            Text(
+              'Used for Boost visibility — type any city you\'re in',
+              style: TextStyle(
+                fontSize: 12,
+                color: AppTheme.textSecondary,
+              ),
+            ),
             const SizedBox(height: 8),
-            _buildField(_locationCtrl, 'City, Country', isDark),
-            const SizedBox(height: 32),
+            _buildField(_locationCtrl, 'e.g. Jorhat, Guwahati, Delhi...', isDark),
+            const SizedBox(height: 28),
             
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -299,7 +311,7 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
                 );
               }).toList(),
             ),
-            SizedBox(height: MediaQuery.of(context).padding.bottom + 120), // Padding for scroll
+            SizedBox(height: MediaQuery.of(context).padding.bottom + 120),
           ],
         ),
       ),

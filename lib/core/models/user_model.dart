@@ -19,6 +19,9 @@ class UserModel {
   final int postCount;
   final int coins;
   final List<String> joinedCommunities;
+  final String? currentCityId;
+  final String? homeCityId;
+  final String? campusId;
 
   const UserModel({
     required this.id,
@@ -41,6 +44,9 @@ class UserModel {
     this.postCount = 0,
     this.coins = 100,
     this.joinedCommunities = const [],
+    this.currentCityId,
+    this.homeCityId,
+    this.campusId,
   });
 
   factory UserModel.fromMap(Map<String, dynamic> map) {
@@ -67,6 +73,9 @@ class UserModel {
       postCount: map['postCount'] ?? 0,
       coins: map['coins'] ?? 100,
       joinedCommunities: List<String>.from(map['joinedCommunities'] ?? []),
+      currentCityId: map['currentCityId'],
+      homeCityId: map['homeCityId'],
+      campusId: map['campusId'],
     );
   }
 
@@ -92,6 +101,9 @@ class UserModel {
       'postCount': postCount,
       'coins': coins,
       'joinedCommunities': joinedCommunities,
+      'currentCityId': currentCityId,
+      'homeCityId': homeCityId,
+      'campusId': campusId,
     };
   }
 
@@ -116,6 +128,9 @@ class UserModel {
     int? postCount,
     int? coins,
     List<String>? joinedCommunities,
+    String? currentCityId,
+    String? homeCityId,
+    String? campusId,
   }) {
     return UserModel(
       id: id ?? this.id,
@@ -138,6 +153,9 @@ class UserModel {
       postCount: postCount ?? this.postCount,
       coins: coins ?? this.coins,
       joinedCommunities: joinedCommunities ?? this.joinedCommunities,
+      currentCityId: currentCityId ?? this.currentCityId,
+      homeCityId: homeCityId ?? this.homeCityId,
+      campusId: campusId ?? this.campusId,
     );
   }
 
@@ -156,5 +174,8 @@ class UserModel {
         postCount: 0,
         coins: 100,
         joinedCommunities: [],
+        currentCityId: null,
+        homeCityId: null,
+        campusId: null,
       );
 }

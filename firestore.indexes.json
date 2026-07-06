@@ -27,6 +27,24 @@
           "order": "ASCENDING"
         }
       ]
+    },
+    {
+      "collectionGroup": "boosts",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "ownerCurrentCityId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "endTime",
+          "order": "DESCENDING"
+        },
+        {
+          "fieldPath": "boostScope",
+          "order": "ASCENDING"
+        }
+      ]
     }
   ],
   "fieldOverrides": []

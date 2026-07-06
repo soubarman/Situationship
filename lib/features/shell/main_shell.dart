@@ -5,6 +5,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../core/theme/app_theme.dart';
 
+import '../../features/boost/providers/boost_provider.dart';
+
 final currentIndexProvider = StateProvider<int>((ref) => 0);
 
 class MainShell extends ConsumerWidget {
@@ -21,6 +23,9 @@ class MainShell extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    // Watch background boost notification listener
+    ref.watch(boostNotificationListenerProvider);
+
     final isDark    = Theme.of(context).brightness == Brightness.dark;
     final location  = GoRouterState.of(context).matchedLocation;
 
