@@ -22,6 +22,8 @@ import 'package:video_player/video_player.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/providers/app_state_provider.dart';
 import '../../../core/utils/color_filters.dart';
+import '../../wallet/widgets/coin_gate_sheet.dart';
+import '../../../core/providers/access_provider.dart';
 
 import '../widgets/overlay_manager.dart';
 import '../widgets/text_editor_overlay.dart';
@@ -29,7 +31,7 @@ import '../widgets/text_editor_overlay.dart';
 // ─── Firestore instance ───────────────────────────────────────────────────────
 final _db = FirebaseFirestore.instanceFor(
   app: Firebase.app(),
-  databaseId: 'default',
+  databaseId: '(default)',
 );
 
 // ─── TakeScreen ───────────────────────────────────────────────────────────────
@@ -518,13 +520,21 @@ class _TakeScreenState extends ConsumerState<TakeScreen>
     }
   }
 
-  // ─── Post / Upload ───────────────────────────────────────────────────────────
   Future<void> _post() async {
     final hasContent = _capturedImageBytes != null || _capturedVideoBytes != null;
     if (!hasContent) {
       _snack('Take a photo or record a video first! 📸');
       return;
     }
+
+    final isPremiumFilter = _filter != 'Normal';
+    if (isPremiumFilter) {
+      final allowed = await showCoinGate(context, ref, 'extra_filters');
+      if (!allowed) {
+        return;
+      }
+    }
+
     setState(() => _isSaving = true);
 
     try {
@@ -950,6 +960,22 @@ class _TakeScreenState extends ConsumerState<TakeScreen>
                 _addText();
               }
             },
+            onHorizontalDragEnd: (details) {
+              if (details.primaryVelocity == null) return;
+              final filters = AppColorFilters.names;
+              final currentIndex = filters.indexOf(_filter);
+              if (details.primaryVelocity! < -300) {
+                // Swipe left, next filter
+                setState(() {
+                  _filter = filters[(currentIndex + 1) % filters.length];
+                });
+              } else if (details.primaryVelocity! > 300) {
+                // Swipe right, prev filter
+                setState(() {
+                  _filter = filters[(currentIndex - 1 + filters.length) % filters.length];
+                });
+              }
+            },
             child: OverlayManager(
               items: _overlays,
               onDragStateChanged: (d) => setState(() => _isDraggingItem = d),
@@ -957,6 +983,42 @@ class _TakeScreenState extends ConsumerState<TakeScreen>
               onItemsChanged: () => setState(() {}),
             ),
           ),
+          
+          // Filter Name / Premium Badge
+          if (_filter != 'Normal')
+            Positioned(
+              top: 80,
+              left: 0,
+              right: 0,
+              child: Center(
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: Colors.black.withOpacity(0.5),
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(color: Colors.white.withOpacity(0.2)),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        _filter,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 14,
+                        ),
+                      ),
+                      if (_filter != 'Normal') ...[
+                        const SizedBox(width: 8),
+                        const Text('✨', style: TextStyle(fontSize: 14)),
+                      ]
+                    ],
+                  ),
+                ),
+              ),
+            ),
+            
           // Recording badge
           if (_isRecording)
             Positioned(
@@ -1544,6 +1606,9 @@ class _TakeScreenState extends ConsumerState<TakeScreen>
 
   Widget _buildColorFilterBar() {
     final filters = AppColorFilters.names;
+    final currentUser = ref.watch(currentUserProvider);
+    final isPremium = currentUser.hasActiveSubscription;
+
     return SizedBox(
       height: 80,
       child: ListView.builder(
@@ -1554,6 +1619,8 @@ class _TakeScreenState extends ConsumerState<TakeScreen>
         itemBuilder: (ctx, i) {
           final f = filters[i];
           final sel = _filter == f;
+          final isPremiumFilter = f != 'Normal' && f != 'Arabica 12' && f != 'Ava 614';
+
           return GestureDetector(
             onTap: () => setState(() => _filter = f),
             child: RepaintBoundary(
@@ -1586,6 +1653,12 @@ class _TakeScreenState extends ConsumerState<TakeScreen>
                           ),
                         ),
                       ),
+                      if (isPremiumFilter && !isPremium)
+                        const Positioned(
+                          top: 4,
+                          right: 4,
+                          child: Icon(Icons.lock_rounded, color: Colors.white70, size: 12),
+                        ),
                       Align(
                         alignment: Alignment.bottomCenter,
                         child: Padding(

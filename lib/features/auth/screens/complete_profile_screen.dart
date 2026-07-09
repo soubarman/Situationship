@@ -15,7 +15,7 @@ import '../../../core/providers/firebase_auth_provider.dart';
 
 final _db = FirebaseFirestore.instanceFor(
   app: Firebase.app(),
-  databaseId: 'default',
+  databaseId: '(default)',
 );
 
 // ─── Screen ──────────────────────────────────────────────────────────────────
@@ -39,6 +39,7 @@ class _CompleteProfileScreenState extends ConsumerState<CompleteProfileScreen>
   bool _isSaving = false;
 
   // Form data
+  String _gender = ''; // 'male' | 'female' | 'other'
   XFile? _avatarFile;
   String? _avatarUrl;
   final _nameCtrl = TextEditingController();
@@ -55,7 +56,7 @@ class _CompleteProfileScreenState extends ConsumerState<CompleteProfileScreen>
     '🍳 Cooking', '🎭 Theatre', '🎯 Sports', '🛍️ Fashion', '🌙 Astrology',
   ];
 
-  static const _steps = ['Photo', 'About You', 'Interests', 'Location'];
+  static const _steps = ['Who are you?', 'Photo', 'About You', 'Interests', 'Location'];
 
   @override
   void initState() {
@@ -94,13 +95,22 @@ class _CompleteProfileScreenState extends ConsumerState<CompleteProfileScreen>
   }
 
   void _nextStep() {
-    if (_currentStep == 0 && _avatarFile == null && _avatarUrl == null) {
+    // Step 0: Gender must be selected
+    if (_currentStep == 0 && _gender.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        _snack('Please select who you are 💙'),
+      );
+      return;
+    }
+    // Step 1: Photo
+    if (_currentStep == 1 && _avatarFile == null && _avatarUrl == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         _snack('Please pick a profile photo 📸'),
       );
       return;
     }
-    if (_currentStep == 1) {
+    // Step 2: About You
+    if (_currentStep == 2) {
       if (_nameCtrl.text.trim().isEmpty) {
         ScaffoldMessenger.of(context).showSnackBar(_snack('Name is required'));
         return;
@@ -175,6 +185,7 @@ class _CompleteProfileScreenState extends ConsumerState<CompleteProfileScreen>
       }
 
       // Build the profile map
+      final isFemale = _gender == 'female';
       final data = <String, dynamic>{
         'id': user.uid,
         'name': _nameCtrl.text.trim(),
@@ -183,7 +194,7 @@ class _CompleteProfileScreenState extends ConsumerState<CompleteProfileScreen>
         'age': int.parse(_ageCtrl.text.trim()),
         'avatarUrl': photoUrl,
         'location': _locationCtrl.text.trim().isEmpty ? null : _locationCtrl.text.trim(),
-        'interests': _selectedInterests.map((i) => i.substring(3)).toList(), // strip emoji prefix
+        'interests': _selectedInterests.map((i) => i.substring(3)).toList(),
         'isVerified': false,
         'isOnline': true,
         'photos': photoUrl != null ? [photoUrl] : [],
@@ -193,6 +204,21 @@ class _CompleteProfileScreenState extends ConsumerState<CompleteProfileScreen>
         'matches': [],
         'postCount': 0,
         'createdAt': FieldValue.serverTimestamp(),
+        // ── New economy fields ──
+        'gender': _gender,
+        'phoneNumber': '+91 98765 ${10000 + user.uid.hashCode % 90000}',
+        'unlockedUserPhones': [],
+        'unlockedVisitors': [],
+        'coins': isFemale ? 0 : 100, // Men get 100 starter coins; women earn theirs
+        'totalEarnedCoins': 0,
+        'claimedMilestones': [],
+        'isSubscribed': false,
+        'subscriptionExpiry': null,
+        'phoneUnlocksUsed': 0,
+        'phoneUnlockQuota': 0,
+        'lastLoginDate': null,
+        'dailyLoginStreak': 0,
+        'conversationRewardsToday': 0,
       };
 
       await _db.collection('users').doc(user.uid).set(data, SetOptions(merge: true));
@@ -252,6 +278,7 @@ class _CompleteProfileScreenState extends ConsumerState<CompleteProfileScreen>
                     controller: _pageController,
                     physics: const NeverScrollableScrollPhysics(),
                     children: [
+                      _buildGenderStep(),
                       _buildPhotoStep(isDark, size),
                       _buildAboutStep(isDark),
                       _buildInterestsStep(isDark),
@@ -359,6 +386,118 @@ class _CompleteProfileScreenState extends ConsumerState<CompleteProfileScreen>
               ),
             ),
           ),
+        ),
+      ),
+    );
+  }
+
+  // ─── Step 0: Gender ─────────────────────────────────────────────────────
+
+  Widget _buildGenderStep() {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(24),
+      child: Column(
+        children: [
+          const SizedBox(height: 24),
+          const Text(
+            'Who are you? 💫',
+            style: TextStyle(fontSize: 28, fontWeight: FontWeight.w800, color: AppTheme.textPrimary),
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'This helps us tailor your experience.',
+            style: TextStyle(fontSize: 15, color: AppTheme.textSecondary),
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: 40),
+          _genderCard(
+            value: 'male',
+            label: 'Man',
+            emoji: '🙋‍♂️',
+            description: 'Buy coins, unlock features\n& connect with people',
+            gradient: const LinearGradient(colors: [Color(0xFF4FC3F7), Color(0xFF0288D1)]),
+          ),
+          const SizedBox(height: 16),
+          _genderCard(
+            value: 'female',
+            label: 'Woman',
+            emoji: '🙋‍♀️',
+            description: 'Earn coins through conversations\n& redeem for gift cards',
+            gradient: const LinearGradient(colors: [Color(0xFFF48FB1), Color(0xFFAD1457)]),
+          ),
+          const SizedBox(height: 16),
+          _genderCard(
+            value: 'other',
+            label: 'Other',
+            emoji: '✨',
+            description: 'Express yourself freely\non Situationship',
+            gradient: const LinearGradient(colors: [Color(0xFFCE93D8), Color(0xFF6A1B9A)]),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _genderCard({
+    required String value,
+    required String label,
+    required String emoji,
+    required String description,
+    required Gradient gradient,
+  }) {
+    final selected = _gender == value;
+    return GestureDetector(
+      onTap: () => setState(() => _gender = value),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        width: double.infinity,
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(
+          gradient: selected ? gradient : null,
+          color: selected ? null : Colors.white.withOpacity(0.65),
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(
+            color: selected ? Colors.white.withOpacity(0.5) : Colors.white.withOpacity(0.9),
+            width: 2,
+          ),
+          boxShadow: selected
+              ? [BoxShadow(color: Colors.black.withOpacity(0.18), blurRadius: 20, offset: const Offset(0, 6))]
+              : [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 8)],
+        ),
+        child: Row(
+          children: [
+            Text(emoji, style: const TextStyle(fontSize: 36)),
+            const SizedBox(width: 16),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    label,
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w800,
+                      color: selected ? Colors.white : AppTheme.textPrimary,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    description,
+                    style: TextStyle(
+                      fontSize: 12,
+                      height: 1.4,
+                      color: selected ? Colors.white.withOpacity(0.85) : AppTheme.textSecondary,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            if (selected)
+              const Icon(Icons.check_circle_rounded, color: Colors.white, size: 24)
+            else
+              Icon(Icons.radio_button_unchecked_rounded, color: AppTheme.textTertiary, size: 24),
+          ],
         ),
       ),
     );

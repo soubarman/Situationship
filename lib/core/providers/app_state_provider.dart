@@ -125,6 +125,11 @@ class PostsPaginationNotifier extends StateNotifier<AsyncValue<List<PostModel>>>
           .get();
 
       final posts = snapshot.docs.map((doc) => PostModel.fromMap(doc.data())).toList();
+      posts.sort((a, b) {
+        if (a.isPriority && !b.isPriority) return -1;
+        if (!a.isPriority && b.isPriority) return 1;
+        return b.createdAt.compareTo(a.createdAt);
+      });
       _lastDoc = snapshot.docs.isNotEmpty ? snapshot.docs.last : null;
       _hasMore = snapshot.docs.length >= _postsPageSize;
       state = AsyncValue.data(posts);
@@ -148,10 +153,16 @@ class PostsPaginationNotifier extends StateNotifier<AsyncValue<List<PostModel>>>
           .get();
 
       final newPosts = snapshot.docs.map((doc) => PostModel.fromMap(doc.data())).toList();
+      final allPosts = [...currentPosts, ...newPosts];
+      allPosts.sort((a, b) {
+        if (a.isPriority && !b.isPriority) return -1;
+        if (!a.isPriority && b.isPriority) return 1;
+        return b.createdAt.compareTo(a.createdAt);
+      });
       _lastDoc = snapshot.docs.isNotEmpty ? snapshot.docs.last : null;
       _hasMore = snapshot.docs.length >= _postsPageSize;
 
-      state = AsyncValue.data([...currentPosts, ...newPosts]);
+      state = AsyncValue.data(allPosts);
     } catch (e, st) {
       state = AsyncValue.error(e, st);
     }

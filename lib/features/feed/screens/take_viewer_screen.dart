@@ -19,7 +19,7 @@ import '../../../core/utils/color_filters.dart';
 
 final _db = FirebaseFirestore.instanceFor(
   app: Firebase.app(),
-  databaseId: 'default',
+  databaseId: '(default)',
 );
 
 // ─── TakeViewerScreen ──────────────────────────────────────────────────────────

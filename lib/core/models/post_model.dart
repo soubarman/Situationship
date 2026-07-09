@@ -26,6 +26,7 @@ class PostModel {
   final bool isPinned;
   final String privacy; // public, connections, private
   final bool isEdited;
+  final bool isPriority; // Feed priority placement
 
   const PostModel({
     required this.id,
@@ -53,6 +54,7 @@ class PostModel {
     this.isPinned = false,
     this.privacy = 'public',
     this.isEdited = false,
+    this.isPriority = false,
   });
 
   factory PostModel.fromMap(Map<String, dynamic> map) {
@@ -86,6 +88,7 @@ class PostModel {
       isPinned: map['isPinned'] ?? false,
       privacy: map['privacy'] ?? 'public',
       isEdited: map['isEdited'] ?? false,
+      isPriority: map['isPriority'] ?? false,
     );
   }
 
@@ -116,6 +119,7 @@ class PostModel {
       'isPinned': isPinned,
       'privacy': privacy,
       'isEdited': isEdited,
+      'isPriority': isPriority,
     };
   }
 
@@ -145,6 +149,7 @@ class PostModel {
     bool? isPinned,
     String? privacy,
     bool? isEdited,
+    bool? isPriority,
   }) {
     return PostModel(
       id: id ?? this.id,
@@ -172,6 +177,7 @@ class PostModel {
       isPinned: isPinned ?? this.isPinned,
       privacy: privacy ?? this.privacy,
       isEdited: isEdited ?? this.isEdited,
+      isPriority: isPriority ?? this.isPriority,
     );
   }
 }

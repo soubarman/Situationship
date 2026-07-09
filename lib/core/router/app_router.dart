@@ -19,11 +19,13 @@ import '../../features/chat/screens/chat_detail_screen.dart';
 import '../../features/profile/screens/profile_screen.dart';
 import '../../features/profile/screens/edit_profile_screen.dart';
 import '../../features/profile/screens/user_detail_screen.dart';
+import '../../features/profile/screens/visitors_screen.dart';
 import '../../features/post/screens/create_post_screen.dart';
 import '../../features/feed/screens/take_screen.dart';
 import '../../features/feed/screens/story_view_screen.dart';
 import '../../features/feed/screens/take_viewer_screen.dart';
 import '../../features/spotlight/screens/spotlight_screen.dart';
+import '../../features/wallet/screens/wallet_screen.dart';
 import '../providers/firebase_auth_provider.dart';
 import '../providers/app_state_provider.dart';
 import '../providers/shared_prefs_provider.dart';
@@ -128,6 +130,11 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         name: 'spotlight',
         builder: (context, state) => const SpotlightScreen(),
       ),
+      GoRoute(
+        path: '/wallet',
+        name: 'wallet',
+        builder: (context, state) => const WalletScreen(),
+      ),
       ShellRoute(
         builder: (context, state, child) => MainShell(child: child),
         routes: [
@@ -184,6 +191,11 @@ final appRouterProvider = Provider<GoRouter>((ref) {
             name: 'edit-profile',
             builder: (context, state) => const EditProfileScreen(),
           ),
+          GoRoute(
+            path: 'visitors',
+            name: 'profile-visitors',
+            builder: (context, state) => const VisitorsScreen(),
+          ),
         ],
       ),
       GoRoute(
@@ -193,6 +205,10 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           final userId = state.pathParameters['userId']!;
           return UserDetailScreen(userId: userId);
         },
+      ),
+      GoRoute(
+        path: '/profile/view',
+        redirect: (context, state) => '/profile',
       ),
       GoRoute(
         path: '/community/create',

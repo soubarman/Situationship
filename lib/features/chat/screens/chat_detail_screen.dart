@@ -18,6 +18,7 @@ import 'package:firebase_storage/firebase_storage.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../../core/widgets/full_screen_image_viewer.dart';
+import '../../../core/services/coin_service.dart';
 
 class ChatDetailScreen extends ConsumerStatefulWidget {
   final String chatId;
@@ -372,6 +373,47 @@ class _ChatDetailScreenState extends ConsumerState<ChatDetailScreen>
     try {
       await ref.read(chatMessagesNotifierProvider(widget.chatId).notifier).addMessage(newMessage);
       ref.read(chatsProvider.notifier).updateLastMessage(widget.chatId, text, DateTime.now());
+
+      // ── Conversation depth reward (female users only) ───────────────────
+      if (currentUser.isFemale) {
+        final wordCount = text.split(RegExp(r'\s+')).where((w) => w.isNotEmpty).length;
+        if (wordCount >= 3) {
+          // Count qualifying messages today in this chat
+          final chatMessages = ref.read(chatMessagesNotifierProvider(widget.chatId));
+          final today = DateTime.now();
+          int myCountToday = chatMessages.where((m) =>
+            m.senderId == currentUser.id &&
+            m.createdAt.day == today.day &&
+            m.createdAt.month == today.month &&
+            m.createdAt.year == today.year &&
+            m.text.split(RegExp(r'\s+')).where((w) => w.isNotEmpty).length >= 3
+          ).length;
+          int otherCountToday = chatMessages.where((m) =>
+            m.senderId != currentUser.id &&
+            m.createdAt.day == today.day &&
+            m.createdAt.month == today.month &&
+            m.createdAt.year == today.year &&
+            m.text.split(RegExp(r'\s+')).where((w) => w.isNotEmpty).length >= 3
+          ).length;
+
+          final earned = await CoinService.checkConversationDepth(
+            userId: currentUser.id,
+            chatId: widget.chatId,
+            myCount: myCountToday,
+            otherCount: otherCountToday,
+            rewardsUsedToday: currentUser.conversationRewardsToday,
+          );
+          if (earned > 0 && mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+              content: Text('🪙 +$earned coins earned from conversation!'),
+              backgroundColor: const Color(0xFFAD1457),
+              duration: const Duration(seconds: 2),
+              behavior: SnackBarBehavior.floating,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            ));
+          }
+        }
+      }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -1239,7 +1281,7 @@ class _ChatDetailScreenState extends ConsumerState<ChatDetailScreen>
     try {
       final db = FirebaseFirestore.instanceFor(
         app: Firebase.app(),
-        databaseId: 'default',
+        databaseId: '(default)',
       );
       await db.collection('chats').doc(chatId).update({
         'isConfession': false,
@@ -1321,7 +1363,7 @@ class _ChatDetailScreenState extends ConsumerState<ChatDetailScreen>
     try {
       final db = FirebaseFirestore.instanceFor(
         app: Firebase.app(),
-        databaseId: 'default',
+        databaseId: '(default)',
       );
       await db.collection('chats').doc(chatId).update({
         'revealStatus': 'requested',
@@ -1430,7 +1472,7 @@ class _ChatDetailScreenState extends ConsumerState<ChatDetailScreen>
     try {
       final db = FirebaseFirestore.instanceFor(
         app: Firebase.app(),
-        databaseId: 'default',
+        databaseId: '(default)',
       );
       await db.collection('chats').doc(chatId).update({
         'revealStatus': accept ? 'revealed' : 'declined',

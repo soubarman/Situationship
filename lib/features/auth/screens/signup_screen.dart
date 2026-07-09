@@ -22,7 +22,9 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
   final _passwordController = TextEditingController();
   final _bioController = TextEditingController();
   final _locationController = TextEditingController();
+  final _phoneController = TextEditingController();
   int _selectedAge = 21;
+  String _selectedGender = 'other';
   bool _obscurePassword = true;
   bool _isLoading = false;
   int _step = 0;
@@ -44,6 +46,7 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
     _passwordController.dispose();
     _bioController.dispose();
     _locationController.dispose();
+    _phoneController.dispose();
     super.dispose();
   }
 
@@ -64,6 +67,10 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
     } else if (_step == 1) {
       if (_bioController.text.trim().isEmpty) {
         setState(() => _errorMessage = 'Tell us a bit about yourself ✨');
+        return false;
+      }
+      if (_phoneController.text.trim().isEmpty) {
+        setState(() => _errorMessage = 'Please enter your phone number 📱');
         return false;
       }
     } else if (_step == 2) {
@@ -106,6 +113,8 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
             location: _locationController.text.trim().isNotEmpty
                 ? _locationController.text.trim()
                 : 'Earth 🌍',
+            gender: _selectedGender,
+            phoneNumber: _phoneController.text.trim(),
             interests: List.from(_selectedInterests),
             avatarFile: _avatarFile,
           );
@@ -340,6 +349,28 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          const Text('Gender', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 15)),
+          const SizedBox(height: 12),
+          DropdownButtonFormField<String>(
+            value: _selectedGender,
+            decoration: InputDecoration(
+              filled: true,
+              fillColor: Theme.of(context).colorScheme.surfaceContainerHighest,
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(16),
+                borderSide: BorderSide.none,
+              ),
+            ),
+            items: const [
+              DropdownMenuItem(value: 'male', child: Text('Male 🙋‍♂️')),
+              DropdownMenuItem(value: 'female', child: Text('Female 🙋‍♀️')),
+              DropdownMenuItem(value: 'other', child: Text('Other ✨')),
+            ],
+            onChanged: (val) {
+              if (val != null) setState(() => _selectedGender = val);
+            },
+          ),
+          const SizedBox(height: 24),
           const Text('Age', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 15)),
           const SizedBox(height: 12),
           Container(
@@ -387,6 +418,17 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
             decoration: const InputDecoration(
               hintText: 'City, Country',
               prefixIcon: Icon(Icons.location_on_outlined, color: AppTheme.primaryBlue, size: 20),
+            ),
+          ),
+          const SizedBox(height: 16),
+          const Text('Phone Number', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 15)),
+          const SizedBox(height: 12),
+          TextField(
+            controller: _phoneController,
+            keyboardType: TextInputType.phone,
+            decoration: const InputDecoration(
+              hintText: '+1 234 567 8900',
+              prefixIcon: Icon(Icons.phone_outlined, color: AppTheme.primaryBlue, size: 20),
             ),
           ),
         ],

@@ -13,6 +13,10 @@ import 'dart:ui';
 import '../../feed/widgets/post_card.dart';
 import '../../feed/screens/saved_posts_screen.dart';
 import '../../../shared/widgets/background_orbs.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_core/firebase_core.dart';
+import '../../../core/providers/access_provider.dart';
+import '../../wallet/widgets/coin_gate_sheet.dart';
 
 class ProfileScreen extends ConsumerWidget {
   const ProfileScreen({super.key});
@@ -227,6 +231,11 @@ class ProfileScreen extends ConsumerWidget {
               SliverToBoxAdapter(
                 child: _buildStats(user, posts.length, context, isDark),
               ),
+
+              // Profile Visitors section
+              SliverToBoxAdapter(
+                child: _buildVisitorsCard(context, ref, user, isDark),
+              ),
               
               SliverToBoxAdapter(
                 child: Column(
@@ -412,6 +421,281 @@ class ProfileScreen extends ConsumerWidget {
         ),
       ),
     );
+  }
+
+  Widget _buildVisitorsCard(BuildContext context, WidgetRef ref, UserModel currentUser, bool isDark) {
+    final db = FirebaseFirestore.instanceFor(
+      app: Firebase.app(),
+      databaseId: '(default)',
+    );
+    
+    return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+      stream: db.collection('profile_views')
+          .where('targetId', isEqualTo: currentUser.id)
+          .snapshots(),
+      builder: (context, snapshot) {
+        final allDocs = snapshot.hasData ? snapshot.data!.docs : [];
+        final sortedDocs = allDocs.toList()..sort((a, b) {
+          final aTime = a.data()['viewedAt'] as int? ?? 0;
+          final bTime = b.data()['viewedAt'] as int? ?? 0;
+          return bTime.compareTo(aTime);
+        });
+        
+        final Map<String, dynamic> uniqueVisitors = {};
+        for (var doc in sortedDocs) {
+          final visitorId = doc.data()['viewerId'] as String? ?? '';
+          if (!uniqueVisitors.containsKey(visitorId)) {
+            uniqueVisitors[visitorId] = doc;
+          }
+        }
+        final docs = uniqueVisitors.values.toList();
+        
+        if (docs.isEmpty) {
+          return Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(24),
+              child: BackdropFilter(
+                filter: ImageFilter.blur(sigmaX: 15, sigmaY: 15),
+                child: Container(
+                  padding: const EdgeInsets.all(20),
+                  decoration: BoxDecoration(
+                    color: isDark ? Colors.white.withOpacity(0.05) : Colors.black.withOpacity(0.03),
+                    borderRadius: BorderRadius.circular(24),
+                    border: Border.all(
+                      color: isDark ? Colors.white.withOpacity(0.1) : Colors.black.withOpacity(0.05),
+                    ),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          const Text('👻', style: TextStyle(fontSize: 16)),
+                          const SizedBox(width: 8),
+                          Text(
+                            'Profile Visitors',
+                            style: TextStyle(
+                              color: isDark ? Colors.white : Colors.black87,
+                              fontSize: 16,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 16),
+                      Center(
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          child: Text(
+                            'No profile views yet! 👻\n(Views by others will appear here)',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              color: isDark ? Colors.white60 : Colors.black54,
+                              fontSize: 13,
+                              height: 1.4,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          );
+        }
+        
+        return Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(24),
+            child: BackdropFilter(
+              filter: ImageFilter.blur(sigmaX: 15, sigmaY: 15),
+              child: Container(
+                padding: const EdgeInsets.all(20),
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: isDark 
+                        ? [Colors.white.withOpacity(0.1), Colors.white.withOpacity(0.02)]
+                        : [Colors.black.withOpacity(0.05), Colors.black.withOpacity(0.01)],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  ),
+                  borderRadius: BorderRadius.circular(24),
+                  border: Border.all(
+                    color: isDark ? Colors.white.withOpacity(0.15) : Colors.black.withOpacity(0.1),
+                  ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: (isDark ? Colors.purpleAccent : AppTheme.primaryBlue).withOpacity(0.1),
+                      blurRadius: 20,
+                      spreadRadius: -5,
+                    ),
+                  ],
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Row(
+                          children: [
+                            const Text('👻', style: TextStyle(fontSize: 18)),
+                            const SizedBox(width: 8),
+                            Text(
+                              'Profile Visitors',
+                              style: TextStyle(
+                                color: isDark ? Colors.white : Colors.black87,
+                                fontSize: 18,
+                                fontWeight: FontWeight.w900,
+                              ),
+                            ),
+                          ],
+                        ),
+                        if (docs.length <= 3 && docs.isNotEmpty)
+                          IconButton(
+                            icon: Icon(Icons.arrow_forward_ios_rounded, size: 16, color: isDark ? Colors.white54 : Colors.black54),
+                            onPressed: () => context.push('/profile/visitors'),
+                            padding: EdgeInsets.zero,
+                            constraints: const BoxConstraints(),
+                          ),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+                    ListView.builder(
+                      shrinkWrap: true,
+                      physics: const NeverScrollableScrollPhysics(),
+                      padding: EdgeInsets.zero,
+                      itemCount: docs.length > 3 ? 3 : docs.length,
+                      itemBuilder: (context, index) {
+                        final data = docs[index].data();
+                        final visitorId = data['viewerId'] as String;
+                        final visitorName = data['viewerName'] as String? ?? 'User';
+                        final visitorAvatar = data['viewerAvatar'] as String?;
+                        
+                        final isUnlocked = currentUser.hasActiveSubscription || 
+                            currentUser.unlockedVisitors.contains(visitorId);
+                            
+                        return Padding(
+                          padding: const EdgeInsets.only(bottom: 12),
+                          child: Material(
+                            color: Colors.transparent,
+                            child: InkWell(
+                              borderRadius: BorderRadius.circular(20),
+                              onTap: (isUnlocked && visitorId.isNotEmpty) ? () => context.push('/profile/view/$visitorId') : (isUnlocked && visitorId.isEmpty ? () => ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('This profile is unavailable or was deleted.'))) : null),
+                              child: Row(
+                                children: [
+                                  CircleAvatar(
+                                    radius: 20,
+                                    backgroundImage: NetworkImage(
+                                      isUnlocked 
+                                          ? (visitorAvatar ?? 'https://ui-avatars.com/api/?name=${Uri.encodeComponent(visitorName)}')
+                                          : 'https://ui-avatars.com/api/?name=%3F&background=252E42&color=fff'
+                                    ),
+                                  ),
+                                  const SizedBox(width: 12),
+                                  Expanded(
+                                    child: Text(
+                                      isUnlocked ? visitorName : 'Ghost Visitor 👻',
+                                      style: TextStyle(
+                                        color: isDark ? Colors.white70 : Colors.black87,
+                                        fontSize: 14,
+                                        fontWeight: FontWeight.w700,
+                                      ),
+                                    ),
+                                  ),
+                                  if (!isUnlocked)
+                                    TextButton.icon(
+                                      onPressed: () => _unlockGhostView(context, ref, currentUser, visitorId),
+                                      icon: const Icon(Icons.lock_open_rounded, size: 14, color: AppTheme.primaryBlue),
+                                      label: const Text('Unlock', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w800, color: AppTheme.primaryBlue)),
+                                      style: TextButton.styleFrom(
+                                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                                        backgroundColor: AppTheme.primaryBlue.withOpacity(0.12),
+                                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                      ),
+                                    )
+                                  else
+                                    const Icon(Icons.arrow_forward_ios_rounded, color: AppTheme.textSecondary, size: 14),
+                                ],
+                              ),
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+                    if (docs.length > 3)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 8),
+                        child: SizedBox(
+                          width: double.infinity,
+                          child: TextButton(
+                            onPressed: () => context.push('/profile/visitors'),
+                            style: TextButton.styleFrom(
+                              backgroundColor: isDark ? Colors.white.withOpacity(0.1) : Colors.black.withOpacity(0.05),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                            ),
+                            child: Text(
+                              'See All Visitors (${docs.length})',
+                              style: TextStyle(
+                                color: isDark ? Colors.white : Colors.black87,
+                                fontWeight: FontWeight.w800,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Future<void> _unlockGhostView(BuildContext context, WidgetRef ref, UserModel currentUser, String visitorId) async {
+    final allowed = await showCoinGate(context, ref, 'undo_ghost');
+    if (!allowed) return;
+
+    try {
+      final db = FirebaseFirestore.instanceFor(
+        app: Firebase.app(),
+        databaseId: '(default)',
+      );
+      
+      await db.runTransaction((tx) async {
+        final userRef = db.collection('users').doc(currentUser.id);
+        final snap = await tx.get(userRef);
+        if (!snap.exists) return;
+        
+        final unlocked = List<String>.from(snap.data()?['unlockedVisitors'] ?? []);
+        if (!unlocked.contains(visitorId)) {
+          unlocked.add(visitorId);
+        }
+        
+        tx.update(userRef, {
+          'unlockedVisitors': unlocked,
+        });
+      });
+      
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+        content: Text('Visitor identity unlocked! 👻🎉'),
+        backgroundColor: AppTheme.success,
+        behavior: SnackBarBehavior.floating,
+      ));
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text('Failed to unlock: $e'),
+        backgroundColor: AppTheme.error,
+        behavior: SnackBarBehavior.floating,
+      ));
+    }
   }
 
   Widget _buildBio(UserModel user, BuildContext context) {

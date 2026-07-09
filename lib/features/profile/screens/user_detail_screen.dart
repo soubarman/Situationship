@@ -14,6 +14,8 @@ import '../../../core/models/post_model.dart';
 import '../../feed/widgets/post_card.dart';
 import '../../../core/utils/location_helper.dart';
 import '../../../shared/widgets/background_orbs.dart';
+import '../../wallet/widgets/coin_gate_sheet.dart';
+import '../../../core/providers/access_provider.dart';
 
 class UserDetailScreen extends ConsumerStatefulWidget {
   final String userId;
@@ -40,6 +42,36 @@ class _UserDetailScreenState extends ConsumerState<UserDetailScreen> {
   void initState() {
     super.initState();
     _fetchDeviceLocation();
+  }
+
+  bool _viewRecorded = false;
+
+  Future<void> _recordProfileView(UserModel currentUser) async {
+    try {
+
+
+      if (currentUser.id == widget.userId) return; // don't record own view
+      
+      final db = FirebaseFirestore.instanceFor(
+        app: Firebase.app(),
+        databaseId: '(default)',
+      );
+      final timestamp = DateTime.now().millisecondsSinceEpoch;
+      final viewId = '${currentUser.id}_${widget.userId}';
+      
+      await db.collection('profile_views').doc(viewId).set({
+        'id': viewId,
+        'viewerId': currentUser.id,
+        'viewerName': currentUser.name,
+        'viewerAvatar': currentUser.avatarUrl,
+        'targetId': widget.userId,
+        'viewedAt': timestamp,
+      });
+      
+      debugPrint('✅ SUCCESS: Profile view recorded for target ${widget.userId}');
+    } catch (e) {
+      debugPrint('❌ Failed to record profile view: $e');
+    }
   }
 
   Future<void> _fetchDeviceLocation() async {
@@ -176,7 +208,7 @@ class _UserDetailScreenState extends ConsumerState<UserDetailScreen> {
     try {
       final db = FirebaseFirestore.instanceFor(
         app: Firebase.app(),
-        databaseId: 'default',
+        databaseId: '(default)',
       );
       
       final batch = db.batch();
@@ -231,7 +263,7 @@ class _UserDetailScreenState extends ConsumerState<UserDetailScreen> {
     try {
       final db = FirebaseFirestore.instanceFor(
         app: Firebase.app(),
-        databaseId: 'default',
+        databaseId: '(default)',
       );
       final chatId = 'chat_${currentUser.id}_${targetUser.id}';
 
@@ -339,7 +371,7 @@ class _UserDetailScreenState extends ConsumerState<UserDetailScreen> {
     try {
       final db = FirebaseFirestore.instanceFor(
         app: Firebase.app(),
-        databaseId: 'default',
+        databaseId: '(default)',
       );
 
       final batch = db.batch();
@@ -393,7 +425,7 @@ class _UserDetailScreenState extends ConsumerState<UserDetailScreen> {
     try {
       final db = FirebaseFirestore.instanceFor(
         app: Firebase.app(),
-        databaseId: 'default',
+        databaseId: '(default)',
       );
       final chatId = 'chat_${currentUser.id}_${targetUser.id}';
 
@@ -843,8 +875,14 @@ class _UserDetailScreenState extends ConsumerState<UserDetailScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final userAsync = ref.watch(otherUserProvider(widget.userId));
     final currentUser = ref.watch(currentUserProvider);
+    if (!_viewRecorded && currentUser.id.isNotEmpty && currentUser.id != '1') {
+      _viewRecorded = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _recordProfileView(currentUser);
+      });
+    }
+    final userAsync = ref.watch(otherUserProvider(widget.userId));
     final chats = ref.watch(chatsProvider);
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
@@ -1283,13 +1321,150 @@ class _UserDetailScreenState extends ConsumerState<UserDetailScreen> {
                       fontWeight: FontWeight.w500,
                     ),
                   ),
-                  const SizedBox(height: 22),
+                  const SizedBox(height: 16),
                 ],
+              ),
+            ),
+            
+          // Phone Section (Independent of Bio)
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 24),
+            child: _buildPhoneSection(user, currentUser, isDark),
+          ),
+          
+          const SizedBox(height: 16),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPhoneSection(UserModel targetUser, UserModel currentUser, bool isDark) {
+    if (targetUser.phoneNumber == null || targetUser.phoneNumber!.trim().isEmpty) {
+      return const SizedBox.shrink();
+    }
+
+    final isSelf = targetUser.id == currentUser.id;
+    final allowUnlock = targetUser.isPhonePublic; // repurposed from public to allow unlock
+    final unlockKey = '${targetUser.id}_${targetUser.phoneVisibilityVersion}';
+    final hasUnlocked = currentUser.unlockedUserPhones.contains(unlockKey) || 
+                        (targetUser.phoneVisibilityVersion == 0 && currentUser.unlockedUserPhones.contains(targetUser.id));
+    
+    if (!isSelf && !allowUnlock && !hasUnlocked) {
+      return const SizedBox.shrink();
+    }
+
+    final displayedPhone = (isSelf || hasUnlocked) ? targetUser.phoneNumber! : '••••• •••••';
+        
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: isDark ? Colors.white.withOpacity(0.05) : Colors.white.withOpacity(0.55),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(
+          color: isDark ? Colors.white.withOpacity(0.08) : Colors.white.withOpacity(0.65),
+          width: 1.2,
+        ),
+      ),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: AppTheme.primaryBlue.withOpacity(0.12),
+              shape: BoxShape.circle,
+            ),
+            child: const Icon(Icons.phone_rounded, color: AppTheme.primaryBlue, size: 20),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'PHONE NUMBER',
+                  style: TextStyle(
+                    color: AppTheme.textSecondary,
+                    fontSize: 10,
+                    fontWeight: FontWeight.w900,
+                    letterSpacing: 0.8,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  displayedPhone,
+                  style: TextStyle(
+                    color: isDark ? Colors.white : AppTheme.textPrimary,
+                    fontSize: 15,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          if (isSelf || hasUnlocked)
+            IconButton(
+              icon: const Icon(Icons.copy_rounded, color: AppTheme.primaryBlue, size: 20),
+              onPressed: () {
+                Clipboard.setData(ClipboardData(text: targetUser.phoneNumber ?? ''));
+                _showSuccess('Phone number copied to clipboard!');
+              },
+            )
+          else
+            ElevatedButton.icon(
+              onPressed: () => _unlockPhone(targetUser, currentUser),
+              icon: const Icon(Icons.lock_open_rounded, size: 14),
+              label: const Text('Unlock', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w800)),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppTheme.primaryBlue,
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                elevation: 0,
               ),
             ),
         ],
       ),
     );
+  }
+
+  Future<void> _unlockPhone(UserModel targetUser, UserModel currentUser) async {
+    final allowed = await showCoinGate(context, ref, 'phone_unlock');
+    if (!allowed) return;
+
+    try {
+      final db = FirebaseFirestore.instanceFor(
+        app: Firebase.app(),
+        databaseId: '(default)',
+      );
+      
+      final isFree = currentUser.hasActiveSubscription && currentUser.phoneUnlocksRemaining > 0;
+      
+      await db.runTransaction((tx) async {
+        final userRef = db.collection('users').doc(currentUser.id);
+        final snap = await tx.get(userRef);
+        if (!snap.exists) return;
+        
+        final unlocked = List<String>.from(snap.data()?['unlockedUserPhones'] ?? []);
+        final unlockKey = '${targetUser.id}_${targetUser.phoneVisibilityVersion}';
+        if (!unlocked.contains(unlockKey)) {
+          unlocked.add(unlockKey);
+        }
+        
+        final updates = <String, dynamic>{
+          'unlockedUserPhones': unlocked,
+        };
+        
+        if (isFree) {
+          updates['phoneUnlocksUsed'] = FieldValue.increment(1);
+        }
+        
+        tx.update(userRef, updates);
+      });
+      
+      _showSuccess('Phone number unlocked successfully! 🎉');
+    } catch (e) {
+      _showError('Unlock failed: $e');
+    }
   }
 
   Widget _buildStatCell(String value, String label, bool isDark) {
@@ -1535,7 +1710,7 @@ class _UserDetailScreenState extends ConsumerState<UserDetailScreen> {
     try {
       final db = FirebaseFirestore.instanceFor(
         app: Firebase.app(),
-        databaseId: 'default',
+        databaseId: '(default)',
       );
       final chatId = 'chat_${currentUser.id}_${targetUser.id}';
 

@@ -14,6 +14,8 @@ import 'dart:io';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/providers/app_state_provider.dart';
 import '../../../core/models/post_model.dart';
+import '../../wallet/widgets/coin_gate_sheet.dart';
+import '../../../core/providers/access_provider.dart';
 
 // ─── Mood data ────────────────────────────────────────────────────────────────
 
@@ -49,7 +51,7 @@ const _moods = [
 
 final _db = FirebaseFirestore.instanceFor(
   app: Firebase.app(),
-  databaseId: 'default',
+  databaseId: '(default)',
 );
 
 // ─── Quick Post Box ───────────────────────────────────────────────────────────
@@ -80,6 +82,7 @@ class _QuickPostBoxState extends ConsumerState<QuickPostBox> {
   String? _attachedVoicePath;
   bool _isSaving = false;
   bool _isFocused = false;
+  bool _isPriority = false;
 
   @override
   void initState() {
@@ -184,6 +187,14 @@ class _QuickPostBoxState extends ConsumerState<QuickPostBox> {
       return;
     }
     _focusNode.unfocus();
+
+    if (_isPriority) {
+      final allowed = await showCoinGate(context, ref, 'priority_feed');
+      if (!allowed) {
+        return;
+      }
+    }
+
     setState(() => _isSaving = true);
     try {
       final currentUser = ref.read(currentUserProvider);
@@ -233,6 +244,7 @@ class _QuickPostBoxState extends ConsumerState<QuickPostBox> {
         communityId: widget.communityId,
         communityName: widget.communityName,
         voiceUrl: voiceUrl,
+        isPriority: _isPriority,
       );
 
       await _db.collection('posts').doc(postId).set(post.toMap());
@@ -726,9 +738,43 @@ class _QuickPostBoxState extends ConsumerState<QuickPostBox> {
               ],
             ),
           ),
-          
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: Row(
+              children: [
+                const Icon(Icons.bolt, color: AppTheme.primaryBlue, size: 18),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Priority Feed Placement',
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w700,
+                          color: isDark ? Colors.white : AppTheme.textPrimary,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      const Text(
+                        'Bubble to top (Free with Premium / 10 coins)',
+                        style: TextStyle(fontSize: 10, color: AppTheme.textTertiary),
+                      ),
+                    ],
+                  ),
+                ),
+                Switch(
+                  value: _isPriority,
+                  activeColor: AppTheme.primaryBlue,
+                  onChanged: (val) {
+                    setState(() => _isPriority = val);
+                  },
+                ),
+              ],
+            ),
+          ),
           const SizedBox(height: 16),
-          
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
             child: Row(

@@ -10,10 +10,12 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 import '../../../core/theme/app_theme.dart';
 import '../../../core/providers/app_state_provider.dart';
 import '../../../core/models/post_model.dart';
+import '../../wallet/widgets/coin_gate_sheet.dart';
+import '../../../core/providers/access_provider.dart';
 
 final _db = FirebaseFirestore.instanceFor(
   app: Firebase.app(),
-  databaseId: 'default',
+  databaseId: '(default)',
 );
 
 class CreatePostScreen extends ConsumerStatefulWidget {
@@ -31,6 +33,7 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
   bool _isSaving = false;
   String? _selectedMoodEmoji;
   String? _selectedMoodLabel;
+  bool _isPriority = false;
 
   @override
   void dispose() {
@@ -57,6 +60,13 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
     if (_captionCtrl.text.trim().isEmpty) {
       _snack('Add a caption ✏️');
       return;
+    }
+
+    if (_isPriority) {
+      final allowed = await showCoinGate(context, ref, 'priority_feed');
+      if (!allowed) {
+        return;
+      }
     }
 
     setState(() => _isSaving = true);
@@ -99,6 +109,7 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
         location: _locationCtrl.text.trim().isEmpty
             ? null
             : _locationCtrl.text.trim(),
+        isPriority: _isPriority,
       );
 
       // Save to Firestore
@@ -287,10 +298,47 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
               isDark,
               prefixIcon: Icons.location_on_rounded,
             ),
+            const SizedBox(height: 24),
+            
+            _buildPrioritySwitch(isDark),
 
             const SizedBox(height: 80),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildPrioritySwitch(bool isDark) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+      decoration: BoxDecoration(
+        color: isDark ? AppTheme.darkCard : Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(
+          color: isDark ? AppTheme.darkBorder : Colors.black12,
+        ),
+      ),
+      child: SwitchListTile(
+        value: _isPriority,
+        activeColor: AppTheme.primaryBlue,
+        title: const Row(
+          children: [
+            Text('⚡', style: TextStyle(fontSize: 18)),
+            SizedBox(width: 8),
+            Text(
+              'Priority Feed Placement',
+              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+            ),
+          ],
+        ),
+        subtitle: const Text(
+          'Places your post higher in the feed for maximum views (Free with Premium or costs 10 coins)',
+          style: TextStyle(fontSize: 11),
+        ),
+        onChanged: (val) {
+          setState(() => _isPriority = val);
+        },
       ),
     );
   }

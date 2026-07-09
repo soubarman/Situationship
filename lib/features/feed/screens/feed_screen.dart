@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_core/firebase_core.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../../core/theme/app_theme.dart';
@@ -29,6 +30,58 @@ class FeedScreen extends ConsumerStatefulWidget {
 }
 
 class _FeedScreenState extends ConsumerState<FeedScreen> {
+  bool _genderPromptShown = false;
+
+  void _showGenderPrompt(BuildContext context, UserModel user) {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) {
+        String selectedGender = 'other';
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            return AlertDialog(
+              title: const Text('Complete Your Profile 💫'),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text('Please select your gender to continue. This helps us tailor your experience!'),
+                  const SizedBox(height: 16),
+                  DropdownButtonFormField<String>(
+                    value: selectedGender,
+                    items: const [
+                      DropdownMenuItem(value: 'male', child: Text('Male 🙋‍♂️')),
+                      DropdownMenuItem(value: 'female', child: Text('Female 🙋‍♀️')),
+                      DropdownMenuItem(value: 'other', child: Text('Other ✨')),
+                    ],
+                    onChanged: (val) {
+                      if (val != null) setDialogState(() => selectedGender = val);
+                    },
+                    decoration: const InputDecoration(
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                ],
+              ),
+              actions: [
+                ElevatedButton(
+                  onPressed: () async {
+                    if (selectedGender == 'other') return; // Enforce selecting male or female if possible, but other is allowed. Wait, we can just save it.
+                    final db = FirebaseFirestore.instanceFor(app: Firebase.app(), databaseId: '(default)');
+                    await db.collection('users').doc(user.id).update({'gender': selectedGender});
+                    if (context.mounted) Navigator.pop(context);
+                  },
+                  child: const Text('Save'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final postsStream = ref.watch(postsPaginationProvider);
@@ -37,6 +90,15 @@ class _FeedScreenState extends ConsumerState<FeedScreen> {
     final activeFilter= ref.watch(feedFilterProvider);
     final isDark      = Theme.of(context).brightness == Brightness.dark;
     final currentUser = ref.watch(currentUserProvider);
+
+    ref.listen(currentUserProvider, (prev, next) {
+      if (!_genderPromptShown && next.id.isNotEmpty && (next.gender.isEmpty || next.gender == 'other')) {
+        _genderPromptShown = true;
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          _showGenderPrompt(context, next);
+        });
+      }
+    });
 
     return Scaffold(
       backgroundColor: isDark ? AppTheme.darkBg : const Color(0xFFF5F5F7),
@@ -325,47 +387,51 @@ class _FeedScreenState extends ConsumerState<FeedScreen> {
   // ─── Coin Badge ────────────────────────────────────────────────────────────
 
   Widget _buildCoinBadge(int coins, bool isDark) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 12),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(20),
-        child: BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-            decoration: BoxDecoration(
-              color: isDark
-                  ? Colors.white.withOpacity(0.08)
-                  : Colors.white.withOpacity(0.85),
-              borderRadius: BorderRadius.circular(20),
-              border: Border.all(
-                color: isDark ? Colors.amber.withOpacity(0.4) : Colors.amber.withOpacity(0.6),
-                width: 1.2,
-              ),
-              boxShadow: isDark ? [] : [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.03),
-                  blurRadius: 8,
-                  offset: const Offset(0, 2),
-                )
-              ],
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Text('🪙', style: TextStyle(fontSize: 13)),
-                const SizedBox(width: 4),
-                Text(
-                  '$coins',
-                  style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 12, color: Colors.amber),
+    return GestureDetector(
+      onTap: () => context.push('/wallet'),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 12),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(20),
+          child: BackdropFilter(
+            filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+              decoration: BoxDecoration(
+                color: isDark
+                    ? Colors.white.withOpacity(0.08)
+                    : Colors.white.withOpacity(0.85),
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(
+                  color: isDark ? Colors.amber.withOpacity(0.4) : Colors.amber.withOpacity(0.6),
+                  width: 1.2,
                 ),
-              ],
+                boxShadow: isDark ? [] : [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.03),
+                    blurRadius: 8,
+                    offset: const Offset(0, 2),
+                  )
+                ],
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Text('🪙', style: TextStyle(fontSize: 13)),
+                  const SizedBox(width: 4),
+                  Text(
+                    '$coins',
+                    style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 12, color: Colors.amber),
+                  ),
+                ],
+              ),
             ),
           ),
         ),
       ),
     );
   }
+
 
   // ─── Notifications Sheet ───────────────────────────────────────────────────
 

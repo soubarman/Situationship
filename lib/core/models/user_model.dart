@@ -23,6 +23,32 @@ class UserModel {
   final String? homeCityId;
   final String? campusId;
 
+  // ── Gender & Economy ──────────────────────────────────────────────────
+  /// 'male' | 'female' | 'other'
+  final String gender;
+
+  // ── Contact Info & Unlocks ───────────────────────────────────────────
+  final String? phoneNumber;
+  final bool isPhonePublic;
+  final int phoneVisibilityVersion;
+  final List<String> unlockedUserPhones; // List of userIds whose phones this user unlocked
+  final List<String> unlockedVisitors;   // List of visitor userIds this user unlocked (unblurred)
+
+  // ── Subscription (male only) ──────────────────────────────────────────
+  final bool isSubscribed;
+  final DateTime? subscriptionExpiry;
+  final int phoneUnlocksUsed;   // resets each billing period
+  final int phoneUnlockQuota;  // 10 for ₹199 plan
+
+  // ── Milestone tracking (female only) ─────────────────────────────────
+  final int totalEarnedCoins;          // lifetime earned (never decreases)
+  final List<String> claimedMilestones; // e.g. ['spark','glow']
+
+  // ── Daily caps ────────────────────────────────────────────────────────
+  final String? lastLoginDate;          // 'yyyy-MM-dd'
+  final int dailyLoginStreak;
+  final int conversationRewardsToday;   // resets daily, max 3
+
   const UserModel({
     required this.id,
     required this.name,
@@ -42,12 +68,36 @@ class UserModel {
     this.likedBy = const [],
     this.matches = const [],
     this.postCount = 0,
-    this.coins = 100,
+    this.coins = 0,
     this.joinedCommunities = const [],
     this.currentCityId,
     this.homeCityId,
     this.campusId,
+    this.gender = 'other',
+    this.phoneNumber,
+    this.isPhonePublic = false,
+    this.phoneVisibilityVersion = 0,
+    this.unlockedUserPhones = const [],
+    this.unlockedVisitors = const [],
+    this.isSubscribed = false,
+    this.subscriptionExpiry,
+    this.phoneUnlocksUsed = 0,
+    this.phoneUnlockQuota = 0,
+    this.totalEarnedCoins = 0,
+    this.claimedMilestones = const [],
+    this.lastLoginDate,
+    this.dailyLoginStreak = 0,
+    this.conversationRewardsToday = 0,
   });
+
+  bool get isMale => gender == 'male';
+  bool get isFemale => gender == 'female';
+  bool get hasActiveSubscription =>
+      isSubscribed &&
+      subscriptionExpiry != null &&
+      subscriptionExpiry!.isAfter(DateTime.now());
+  int get phoneUnlocksRemaining =>
+      (phoneUnlockQuota - phoneUnlocksUsed).clamp(0, 999);
 
   factory UserModel.fromMap(Map<String, dynamic> map) {
     return UserModel(
@@ -71,11 +121,28 @@ class UserModel {
       likedBy: List<String>.from(map['likedBy'] ?? []),
       matches: List<String>.from(map['matches'] ?? []),
       postCount: map['postCount'] ?? 0,
-      coins: map['coins'] ?? 100,
+      coins: map['coins'] ?? 0,
       joinedCommunities: List<String>.from(map['joinedCommunities'] ?? []),
       currentCityId: map['currentCityId'],
       homeCityId: map['homeCityId'],
       campusId: map['campusId'],
+      gender: map['gender'] ?? 'other',
+      phoneNumber: map['phoneNumber'],
+      isPhonePublic: map['isPhonePublic'] ?? false,
+      phoneVisibilityVersion: map['phoneVisibilityVersion'] ?? 0,
+      unlockedUserPhones: List<String>.from(map['unlockedUserPhones'] ?? []),
+      unlockedVisitors: List<String>.from(map['unlockedVisitors'] ?? []),
+      isSubscribed: map['isSubscribed'] ?? false,
+      subscriptionExpiry: map['subscriptionExpiry'] != null
+          ? DateTime.fromMillisecondsSinceEpoch(map['subscriptionExpiry'])
+          : null,
+      phoneUnlocksUsed: map['phoneUnlocksUsed'] ?? 0,
+      phoneUnlockQuota: map['phoneUnlockQuota'] ?? 0,
+      totalEarnedCoins: map['totalEarnedCoins'] ?? 0,
+      claimedMilestones: List<String>.from(map['claimedMilestones'] ?? []),
+      lastLoginDate: map['lastLoginDate'],
+      dailyLoginStreak: map['dailyLoginStreak'] ?? 0,
+      conversationRewardsToday: map['conversationRewardsToday'] ?? 0,
     );
   }
 
@@ -104,6 +171,21 @@ class UserModel {
       'currentCityId': currentCityId,
       'homeCityId': homeCityId,
       'campusId': campusId,
+      'gender': gender,
+      'phoneNumber': phoneNumber,
+      'isPhonePublic': isPhonePublic,
+      'phoneVisibilityVersion': phoneVisibilityVersion,
+      'unlockedUserPhones': unlockedUserPhones,
+      'unlockedVisitors': unlockedVisitors,
+      'isSubscribed': isSubscribed,
+      'subscriptionExpiry': subscriptionExpiry?.millisecondsSinceEpoch,
+      'phoneUnlocksUsed': phoneUnlocksUsed,
+      'phoneUnlockQuota': phoneUnlockQuota,
+      'totalEarnedCoins': totalEarnedCoins,
+      'claimedMilestones': claimedMilestones,
+      'lastLoginDate': lastLoginDate,
+      'dailyLoginStreak': dailyLoginStreak,
+      'conversationRewardsToday': conversationRewardsToday,
     };
   }
 
@@ -131,6 +213,21 @@ class UserModel {
     String? currentCityId,
     String? homeCityId,
     String? campusId,
+    String? gender,
+    String? phoneNumber,
+    bool? isPhonePublic,
+    int? phoneVisibilityVersion,
+    List<String>? unlockedUserPhones,
+    List<String>? unlockedVisitors,
+    bool? isSubscribed,
+    DateTime? subscriptionExpiry,
+    int? phoneUnlocksUsed,
+    int? phoneUnlockQuota,
+    int? totalEarnedCoins,
+    List<String>? claimedMilestones,
+    String? lastLoginDate,
+    int? dailyLoginStreak,
+    int? conversationRewardsToday,
   }) {
     return UserModel(
       id: id ?? this.id,
@@ -156,6 +253,21 @@ class UserModel {
       currentCityId: currentCityId ?? this.currentCityId,
       homeCityId: homeCityId ?? this.homeCityId,
       campusId: campusId ?? this.campusId,
+      gender: gender ?? this.gender,
+      phoneNumber: phoneNumber ?? this.phoneNumber,
+      isPhonePublic: isPhonePublic ?? this.isPhonePublic,
+      phoneVisibilityVersion: phoneVisibilityVersion ?? this.phoneVisibilityVersion,
+      unlockedUserPhones: unlockedUserPhones ?? this.unlockedUserPhones,
+      unlockedVisitors: unlockedVisitors ?? this.unlockedVisitors,
+      isSubscribed: isSubscribed ?? this.isSubscribed,
+      subscriptionExpiry: subscriptionExpiry ?? this.subscriptionExpiry,
+      phoneUnlocksUsed: phoneUnlocksUsed ?? this.phoneUnlocksUsed,
+      phoneUnlockQuota: phoneUnlockQuota ?? this.phoneUnlockQuota,
+      totalEarnedCoins: totalEarnedCoins ?? this.totalEarnedCoins,
+      claimedMilestones: claimedMilestones ?? this.claimedMilestones,
+      lastLoginDate: lastLoginDate ?? this.lastLoginDate,
+      dailyLoginStreak: dailyLoginStreak ?? this.dailyLoginStreak,
+      conversationRewardsToday: conversationRewardsToday ?? this.conversationRewardsToday,
     );
   }
 
@@ -172,10 +284,15 @@ class UserModel {
         isVerified: false,
         isOnline: true,
         postCount: 0,
-        coins: 100,
+        coins: 0,
         joinedCommunities: [],
         currentCityId: null,
         homeCityId: null,
         campusId: null,
+        gender: 'other',
+        phoneNumber: null,
+        unlockedUserPhones: [],
+        unlockedVisitors: [],
       );
 }
+

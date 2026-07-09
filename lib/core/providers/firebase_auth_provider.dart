@@ -52,6 +52,8 @@ class AuthController extends StateNotifier<AsyncValue<User?>> {
     required int age,
     required String bio,
     required String location,
+    required String gender,
+    required String phoneNumber,
     required List<String> interests,
     XFile? avatarFile,
   }) async {
@@ -66,18 +68,22 @@ class AuthController extends StateNotifier<AsyncValue<User?>> {
       String? photoUrl;
 
       if (avatarFile != null) {
-        final storageRef =
-            FirebaseStorage.instance.ref('avatars/${user.uid}.jpg');
+        try {
+          final storageRef = FirebaseStorage.instance.ref('avatars/${user.uid}.jpg');
 
-        if (kIsWeb) {
-          final bytes = await avatarFile.readAsBytes();
-          await storageRef.putData(bytes);
-        } else {
-          await storageRef.putFile(File(avatarFile.path));
+          if (kIsWeb) {
+            final bytes = await avatarFile.readAsBytes();
+            await storageRef.putData(bytes);
+          } else {
+            await storageRef.putFile(File(avatarFile.path));
+          }
+
+          photoUrl = await storageRef.getDownloadURL();
+          await user.updatePhotoURL(photoUrl);
+        } catch (e) {
+          print('Storage upload failed: $e');
+          // Don't crash the whole signup just because the photo failed to upload
         }
-
-        photoUrl = await storageRef.getDownloadURL();
-        await user.updatePhotoURL(photoUrl);
       }
 
       await _db.collection('users').doc(user.uid).set({
@@ -87,6 +93,9 @@ class AuthController extends StateNotifier<AsyncValue<User?>> {
         'bio': bio,
         'age': age,
         'location': location,
+        'gender': gender,
+        'phoneNumber': phoneNumber,
+        'isPhonePublic': false,
         'avatarUrl': photoUrl,
         'interests': interests,
         'isVerified': false,
@@ -101,9 +110,17 @@ class AuthController extends StateNotifier<AsyncValue<User?>> {
       });
 
       state = AsyncValue.data(user);
-    } on FirebaseAuthException catch (e) {
+    } catch (e) {
+      if (_auth.currentUser != null) {
+        try {
+          await _auth.currentUser!.delete();
+        } catch (_) {}
+      }
       state = const AsyncValue.data(null);
-      throw _mapFirebaseError(e);
+      if (e is FirebaseAuthException) {
+        throw _mapFirebaseError(e);
+      }
+      throw Exception('Failed to create account: $e');
     }
   }
 
@@ -151,6 +168,7 @@ class AuthController extends StateNotifier<AsyncValue<User?>> {
             'bio': 'New to Situationship! ✨',
             'age': 21,
             'location': 'Earth 🌍',
+            'isPhonePublic': false,
             'avatarUrl': user.photoURL,
             'interests': [],
             'isVerified': false,
@@ -201,6 +219,7 @@ class AuthController extends StateNotifier<AsyncValue<User?>> {
             'bio': 'New to Situationship! ✨',
             'age': 21,
             'location': 'Earth 🌍',
+            'isPhonePublic': false,
             'avatarUrl': user.photoURL,
             'interests': [],
             'isVerified': false,

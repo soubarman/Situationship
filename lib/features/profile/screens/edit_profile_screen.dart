@@ -9,12 +9,13 @@ import 'package:firebase_core/firebase_core.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/providers/app_state_provider.dart';
 import '../../../core/providers/firebase_auth_provider.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 
 // ─── Provider ────────────────────────────────────────────────────────────────
 
 final _db = FirebaseFirestore.instanceFor(
   app: Firebase.app(),
-  databaseId: 'default',
+  databaseId: '(default)',
 );
 
 // ─── Screen ──────────────────────────────────────────────────────────────────
@@ -28,12 +29,15 @@ class EditProfileScreen extends ConsumerStatefulWidget {
 
 class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
   bool _isSaving = false;
-  File? _avatarFile;
+  XFile? _avatarFile;
   String? _currentAvatarUrl;
   
   final _nameCtrl = TextEditingController();
   final _bioCtrl = TextEditingController();
   final _locationCtrl = TextEditingController();
+  final _phoneCtrl = TextEditingController();
+  String _gender = 'other';
+  bool _isPhonePublic = false;
   List<String> _selectedInterests = [];
 
   static const _allInterests = [
@@ -53,6 +57,9 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
         _bioCtrl.text = user.bio ?? '';
         _locationCtrl.text = user.location ?? '';
         _currentAvatarUrl = user.avatarUrl;
+        _gender = user.gender;
+        _phoneCtrl.text = user.phoneNumber ?? '';
+        _isPhonePublic = user.isPhonePublic;
         
         _selectedInterests = user.interests.map((interestText) {
           final match = _allInterests.firstWhere(
@@ -70,6 +77,7 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
     _nameCtrl.dispose();
     _bioCtrl.dispose();
     _locationCtrl.dispose();
+    _phoneCtrl.dispose();
     super.dispose();
   }
 
@@ -81,7 +89,7 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
       maxWidth: 800,
     );
     if (picked != null) {
-      setState(() => _avatarFile = File(picked.path));
+      setState(() => _avatarFile = picked);
     }
   }
 
@@ -93,19 +101,32 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
 
     setState(() => _isSaving = true);
     try {
-      final user = ref.read(authStateChangesProvider).asData?.value;
-      if (user == null) throw Exception('Not authenticated');
+      final authUser = ref.read(authStateChangesProvider).asData?.value;
+      if (authUser == null) throw Exception('Not authenticated');
+      final userModel = ref.read(currentUserProvider);
 
       String? photoUrl = _currentAvatarUrl;
       if (_avatarFile != null) {
-        final ref = FirebaseStorage.instance.ref('avatars/${user.uid}.jpg');
-        await ref.putFile(_avatarFile!);
+        final ref = FirebaseStorage.instance.ref('avatars/${authUser.uid}.jpg');
+        
+        if (kIsWeb) {
+          final bytes = await _avatarFile!.readAsBytes();
+          await ref.putData(bytes);
+        } else {
+          await ref.putFile(File(_avatarFile!.path));
+        }
+        
         photoUrl = await ref.getDownloadURL();
       }
 
       // Use the location text field as the city for Boost — simple and consistent
       final locationText = _locationCtrl.text.trim();
       final cityId = locationText.isEmpty ? null : locationText.toLowerCase().replaceAll(' ', '_');
+
+      int newVersion = userModel.phoneVisibilityVersion;
+      if (_isPhonePublic == false && userModel.isPhonePublic == true) {
+        newVersion += 1; // Incrementing version to invalidate all previous unlocks
+      }
 
       final updates = <String, dynamic>{
         'name': _nameCtrl.text.trim(),
@@ -115,13 +136,17 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
         'interests': _selectedInterests.map((i) => i.substring(3)).toList(),
         // Use location as city for Boost scope — users just type their city naturally
         'currentCityId': cityId,
+        'gender': _gender,
+        'phoneNumber': _phoneCtrl.text.trim().isEmpty ? null : _phoneCtrl.text.trim(),
+        'isPhonePublic': _isPhonePublic,
+        'phoneVisibilityVersion': newVersion,
       };
 
       if (photoUrl != null) {
         updates['photos'] = FieldValue.arrayUnion([photoUrl]);
       }
 
-      await _db.collection('users').doc(user.uid).update(updates);
+      await _db.collection('users').doc(authUser.uid).set(updates, SetOptions(merge: true));
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(_snack('Profile updated! ✨'));
@@ -205,7 +230,9 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
                       ),
                       child: ClipOval(
                         child: _avatarFile != null
-                            ? Image.file(_avatarFile!, fit: BoxFit.cover)
+                            ? (kIsWeb 
+                                ? Image.network(_avatarFile!.path, fit: BoxFit.cover)
+                                : Image.file(File(_avatarFile!.path), fit: BoxFit.cover))
                             : _currentAvatarUrl != null
                                 ? Image.network(_currentAvatarUrl!, fit: BoxFit.cover)
                                 : Icon(Icons.person, size: 60, color: AppTheme.textTertiary),
@@ -254,6 +281,48 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
             ),
             const SizedBox(height: 8),
             _buildField(_locationCtrl, 'e.g. Jorhat, Guwahati, Delhi...', isDark),
+            const SizedBox(height: 20),
+            
+            _label('Gender'),
+            const SizedBox(height: 8),
+            _buildGenderSelector(isDark),
+            const SizedBox(height: 20),
+
+            _label('Phone Number'),
+            const SizedBox(height: 8),
+            _buildField(_phoneCtrl, '+1 234 567 8900', isDark),
+            const SizedBox(height: 12),
+            
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              decoration: BoxDecoration(
+                color: isDark ? AppTheme.darkCard : Colors.white,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: isDark ? AppTheme.darkBorder : Colors.black12),
+              ),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text('Allow others to unlock number with coins', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
+                        const SizedBox(height: 4),
+                        Text(
+                          'If off, your number remains completely private.',
+                          style: TextStyle(color: AppTheme.textSecondary, fontSize: 12),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Switch(
+                    value: _isPhonePublic,
+                    onChanged: (val) => setState(() => _isPhonePublic = val),
+                    activeColor: AppTheme.primaryBlue,
+                  ),
+                ],
+              ),
+            ),
             const SizedBox(height: 28),
             
             Row(
@@ -351,6 +420,32 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
           borderSide: const BorderSide(color: AppTheme.primaryBlue, width: 2),
         ),
         contentPadding: const EdgeInsets.all(16),
+      ),
+    );
+  }
+
+  Widget _buildGenderSelector(bool isDark) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+      decoration: BoxDecoration(
+        color: isDark ? AppTheme.darkCard : Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: isDark ? AppTheme.darkBorder : Colors.black12),
+      ),
+      child: DropdownButtonHideUnderline(
+        child: DropdownButton<String>(
+          value: _gender.isNotEmpty ? _gender : 'other',
+          isExpanded: true,
+          dropdownColor: isDark ? AppTheme.darkCard : Colors.white,
+          items: const [
+            DropdownMenuItem(value: 'male', child: Text('Male')),
+            DropdownMenuItem(value: 'female', child: Text('Female')),
+            DropdownMenuItem(value: 'other', child: Text('Other')),
+          ],
+          onChanged: (val) {
+            if (val != null) setState(() => _gender = val);
+          },
+        ),
       ),
     );
   }
