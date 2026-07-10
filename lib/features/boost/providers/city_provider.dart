@@ -1,6 +1,8 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/providers/app_state_provider.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_core/firebase_core.dart';
+
 
 final citiesProvider = Provider<List<Map<String, String>>>((ref) {
   // Hardcoded for v1
@@ -56,6 +58,6 @@ class ChangeCityService {
     if (campusId != null) updates['campusId'] = campusId;
     if (homeCityId != null) updates['homeCityId'] = homeCityId;
 
-    await FirebaseFirestore.instance.collection('users').doc(user.id).update(updates);
+    await FirebaseFirestore.instanceFor(app: Firebase.app(), databaseId: 'default').collection('users').doc(user.id).update(updates);
   }
 }

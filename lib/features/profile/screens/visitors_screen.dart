@@ -18,10 +18,7 @@ class VisitorsScreen extends ConsumerWidget {
     final currentUser = ref.watch(currentUserProvider);
     final isDark = Theme.of(context).brightness == Brightness.dark;
     
-    final db = FirebaseFirestore.instanceFor(
-      app: Firebase.app(),
-      databaseId: '(default)',
-    );
+    final db = FirebaseFirestore.instanceFor(app: Firebase.app(), databaseId: 'default');
 
     return Scaffold(
       extendBodyBehindAppBar: true,
@@ -194,10 +191,7 @@ class VisitorsScreen extends ConsumerWidget {
     if (!allowed) return;
 
     try {
-      final db = FirebaseFirestore.instanceFor(
-        app: Firebase.app(),
-        databaseId: '(default)',
-      );
+      final db = FirebaseFirestore.instanceFor(app: Firebase.app(), databaseId: 'default');
       
       await db.collection('users').doc(currentUser.id).update({
         'unlockedVisitors': FieldValue.arrayUnion([visitorId]),

@@ -1,8 +1,10 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/spotlight_model.dart';
 import 'location_provider.dart';
 import 'package:situationship/core/providers/app_state_provider.dart';
+
 
 // ─── Helper: get session ID from location state ───────────────────────────────
 
@@ -22,7 +24,7 @@ final spotlightSessionProvider = StreamProvider<SpotlightSession?>((ref) {
   final sessionId = ref.watch(_sessionIdProvider);
   if (sessionId == null) return const Stream.empty();
 
-  return FirebaseFirestore.instance
+  return FirebaseFirestore.instanceFor(app: Firebase.app(), databaseId: 'default')
       .collection('spotlight_sessions')
       .doc(sessionId)
       .snapshots()
@@ -47,18 +49,24 @@ final spotlightSessionProvider = StreamProvider<SpotlightSession?>((ref) {
 
 final spotlightBidsProvider =
     StreamProvider.family<List<SpotlightBid>, String>((ref, sessionId) {
-  return FirebaseFirestore.instance
+  return FirebaseFirestore.instanceFor(app: Firebase.app(), databaseId: 'default')
       .collection('spotlight_sessions')
       .doc(sessionId)
       .collection('bids')
       .orderBy('amount', descending: true)
-      .orderBy('timestamp', descending: false)
       .limit(30)
       .snapshots()
       .map((snapshot) {
     final bids = snapshot.docs
         .map((doc) => SpotlightBid.fromMap(doc.id, doc.data()))
         .toList();
+
+    // Sort by amount descending (primary), then timestamp ascending (tie-breaker) in memory
+    bids.sort((a, b) {
+      final amtCmp = b.amount.compareTo(a.amount);
+      if (amtCmp != 0) return amtCmp;
+      return a.timestamp.compareTo(b.timestamp);
+    });
 
     // Assign ranks locally based on the sorted order
     for (int i = 0; i < bids.length; i++) {
@@ -103,14 +111,14 @@ class SpotlightNotifier {
 
     final resolvedSessionId = _sessionId ?? sessionId;
 
-    final sessionRef = FirebaseFirestore.instance
+    final sessionRef = FirebaseFirestore.instanceFor(app: Firebase.app(), databaseId: 'default')
         .collection('spotlight_sessions')
         .doc(resolvedSessionId);
 
     final bidRef = sessionRef.collection('bids').doc(user.id);
-    final userRef = FirebaseFirestore.instance.collection('users').doc(user.id);
+    final userRef = FirebaseFirestore.instanceFor(app: Firebase.app(), databaseId: 'default').collection('users').doc(user.id);
 
-    await FirebaseFirestore.instance.runTransaction((transaction) async {
+    await FirebaseFirestore.instanceFor(app: Firebase.app(), databaseId: 'default').runTransaction((transaction) async {
       final userDoc = await transaction.get(userRef);
       if (!userDoc.exists) throw Exception('User not found');
       

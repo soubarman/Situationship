@@ -13,10 +13,7 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 
 // ─── Provider ────────────────────────────────────────────────────────────────
 
-final _db = FirebaseFirestore.instanceFor(
-  app: Firebase.app(),
-  databaseId: '(default)',
-);
+final _db = FirebaseFirestore.instanceFor(app: Firebase.app(), databaseId: 'default');
 
 // ─── Screen ──────────────────────────────────────────────────────────────────
 

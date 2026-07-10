@@ -720,10 +720,7 @@ class _SwipeDeckState extends ConsumerState<SwipeDeck> with SingleTickerProvider
     }
 
     try {
-      final db = FirebaseFirestore.instanceFor(
-        app: Firebase.app(),
-        databaseId: '(default)',
-      );
+      final db = FirebaseFirestore.instanceFor(app: Firebase.app(), databaseId: 'default');
       final chatId = 'chat_${currentUser.id}_${targetUser.id}';
 
       // Ensure chat exists

@@ -13,10 +13,7 @@ import '../../../core/providers/firebase_auth_provider.dart';
 
 // ─── Provider ────────────────────────────────────────────────────────────────
 
-final _db = FirebaseFirestore.instanceFor(
-  app: Firebase.app(),
-  databaseId: '(default)',
-);
+final _db = FirebaseFirestore.instanceFor(app: Firebase.app(), databaseId: 'default');
 
 // ─── Screen ──────────────────────────────────────────────────────────────────
 

@@ -52,10 +52,7 @@ class _UserDetailScreenState extends ConsumerState<UserDetailScreen> {
 
       if (currentUser.id == widget.userId) return; // don't record own view
       
-      final db = FirebaseFirestore.instanceFor(
-        app: Firebase.app(),
-        databaseId: '(default)',
-      );
+      final db = FirebaseFirestore.instanceFor(app: Firebase.app(), databaseId: 'default');
       final timestamp = DateTime.now().millisecondsSinceEpoch;
       final viewId = '${currentUser.id}_${widget.userId}';
       
@@ -206,10 +203,7 @@ class _UserDetailScreenState extends ConsumerState<UserDetailScreen> {
     });
 
     try {
-      final db = FirebaseFirestore.instanceFor(
-        app: Firebase.app(),
-        databaseId: '(default)',
-      );
+      final db = FirebaseFirestore.instanceFor(app: Firebase.app(), databaseId: 'default');
       
       final batch = db.batch();
       batch.update(db.collection('users').doc(currentUser.id), {
@@ -261,10 +255,7 @@ class _UserDetailScreenState extends ConsumerState<UserDetailScreen> {
     });
 
     try {
-      final db = FirebaseFirestore.instanceFor(
-        app: Firebase.app(),
-        databaseId: '(default)',
-      );
+      final db = FirebaseFirestore.instanceFor(app: Firebase.app(), databaseId: 'default');
       final chatId = 'chat_${currentUser.id}_${targetUser.id}';
 
       await db.collection('chats').doc(chatId).set({
@@ -369,10 +360,7 @@ class _UserDetailScreenState extends ConsumerState<UserDetailScreen> {
     });
 
     try {
-      final db = FirebaseFirestore.instanceFor(
-        app: Firebase.app(),
-        databaseId: '(default)',
-      );
+      final db = FirebaseFirestore.instanceFor(app: Firebase.app(), databaseId: 'default');
 
       final batch = db.batch();
       batch.delete(db.collection('chats').doc(chat.id));
@@ -423,10 +411,7 @@ class _UserDetailScreenState extends ConsumerState<UserDetailScreen> {
     setState(() => _isSendingConfession = true);
 
     try {
-      final db = FirebaseFirestore.instanceFor(
-        app: Firebase.app(),
-        databaseId: '(default)',
-      );
+      final db = FirebaseFirestore.instanceFor(app: Firebase.app(), databaseId: 'default');
       final chatId = 'chat_${currentUser.id}_${targetUser.id}';
 
       // Ensure chat exists
@@ -1432,10 +1417,7 @@ class _UserDetailScreenState extends ConsumerState<UserDetailScreen> {
     if (!allowed) return;
 
     try {
-      final db = FirebaseFirestore.instanceFor(
-        app: Firebase.app(),
-        databaseId: '(default)',
-      );
+      final db = FirebaseFirestore.instanceFor(app: Firebase.app(), databaseId: 'default');
       
       final isFree = currentUser.hasActiveSubscription && currentUser.phoneUnlocksRemaining > 0;
       
@@ -1708,10 +1690,7 @@ class _UserDetailScreenState extends ConsumerState<UserDetailScreen> {
   }
   void _handleReaction(String emoji, UserModel currentUser, UserModel targetUser, bool isFollowing) async {
     try {
-      final db = FirebaseFirestore.instanceFor(
-        app: Firebase.app(),
-        databaseId: '(default)',
-      );
+      final db = FirebaseFirestore.instanceFor(app: Firebase.app(), databaseId: 'default');
       final chatId = 'chat_${currentUser.id}_${targetUser.id}';
 
       final chatDoc = await db.collection('chats').doc(chatId).get();

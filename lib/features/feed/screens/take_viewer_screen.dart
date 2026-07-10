@@ -17,10 +17,7 @@ import '../../../core/theme/app_theme.dart';
 import '../../../core/providers/app_state_provider.dart';
 import '../../../core/utils/color_filters.dart';
 
-final _db = FirebaseFirestore.instanceFor(
-  app: Firebase.app(),
-  databaseId: '(default)',
-);
+final _db = FirebaseFirestore.instanceFor(app: Firebase.app(), databaseId: 'default');
 
 // ─── TakeViewerScreen ──────────────────────────────────────────────────────────
 // Full-screen TikTok-style viewer for takes/stories

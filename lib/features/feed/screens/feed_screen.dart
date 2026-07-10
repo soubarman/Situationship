@@ -68,7 +68,7 @@ class _FeedScreenState extends ConsumerState<FeedScreen> {
                 ElevatedButton(
                   onPressed: () async {
                     if (selectedGender == 'other') return; // Enforce selecting male or female if possible, but other is allowed. Wait, we can just save it.
-                    final db = FirebaseFirestore.instanceFor(app: Firebase.app(), databaseId: '(default)');
+                    final db = FirebaseFirestore.instanceFor(app: Firebase.app(), databaseId: 'default');
                     await db.collection('users').doc(user.id).update({'gender': selectedGender});
                     if (context.mounted) Navigator.pop(context);
                   },
@@ -151,15 +151,18 @@ class _FeedScreenState extends ConsumerState<FeedScreen> {
                         borderRadius: BorderRadius.circular(14),
                         border: Border.all(color: AppTheme.error.withOpacity(0.4)),
                       ),
-                      child: Row(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Icon(Icons.lock_outline_rounded, color: AppTheme.error, size: 20),
-                          const SizedBox(width: 10),
-                          Expanded(
-                            child: Text(
-                              '🔒 Firestore permission denied — fix your security rules in Firebase Console.',
-                              style: TextStyle(color: AppTheme.error, fontSize: 12, height: 1.4),
-                            ),
+                          Row(children: [
+                            Icon(Icons.warning_amber_rounded, color: AppTheme.error, size: 20),
+                            const SizedBox(width: 10),
+                            Expanded(child: Text('Feed load error:', style: TextStyle(color: AppTheme.error, fontSize: 12, fontWeight: FontWeight.bold))),
+                          ]),
+                          const SizedBox(height: 6),
+                          Text(
+                            postsStream.error.toString(),
+                            style: TextStyle(color: AppTheme.error.withOpacity(0.8), fontSize: 11, height: 1.4),
                           ),
                         ],
                       ),

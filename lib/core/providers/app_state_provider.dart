@@ -110,12 +110,30 @@ class PostsPaginationNotifier extends StateNotifier<AsyncValue<List<PostModel>>>
   bool _hasMore = true;
 
   PostsPaginationNotifier(this.ref) : super(const AsyncValue.loading()) {
-    loadInitialPosts();
+    // Listen to auth state — only load posts once a user is authenticated.
+    // This prevents the permission-denied error that happens when the posts
+    // query fires before the auth token is ready.
+    ref.listen(authStateChangesProvider, (previous, next) {
+      final user = next.asData?.value;
+      if (user != null) {
+        // User just signed in (or app started with a session) — load posts
+        if (state.isLoading || state.hasError) {
+          loadInitialPosts();
+        }
+      }
+    }, fireImmediately: true);
   }
 
   bool get hasMore => _hasMore;
 
   Future<void> loadInitialPosts() async {
+    // Guard: don't query if not authenticated
+    final user = ref.read(authStateChangesProvider).asData?.value;
+    if (user == null) {
+      state = const AsyncValue.data([]);
+      return;
+    }
+
     state = const AsyncValue.loading();
     try {
       final snapshot = await firestoreProvider
@@ -635,8 +653,9 @@ final filteredPostsProvider = Provider<List<PostModel>>((ref) {
 
   // Second level filter: Tab specific rules
   if (filter == 'all') {
-    // Standard feed only: completely exclude any posts belonging to a community
-    result = result.where((p) => p.communityId == null || p.communityId!.isEmpty).toList();
+    // Show all posts - both community and non-community posts
+    // (Communities tab already handles community-specific filtering)
+
   } else if (filter == 'following') {
     // Show only posts from users the current user follows
     final currentUser = ref.watch(currentUserProvider);

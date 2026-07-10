@@ -49,10 +49,7 @@ const _moods = [
 
 // ─── Firestore ────────────────────────────────────────────────────────────────
 
-final _db = FirebaseFirestore.instanceFor(
-  app: Firebase.app(),
-  databaseId: '(default)',
-);
+final _db = FirebaseFirestore.instanceFor(app: Firebase.app(), databaseId: 'default');
 
 // ─── Quick Post Box ───────────────────────────────────────────────────────────
 

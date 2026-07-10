@@ -424,10 +424,7 @@ class ProfileScreen extends ConsumerWidget {
   }
 
   Widget _buildVisitorsCard(BuildContext context, WidgetRef ref, UserModel currentUser, bool isDark) {
-    final db = FirebaseFirestore.instanceFor(
-      app: Firebase.app(),
-      databaseId: '(default)',
-    );
+    final db = FirebaseFirestore.instanceFor(app: Firebase.app(), databaseId: 'default');
     
     return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
       stream: db.collection('profile_views')
@@ -664,10 +661,7 @@ class ProfileScreen extends ConsumerWidget {
     if (!allowed) return;
 
     try {
-      final db = FirebaseFirestore.instanceFor(
-        app: Firebase.app(),
-        databaseId: '(default)',
-      );
+      final db = FirebaseFirestore.instanceFor(app: Firebase.app(), databaseId: 'default');
       
       await db.runTransaction((tx) async {
         final userRef = db.collection('users').doc(currentUser.id);

@@ -29,10 +29,7 @@ import '../widgets/overlay_manager.dart';
 import '../widgets/text_editor_overlay.dart';
 
 // ─── Firestore instance ───────────────────────────────────────────────────────
-final _db = FirebaseFirestore.instanceFor(
-  app: Firebase.app(),
-  databaseId: '(default)',
-);
+final _db = FirebaseFirestore.instanceFor(app: Firebase.app(), databaseId: 'default');
 
 // ─── TakeScreen ───────────────────────────────────────────────────────────────
 class TakeScreen extends ConsumerStatefulWidget {
