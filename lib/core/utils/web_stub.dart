@@ -54,7 +54,9 @@ class MediaStream {
 }
 
 class MediaRecorderOptions {
-  MediaRecorderOptions({int? videoBitsPerSecond});
+  final String? mimeType;
+  final int? videoBitsPerSecond;
+  MediaRecorderOptions({this.mimeType, this.videoBitsPerSecond});
 }
 
 class MediaRecorder {
@@ -63,7 +65,10 @@ class MediaRecorder {
   void stop() {}
   void addEventListener(String type, dynamic listener) {}
   dynamic get ondataavailable => null;
+  set ondataavailable(dynamic handler) {}
   dynamic get onstop => null;
+  set onstop(dynamic handler) {}
+  static bool isTypeSupported(String type) => false;
 }
 
 class BlobPropertyBag {
@@ -72,7 +77,8 @@ class BlobPropertyBag {
 
 class Blob {
   int get size => 0;
-  Blob(dynamic parts, [dynamic options]) {}
+  Blob([dynamic parts, dynamic options]) {}
+  dynamic arrayBuffer() => null;
 }
 
 class HTMLCanvasElement {
@@ -115,6 +121,25 @@ class MediaDevices {
   dynamic getUserMedia(dynamic constraints) => null;
 }
 
-class MediaStreamConstraints {}
+class MediaStreamConstraints {
+  final dynamic video;
+  final dynamic audio;
+  MediaStreamConstraints({this.video, this.audio});
+}
+
+class MediaTrackConstraints {
+  final dynamic width;
+  final dynamic height;
+  final dynamic facingMode;
+  MediaTrackConstraints({this.width, this.height, this.facingMode});
+}
+
+class ConstrainULongRange {
+  final int? ideal;
+  final int? exact;
+  final int? min;
+  final int? max;
+  ConstrainULongRange({this.ideal, this.exact, this.min, this.max});
+}
 
 final window = Window();

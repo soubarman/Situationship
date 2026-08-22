@@ -5,9 +5,9 @@
 
 import 'dart:async';
 import 'dart:typed_data';
-import 'dart:js_interop';
-import 'package:web/web.dart' as web;
-import 'dart:ui_web' as ui_web;
+import '../../../../core/utils/js_interop_stub.dart' if (dart.library.html) 'dart:js_interop';
+import '../../../../core/utils/web_stub.dart' if (dart.library.html) 'package:web/web.dart' as web;
+import '../../../feed/utils/ui_web_shim.dart' as ui_web;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
