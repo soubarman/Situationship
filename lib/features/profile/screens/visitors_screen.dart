@@ -9,6 +9,7 @@ import '../../../core/providers/app_state_provider.dart';
 import '../../../core/models/user_model.dart';
 import '../../wallet/widgets/coin_gate_sheet.dart';
 import '../../../shared/widgets/background_orbs.dart';
+import '../../../shared/widgets/profile_choice_sheet.dart';
 
 class VisitorsScreen extends ConsumerWidget {
   const VisitorsScreen({super.key});
@@ -104,7 +105,7 @@ class VisitorsScreen extends ConsumerWidget {
                         color: Colors.transparent,
                         child: InkWell(
                           borderRadius: BorderRadius.circular(20),
-                          onTap: (isUnlocked && visitorId.isNotEmpty) ? () => context.push('/profile/view/$visitorId') : (isUnlocked && visitorId.isEmpty ? () => ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('This profile is unavailable or was deleted.'))) : null),
+                          onTap: (isUnlocked && visitorId.isNotEmpty) ? () => ProfileChoiceSheet.navigateToProfile(context, ref, visitorId) : (isUnlocked && visitorId.isEmpty ? () => ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('This profile is unavailable or was deleted.'))) : null),
                           child: ClipRRect(
                             borderRadius: BorderRadius.circular(20),
                             child: BackdropFilter(

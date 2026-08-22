@@ -9,6 +9,7 @@ import 'package:video_player/video_player.dart';
 import 'dart:io';
 import '../../../core/models/post_model.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../verification/presentation/widgets/s_badge_widget.dart';
 import '../../../core/constants/app_constants.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/providers/app_state_provider.dart';
@@ -20,6 +21,7 @@ import '../../../core/widgets/full_screen_image_viewer.dart';
 import '../../boost/widgets/boost_badge.dart';
 import '../../boost/screens/boost_screen.dart';
 import '../../boost/providers/boost_provider.dart';
+import '../../../shared/widgets/profile_choice_sheet.dart';
 class PostCard extends ConsumerStatefulWidget {
   final PostModel post;
   final VoidCallback onLike;
@@ -35,9 +37,12 @@ class PostCard extends ConsumerStatefulWidget {
 }
 
 class _PostCardState extends ConsumerState<PostCard>
-    with SingleTickerProviderStateMixin {
+    with TickerProviderStateMixin {
   late AnimationController _heartController;
   late Animation<double> _heartScale;
+  // Animation for the React button tap feedback
+  late AnimationController _reactBtnController;
+  late Animation<double> _reactBtnScale;
   bool _showHeart = false;
   bool _isExpanded = false;
   bool _isBookmarked = false;
@@ -50,7 +55,7 @@ class _PostCardState extends ConsumerState<PostCard>
   @override
   void initState() {
     super.initState();
-    // Initialize animation controller
+    // Heart double-tap animation
     _heartController = AnimationController(
       vsync: this,
       duration: AppDurations.heartAnimation,
@@ -72,6 +77,28 @@ class _PostCardState extends ConsumerState<PostCard>
         weight: 20,
       ),
     ]).animate(_heartController);
+    // React button tap bounce animation
+    _reactBtnController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 300),
+    );
+    _reactBtnScale = TweenSequence([
+      TweenSequenceItem(
+        tween: Tween<double>(begin: 1.0, end: 1.35)
+            .chain(CurveTween(curve: Curves.easeOut)),
+        weight: 40,
+      ),
+      TweenSequenceItem(
+        tween: Tween<double>(begin: 1.35, end: 0.9)
+            .chain(CurveTween(curve: Curves.easeInOut)),
+        weight: 30,
+      ),
+      TweenSequenceItem(
+        tween: Tween<double>(begin: 0.9, end: 1.0)
+            .chain(CurveTween(curve: Curves.elasticOut)),
+        weight: 30,
+      ),
+    ]).animate(_reactBtnController);
     _loadBookmarkStatus();
   }
 
@@ -79,6 +106,7 @@ class _PostCardState extends ConsumerState<PostCard>
   void dispose() {
     _hideReactionPopup();
     _heartController.dispose();
+    _reactBtnController.dispose();
     _voiceCtrl?.dispose();
     super.dispose();
   }
@@ -128,9 +156,14 @@ class _PostCardState extends ConsumerState<PostCard>
     return ref.read(currentUserProvider).id;
   }
 
-  bool get _isLiked => widget.post.likes.contains(_currentUserId) || widget.post.reactions.containsKey(_currentUserId);
+  // Use liveReactions from Firestore stream; fall back to widget.post data while loading
+  bool _isLikedFromLive(List<String> liveLikes, Map<String, String> liveReactions) {
+    return liveLikes.contains(_currentUserId) || liveReactions.containsKey(_currentUserId);
+  }
 
-  String? get _myReaction => widget.post.reactions[_currentUserId];
+  String? _myReactionFromLive(Map<String, String> liveReactions) {
+    return liveReactions[_currentUserId];
+  }
 
   String _formatTimeAgo(DateTime date) {
     final diff = DateTime.now().difference(date);
@@ -150,8 +183,13 @@ class _PostCardState extends ConsumerState<PostCard>
         ?? widget.post.userAvatar
         ?? 'https://i.pravatar.cc/100?u=${widget.post.userId}';
 
-    // RepaintBoundary isolates each card — a like/reaction on one card
-    // won't trigger a repaint of every other visible card.
+    // Watch live reactions from Firestore for real-time updates
+    final liveReactionsAsync = ref.watch(livePostReactionsProvider(widget.post.id));
+    final liveLikes = liveReactionsAsync.asData?.value.likes ?? widget.post.likes;
+    final liveReactions = liveReactionsAsync.asData?.value.reactions ?? widget.post.reactions;
+    final isLiked = _isLikedFromLive(liveLikes, liveReactions);
+    final myReaction = _myReactionFromLive(liveReactions);
+
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
         decoration: BoxDecoration(
@@ -176,7 +214,7 @@ class _PostCardState extends ConsumerState<PostCard>
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            _buildHeader(isDark, displayName, displayAvatar),
+            _buildHeader(isDark, displayName, displayAvatar, liveAuthor.asData?.value?.isVerified ?? widget.post.isUserVerified),
             if (widget.post.mood != null && widget.post.imageUrl != null)
               _buildMoodBadge(isDark),
             if (widget.post.caption.isNotEmpty &&
@@ -190,7 +228,7 @@ class _PostCardState extends ConsumerState<PostCard>
                 (widget.post.caption.isEmpty ||
                     widget.post.caption == widget.post.mood))
               _buildMoodHero(isDark),
-            _buildActions(isDark),
+            _buildActions(isDark, isLiked, myReaction, liveLikes, liveReactions),
             if (widget.post.commentCount > 0)
               _buildRecentComment(isDark),
           ],
@@ -321,7 +359,7 @@ class _PostCardState extends ConsumerState<PostCard>
     );
   }
 
-  Widget _buildHeader(bool isDark, String displayName, String displayAvatar) {
+  Widget _buildHeader(bool isDark, String displayName, String displayAvatar, bool isVerified) {
     final boostStatus = ref.watch(contentBoostStatusProvider(widget.post.id));
     return Padding(
       padding: const EdgeInsets.fromLTRB(18, 16, 18, 10),
@@ -329,7 +367,7 @@ class _PostCardState extends ConsumerState<PostCard>
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
           GestureDetector(
-            onTap: () => context.push('/profile/view/${widget.post.userId}'),
+            onTap: () => ProfileChoiceSheet.navigateToProfile(context, ref, widget.post.userId),
             child: Container(
               decoration: BoxDecoration(
                 borderRadius: BorderRadius.circular(16),
@@ -368,7 +406,7 @@ class _PostCardState extends ConsumerState<PostCard>
                         children: [
                           Flexible(
                             child: GestureDetector(
-                              onTap: () => context.push('/profile/view/${widget.post.userId}'),
+                              onTap: () => ProfileChoiceSheet.navigateToProfile(context, ref, widget.post.userId),
                               child: Text(
                                 displayName,
                                 style: TextStyle(
@@ -381,9 +419,9 @@ class _PostCardState extends ConsumerState<PostCard>
                               ),
                             ),
                           ),
-                          if (widget.post.isUserVerified) ...[
+                          if (isVerified) ...[
                             const SizedBox(width: 4),
-                            const Icon(Icons.verified, color: AppTheme.primaryBlue, size: 15),
+                            const SBadgeWidget(size: 15, showTooltip: false),
                           ],
                           if (widget.post.isPinned) ...[
                             const SizedBox(width: 8),
@@ -481,9 +519,54 @@ class _PostCardState extends ConsumerState<PostCard>
               ],
             ),
           ),
-          IconButton(
-            icon: Icon(Icons.more_horiz, color: isDark ? Colors.white70 : Colors.black54),
-            onPressed: () => _showPostOptionsSheet(context, isDark),
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Quick boost button — tap to boost or see boost status
+              if (widget.post.userId == _currentUserId)
+                GestureDetector(
+                  onTap: () => BoostScreen.show(context, widget.post),
+                  child: Container(
+                    margin: const EdgeInsets.only(right: 4),
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+                    decoration: BoxDecoration(
+                      gradient: const LinearGradient(
+                        colors: [Color(0xFFF59E0B), Color(0xFFEF4444)],
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                      ),
+                      borderRadius: BorderRadius.circular(12),
+                      boxShadow: [
+                        BoxShadow(
+                          color: const Color(0xFFF59E0B).withOpacity(0.35),
+                          blurRadius: 6,
+                          offset: const Offset(0, 2),
+                        ),
+                      ],
+                    ),
+                    child: const Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.bolt_rounded, color: Colors.white, size: 13),
+                        SizedBox(width: 3),
+                        Text(
+                          'Boost',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 11,
+                            fontWeight: FontWeight.w900,
+                            letterSpacing: 0.3,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              IconButton(
+                icon: Icon(Icons.more_horiz, color: isDark ? Colors.white70 : Colors.black54),
+                onPressed: () => _showPostOptionsSheet(context, isDark),
+              ),
+            ],
           ),
         ],
       ),
@@ -607,10 +690,16 @@ class _PostCardState extends ConsumerState<PostCard>
     );
   }
 
-  Widget _buildActions(bool isDark) {
+  Widget _buildActions(
+    bool isDark,
+    bool isLiked,
+    String? myReaction,
+    List<String> liveLikes,
+    Map<String, String> liveReactions,
+  ) {
     final Set<String> uniqueReactors = {
-      ...widget.post.likes,
-      ...widget.post.reactions.keys,
+      ...liveLikes,
+      ...liveReactions.keys,
     };
     final int reactionCount = uniqueReactors.length;
 
@@ -641,10 +730,10 @@ class _PostCardState extends ConsumerState<PostCard>
                           mainAxisSize: MainAxisSize.min,
                           children: () {
                             final Set<String> activeEmojis = {};
-                            if (widget.post.likes.isNotEmpty) {
-                              activeEmojis.add('👍');
+                            if (liveLikes.isNotEmpty) {
+                              activeEmojis.add('🔥'); // legacy likes show as 🔥
                             }
-                            activeEmojis.addAll(widget.post.reactions.values);
+                            activeEmojis.addAll(liveReactions.values);
                             return activeEmojis.toList().take(3).map((emoji) {
                               return Padding(
                                 padding: const EdgeInsets.only(right: 2.0),
@@ -694,73 +783,79 @@ class _PostCardState extends ConsumerState<PostCard>
               Expanded(
                 child: Builder(
                   builder: (buttonContext) {
+                    // Determine the displayed reaction emoji & label using LIVE data
                     Widget reactionWidget;
                     Color? reactionColor;
-                    String reactionLabel = 'Like';
+                    String reactionLabel = 'React';
 
-                    if (_myReaction != null) {
-                      if (_myReaction == '👍') {
-                        reactionLabel = 'Like';
-                        reactionWidget = const Icon(Icons.thumb_up, size: 18, color: AppTheme.primaryBlue);
-                        reactionColor = AppTheme.primaryBlue;
-                      } else if (_myReaction == '❤️') {
-                        reactionLabel = 'Love';
-                        reactionWidget = const Icon(Icons.favorite, size: 18, color: Colors.red);
-                        reactionColor = Colors.red;
-                      } else {
-                        if (_myReaction == '😆') {
-                          reactionLabel = 'Haha';
-                          reactionColor = Colors.amber[800];
-                        } else if (_myReaction == '😮') {
-                          reactionLabel = 'Wow';
-                          reactionColor = Colors.amber[800];
-                        } else if (_myReaction == '😢') {
-                          reactionLabel = 'Sad';
-                          reactionColor = Colors.amber[800];
-                        } else if (_myReaction == '😡') {
-                          reactionLabel = 'Angry';
-                          reactionColor = Colors.deepOrange;
-                        } else {
-                          reactionLabel = 'Like';
-                          reactionColor = Colors.orange;
-                        }
-                        reactionWidget = Icon(Icons.thumb_up, size: 18, color: reactionColor);
-                      }
-                    } else if (_isLiked) {
-                      reactionWidget = const Icon(Icons.thumb_up, size: 18, color: AppTheme.primaryBlue);
-                      reactionColor = AppTheme.primaryBlue;
-                      reactionLabel = 'Like';
+                    const genZLabels = {
+                      '🔥': 'Fire',
+                      '💀': 'Dead 💀',
+                      '🫶': 'Luv',
+                      '😭': 'Crying',
+                      '🤩': 'Obsessed',
+                      '👀': 'No way',
+                      '👍': 'Vibe',
+                      '❤️': 'Luv',
+                    };
+
+                    if (myReaction != null) {
+                      reactionLabel = genZLabels[myReaction] ?? 'React';
+                      reactionColor = myReaction == '🔥'
+                          ? Colors.deepOrange
+                          : myReaction == '💀'
+                              ? Colors.grey[700]
+                              : myReaction == '🫶'
+                                  ? const Color(0xFFFF3CAC)
+                                  : myReaction == '😭'
+                                      ? const Color(0xFF5B9BD5)
+                                      : myReaction == '🤩'
+                                          ? Colors.amber[800]
+                                          : myReaction == '👀'
+                                              ? Colors.teal
+                                              : AppTheme.primaryBlue;
+                      reactionWidget = _buildEmojiImage(myReaction, size: 20);
+                    } else if (isLiked) {
+                      reactionLabel = 'Fire';
+                      reactionColor = Colors.deepOrange;
+                      reactionWidget = _buildEmojiImage('🔥', size: 20);
                     } else {
-                      reactionWidget = Icon(Icons.thumb_up_alt_outlined, size: 18,
-                          color: isDark ? Colors.white70 : const Color(0xFF1A1035).withOpacity(0.60));
+                      reactionWidget = const Text('🤍', style: TextStyle(fontSize: 20));
                     }
 
-                    return InkWell(
+                    return GestureDetector(
                       onTap: () {
                         HapticFeedback.lightImpact();
+                        _reactBtnController.forward(from: 0);
                         _showReactionPopup(buttonContext, isDark);
                       },
-                      borderRadius: BorderRadius.circular(16),
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 10),
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            reactionWidget,
-                            const SizedBox(width: 6),
-                            Text(
-                              reactionLabel,
-                              style: TextStyle(
-                                fontSize: 13.5,
-                                fontWeight: FontWeight.w700,
-                                color: reactionColor ?? (isDark ? Colors.white70 : Colors.black54),
+                      child: AnimatedBuilder(
+                        animation: _reactBtnScale,
+                        builder: (_, child) => Transform.scale(
+                          scale: _reactBtnScale.value,
+                          child: child,
+                        ),
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 10),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              reactionWidget,
+                              const SizedBox(width: 6),
+                              Text(
+                                reactionLabel,
+                                style: TextStyle(
+                                  fontSize: 13.5,
+                                  fontWeight: FontWeight.w700,
+                                  color: reactionColor ?? (isDark ? Colors.white70 : Colors.black54),
+                                ),
                               ),
-                            ),
-                          ],
+                            ],
+                          ),
                         ),
                       ),
                     );
-                  }
+                  },
                 ),
               ),
               Expanded(
@@ -783,16 +878,16 @@ class _PostCardState extends ConsumerState<PostCard>
                 ),
               ),
               Expanded(
-                child: _FbActionButton(
-                  icon: Icons.share_outlined,
-                  label: 'Share',
+                child: _HypeItActionButton(
                   isDark: isDark,
                   onTap: () {
+                    HapticFeedback.mediumImpact();
                     showModalBottomSheet(
                       context: context,
                       useRootNavigator: true,
+                      isScrollControlled: true,
                       backgroundColor: Colors.transparent,
-                      builder: (_) => _ShareSheet(post: widget.post),
+                      builder: (_) => _HypeItSheet(post: widget.post),
                     );
                   },
                 ),
@@ -803,6 +898,7 @@ class _PostCardState extends ConsumerState<PostCard>
       ],
     );
   }
+
 
   Widget _buildRecentComment(bool isDark) {
     return Padding(
@@ -951,63 +1047,102 @@ class _PostCardState extends ConsumerState<PostCard>
     _reactionOverlayEntry = OverlayEntry(
       builder: (context) {
         final screenWidth = MediaQuery.of(buttonContext).size.width;
-        double leftPosition = offset.dx - (300 - size.width) / 2;
+        double leftPosition = offset.dx - (320 - size.width) / 2;
         // Clamp to prevent overlay going off-screen
-        leftPosition = leftPosition.clamp(12.0, screenWidth - 312.0);
+        leftPosition = leftPosition.clamp(12.0, screenWidth - 332.0);
 
         return Stack(
           children: [
             Positioned.fill(
               child: GestureDetector(
                 behavior: HitTestBehavior.translucent,
-                onTap: () {
-                  _hideReactionPopup();
-                },
+                onTap: _hideReactionPopup,
                 child: Container(color: Colors.transparent),
               ),
             ),
             Positioned(
               left: leftPosition,
-              top: offset.dy - 65,
+              top: offset.dy - 80,
               child: Material(
                 color: Colors.transparent,
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-                  decoration: BoxDecoration(
-                    color: isDark ? AppTheme.darkSurface.withOpacity(0.98) : Colors.white.withOpacity(0.98),
-                    borderRadius: BorderRadius.circular(30),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withOpacity(0.15),
-                        blurRadius: 16,
-                        offset: const Offset(0, 4),
+                child: TweenAnimationBuilder<double>(
+                  tween: Tween(begin: 0.0, end: 1.0),
+                  duration: const Duration(milliseconds: 260),
+                  curve: Curves.elasticOut,
+                  builder: (context, value, child) {
+                    return Transform.scale(
+                      scale: 0.6 + 0.4 * value,
+                      alignment: Alignment.bottomCenter,
+                      child: Opacity(
+                        opacity: value.clamp(0.0, 1.0),
+                        child: child,
                       ),
-                    ],
-                    border: Border.all(
-                      color: isDark ? Colors.white10 : Colors.black12,
-                      width: 0.5,
+                    );
+                  },
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: isDark
+                          ? const Color(0xFF1E1E2E).withOpacity(0.97)
+                          : Colors.white.withOpacity(0.97),
+                      borderRadius: BorderRadius.circular(32),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.20),
+                          blurRadius: 24,
+                          spreadRadius: 2,
+                          offset: const Offset(0, 6),
+                        ),
+                        BoxShadow(
+                          color: const Color(0xFFFF3CAC).withOpacity(0.12),
+                          blurRadius: 16,
+                          offset: const Offset(0, 2),
+                        ),
+                      ],
+                      border: Border.all(
+                        color: isDark
+                            ? Colors.white.withOpacity(0.12)
+                            : Colors.black.withOpacity(0.07),
+                        width: 0.8,
+                      ),
                     ),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: ['👍', '❤️', '😆', '😮', '😢', '😡'].map((emoji) {
-                      return _ReactionItem(
-                        emoji: emoji,
-                        onTap: () {
-                          HapticFeedback.lightImpact();
-                          if (emoji == '👍') {
-                            widget.onLike();
-                          } else {
-                            ref.read(postsProvider.notifier).reactToPost(
-                              widget.post.id,
-                              _currentUserId,
-                              emoji,
-                            );
-                          }
-                          _hideReactionPopup();
-                        },
-                      );
-                    }).toList(),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: ['🔥', '💀', '🫶', '😭', '🤩', '👀'].asMap().entries.map((entry) {
+                        final i = entry.key;
+                        final emoji = entry.value;
+                        // Staggered entrance using delayed TweenAnimationBuilder
+                        return TweenAnimationBuilder<double>(
+                          tween: Tween(begin: 0.0, end: 1.0),
+                          duration: Duration(milliseconds: 200 + i * 40),
+                          curve: Curves.easeOutBack,
+                          builder: (context, v, child) => Transform.translate(
+                            offset: Offset(0, 8 * (1 - v)),
+                            child: Opacity(opacity: v.clamp(0.0, 1.0), child: child),
+                          ),
+                          child: _ReactionItem(
+                            emoji: emoji,
+                            label: const {
+                              '🔥': 'Fire',
+                              '💀': 'Dead',
+                              '🫶': 'Luv',
+                              '😭': 'Crying',
+                              '🤩': 'Obsessed',
+                              '👀': 'No way',
+                            }[emoji],
+                            onTap: () {
+                              HapticFeedback.lightImpact();
+                              ref.read(postsProvider.notifier).reactToPost(
+                                widget.post.id,
+                                _currentUserId,
+                                emoji,
+                              );
+                              _hideReactionPopup();
+                            },
+                          ),
+                        );
+                      }).toList(),
+                    ),
                   ),
                 ),
               ),
@@ -2042,9 +2177,9 @@ class _GlassIconButton extends StatelessWidget {
   }
 }
 
-class _ShareSheet extends StatelessWidget {
+class _HypeItSheet extends StatelessWidget {
   final PostModel post;
-  const _ShareSheet({required this.post});
+  const _HypeItSheet({required this.post});
 
   @override
   Widget build(BuildContext context) {
@@ -2052,27 +2187,35 @@ class _ShareSheet extends StatelessWidget {
 
     Future<void> copyLink() async {
       final postUrl = 'https://situationship.app/post/${post.id}';
-      Navigator.pop(context);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Row(
-            children: [
-              const Icon(Icons.check_circle, color: Colors.white, size: 20),
-              const SizedBox(width: 8),
-              Expanded(child: Text('Link copied: $postUrl')),
-            ],
+      await Clipboard.setData(ClipboardData(text: postUrl));
+      if (context.mounted) Navigator.pop(context);
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Row(
+              children: [
+                Icon(Icons.check_circle, color: Colors.white, size: 20),
+                SizedBox(width: 8),
+                Expanded(child: Text('Link copied! spread the chaos 🔥')),
+              ],
+            ),
+            behavior: SnackBarBehavior.floating,
+            backgroundColor: const Color(0xFFEF4444),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
           ),
-          behavior: SnackBarBehavior.floating,
-          backgroundColor: AppTheme.success,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        ),
-      );
+        );
+      }
     }
 
+    final bgColor = isDark ? const Color(0xFF13111C) : Colors.white;
+    final textColor = isDark ? Colors.white : const Color(0xFF1A1035);
+    final subColor = isDark ? Colors.white60 : Colors.black54;
+    final tileColor = isDark ? Colors.white.withOpacity(0.06) : const Color(0xFFF5F3FF);
+
     return Container(
-      padding: const EdgeInsets.fromLTRB(24, 16, 24, 28),
+      padding: const EdgeInsets.fromLTRB(20, 12, 20, 32),
       decoration: BoxDecoration(
-        color: isDark ? AppTheme.darkSurface : Colors.white,
+        color: bgColor,
         borderRadius: const BorderRadius.vertical(top: Radius.circular(32)),
       ),
       child: Column(
@@ -2080,141 +2223,193 @@ class _ShareSheet extends StatelessWidget {
         children: [
           Container(
             width: 44, height: 5,
-            margin: const EdgeInsets.only(bottom: 24),
+            margin: const EdgeInsets.only(bottom: 20),
             decoration: BoxDecoration(
               color: Colors.grey.withOpacity(0.2),
               borderRadius: BorderRadius.circular(3),
             ),
           ),
-          const Text('Share Post', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800)),
-          const SizedBox(height: 24),
+          // Header
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(
+                    colors: [Color(0xFFFF3CAC), Color(0xFFF59E0B)],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  ),
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: _buildEmojiImage('🔥', size: 26),
+              ),
+              const SizedBox(width: 12),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Hype It Up! 🚀',
+                    style: TextStyle(fontSize: 20, fontWeight: FontWeight.w900, color: textColor),
+                  ),
+                  Text(
+                    'Spread the vibe fr fr',
+                    style: TextStyle(fontSize: 13, color: subColor),
+                  ),
+                ],
+              ),
+            ],
+          ),
+          const SizedBox(height: 20),
           // Send in Chat
-          Padding(
-            padding: const EdgeInsets.only(bottom: 8),
-            child: ListTile(
-              leading: Container(
-                padding: const EdgeInsets.all(10),
-                decoration: BoxDecoration(
-                  color: (isDark ? Colors.white : Colors.black).withOpacity(0.05),
-                  borderRadius: BorderRadius.circular(14),
+          _HypeTile(
+            emoji: '💬',
+            title: 'Slide into DMs',
+            subtitle: 'Send it to your fav people',
+            tileColor: tileColor,
+            textColor: textColor,
+            subColor: subColor,
+            onTap: () {
+              Navigator.pop(context);
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: const Text('Pick your situationship 👀'),
+                  behavior: SnackBarBehavior.floating,
+                  backgroundColor: const Color(0xFF7C3AED),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                 ),
-                child: const Text('💬', style: TextStyle(fontSize: 22)),
-              ),
-              title: const Text('Send in Chat', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 15)),
-              trailing: const Icon(Icons.chevron_right_rounded, size: 20),
-              onTap: () {
-                Navigator.pop(context);
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: const Text('Select a conversation to share'),
-                    behavior: SnackBarBehavior.floating,
-                    backgroundColor: AppTheme.primaryBlue,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                  ),
-                );
-              },
-            ),
+              );
+            },
           ),
+          const SizedBox(height: 8),
           // Copy Link
-          Padding(
-            padding: const EdgeInsets.only(bottom: 8),
-            child: ListTile(
-              leading: Container(
-                padding: const EdgeInsets.all(10),
-                decoration: BoxDecoration(
-                  color: (isDark ? Colors.white : Colors.black).withOpacity(0.05),
-                  borderRadius: BorderRadius.circular(14),
-                ),
-                child: const Text('📋', style: TextStyle(fontSize: 22)),
-              ),
-              title: const Text('Copy Link', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 15)),
-              trailing: const Icon(Icons.chevron_right_rounded, size: 20),
-              onTap: copyLink,
-            ),
+          _HypeTile(
+            emoji: '🔗',
+            title: 'Copy Link',
+            subtitle: 'Snatch the link & do ur thing',
+            tileColor: tileColor,
+            textColor: textColor,
+            subColor: subColor,
+            onTap: copyLink,
           ),
-          // Share to Twitter
-          Padding(
-            padding: const EdgeInsets.only(bottom: 8),
-            child: ListTile(
-              leading: Container(
-                padding: const EdgeInsets.all(10),
-                decoration: BoxDecoration(
-                  color: (isDark ? Colors.white : Colors.black).withOpacity(0.05),
-                  borderRadius: BorderRadius.circular(14),
+          const SizedBox(height: 8),
+          // Share to X/Twitter
+          _HypeTile(
+            emoji: '🐦',
+            title: 'Drop on X (Twitter)',
+            subtitle: 'Let the timeline eat 🍽️',
+            tileColor: tileColor,
+            textColor: textColor,
+            subColor: subColor,
+            onTap: () {
+              Navigator.pop(context);
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: const Text('X integration dropping soon 👀'),
+                  behavior: SnackBarBehavior.floating,
+                  backgroundColor: Colors.black87,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                 ),
-                child: const Text('🐦', style: TextStyle(fontSize: 22)),
-              ),
-              title: const Text('Share to Twitter', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 15)),
-              trailing: const Icon(Icons.chevron_right_rounded, size: 20),
-              onTap: () {
-                Navigator.pop(context);
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: const Text('Twitter integration coming soon'),
-                    behavior: SnackBarBehavior.floating,
-                    backgroundColor: AppTheme.primaryBlue,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                  ),
-                );
-              },
-            ),
+              );
+            },
           ),
+          const SizedBox(height: 8),
           // Share to Instagram
-          Padding(
-            padding: const EdgeInsets.only(bottom: 8),
-            child: ListTile(
-              leading: Container(
-                padding: const EdgeInsets.all(10),
-                decoration: BoxDecoration(
-                  color: (isDark ? Colors.white : Colors.black).withOpacity(0.05),
-                  borderRadius: BorderRadius.circular(14),
+          _HypeTile(
+            emoji: '📸',
+            title: 'Blast on Insta',
+            subtitle: 'Stories, Reels, whatever slaps',
+            tileColor: tileColor,
+            textColor: textColor,
+            subColor: subColor,
+            onTap: () {
+              Navigator.pop(context);
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: const Text('Instagram link-up coming soon ✨'),
+                  behavior: SnackBarBehavior.floating,
+                  backgroundColor: const Color(0xFFFF3CAC),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                 ),
-                child: const Text('📸', style: TextStyle(fontSize: 22)),
-              ),
-              title: const Text('Share to Instagram', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 15)),
-              trailing: const Icon(Icons.chevron_right_rounded, size: 20),
-              onTap: () {
-                Navigator.pop(context);
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: const Text('Instagram integration coming soon'),
-                    behavior: SnackBarBehavior.floating,
-                    backgroundColor: AppTheme.primaryBlue,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                  ),
-                );
-              },
-            ),
+              );
+            },
           ),
+          const SizedBox(height: 8),
           // More Options
-          Padding(
-            padding: const EdgeInsets.only(bottom: 8),
-            child: ListTile(
-              leading: Container(
-                padding: const EdgeInsets.all(10),
-                decoration: BoxDecoration(
-                  color: (isDark ? Colors.white : Colors.black).withOpacity(0.05),
-                  borderRadius: BorderRadius.circular(14),
+          _HypeTile(
+            emoji: '📲',
+            title: 'More Ways to Hype',
+            subtitle: 'WhatsApp, Snap, wherever u vibe',
+            tileColor: tileColor,
+            textColor: textColor,
+            subColor: subColor,
+            onTap: () {
+              Navigator.pop(context);
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: const Text('More share options comin fr 🔜'),
+                  behavior: SnackBarBehavior.floating,
+                  backgroundColor: const Color(0xFF00C6FF),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                 ),
-                child: const Text('📲', style: TextStyle(fontSize: 22)),
-              ),
-              title: const Text('More Options', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 15)),
-              trailing: const Icon(Icons.chevron_right_rounded, size: 20),
-              onTap: () {
-                Navigator.pop(context);
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: const Text('More sharing options coming soon'),
-                    behavior: SnackBarBehavior.floating,
-                    backgroundColor: AppTheme.primaryBlue,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                  ),
-                );
-              },
-            ),
+              );
+            },
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 8),
         ],
+      ),
+    );
+  }
+}
+
+class _HypeTile extends StatelessWidget {
+  final String emoji;
+  final String title;
+  final String subtitle;
+  final Color tileColor;
+  final Color textColor;
+  final Color subColor;
+  final VoidCallback onTap;
+
+  const _HypeTile({
+    required this.emoji,
+    required this.title,
+    required this.subtitle,
+    required this.tileColor,
+    required this.textColor,
+    required this.subColor,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        decoration: BoxDecoration(
+          color: tileColor,
+          borderRadius: BorderRadius.circular(16),
+        ),
+        child: Row(
+          children: [
+            _buildEmojiImage(emoji, size: 24),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(title,
+                      style: TextStyle(
+                          fontWeight: FontWeight.w800, fontSize: 14.5, color: textColor)),
+                  Text(subtitle,
+                      style: TextStyle(fontSize: 12, color: subColor, height: 1.3)),
+                ],
+              ),
+            ),
+            Icon(Icons.arrow_forward_ios_rounded, size: 14, color: subColor),
+          ],
+        ),
       ),
     );
   }
@@ -2266,55 +2461,354 @@ class _FbActionButton extends StatelessWidget {
   }
 }
 
-class _ReactionItem extends StatefulWidget {
-  final String emoji;
+class _HypeItActionButton extends StatefulWidget {
   final VoidCallback onTap;
+  final bool isDark;
 
-  const _ReactionItem({required this.emoji, required this.onTap});
+  const _HypeItActionButton({required this.onTap, required this.isDark});
 
   @override
-  State<_ReactionItem> createState() => _ReactionItemState();
+  State<_HypeItActionButton> createState() => _HypeItActionButtonState();
 }
 
-class _ReactionItemState extends State<_ReactionItem> {
-  bool _isHovered = false;
+class _HypeItActionButtonState extends State<_HypeItActionButton>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _pulseCtrl;
+  late final Animation<double> _pulseAnim;
+
+  @override
+  void initState() {
+    super.initState();
+    _pulseCtrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 900),
+    )..repeat(reverse: true);
+    _pulseAnim = Tween<double>(begin: 0.92, end: 1.0).animate(
+      CurvedAnimation(parent: _pulseCtrl, curve: Curves.easeInOut),
+    );
+  }
+
+  @override
+  void dispose() {
+    _pulseCtrl.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
-    return MouseRegion(
-      onEnter: (_) => setState(() => _isHovered = true),
-      onExit: (_) => setState(() => _isHovered = false),
-      cursor: SystemMouseCursors.click,
-      child: GestureDetector(
-        onTap: widget.onTap,
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 150),
-          transform: Matrix4.identity()..scale(_isHovered ? 1.25 : 1.0),
-          transformAlignment: Alignment.center,
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-          child: _buildEmojiImage(widget.emoji, size: 28),
+    return InkWell(
+      onTap: widget.onTap,
+      borderRadius: BorderRadius.circular(16),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 10),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            AnimatedBuilder(
+              animation: _pulseAnim,
+              builder: (_, child) => Transform.scale(
+                scale: _pulseAnim.value,
+                child: child,
+              ),
+              child: _buildEmojiImage('🔥', size: 20),
+            ),
+            const SizedBox(width: 6),
+            ShaderMask(
+              shaderCallback: (bounds) => const LinearGradient(
+                colors: [Color(0xFFFF3CAC), Color(0xFFF59E0B)],
+              ).createShader(bounds),
+              child: Text(
+                'Hype It',
+                style: TextStyle(
+                  fontSize: 13.5,
+                  fontWeight: FontWeight.w800,
+                  color: widget.isDark ? Colors.white : Colors.white,
+                ),
+              ),
+            ),
+          ],
         ),
       ),
     );
   }
 }
 
-Widget _buildEmojiImage(String emoji, {double size = 20}) {
+class _ReactionItem extends StatefulWidget {
+  final String emoji;
+  final String? label;
+  final VoidCallback onTap;
+
+  const _ReactionItem({required this.emoji, this.label, required this.onTap});
+
+  @override
+  State<_ReactionItem> createState() => _ReactionItemState();
+}
+
+class _ReactionItemState extends State<_ReactionItem>
+    with SingleTickerProviderStateMixin {
+  bool _isHovered = false;
+  bool _isAnimating = false;
+  late final AnimationController _bounceCtrl;
+  late final Animation<double> _bounceAnim;
+
+  @override
+  void initState() {
+    super.initState();
+    _bounceCtrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 380),
+    );
+    _bounceAnim = TweenSequence([
+      TweenSequenceItem(
+          tween: Tween<double>(begin: 1.0, end: 1.55)
+              .chain(CurveTween(curve: Curves.easeOut)),
+          weight: 35),
+      TweenSequenceItem(
+          tween: Tween<double>(begin: 1.55, end: 0.85)
+              .chain(CurveTween(curve: Curves.easeInOut)),
+          weight: 25),
+      TweenSequenceItem(
+          tween: Tween<double>(begin: 0.85, end: 1.05)
+              .chain(CurveTween(curve: Curves.elasticOut)),
+          weight: 40),
+    ]).animate(_bounceCtrl);
+    _bounceCtrl.addStatusListener((status) {
+      if (status == AnimationStatus.completed) {
+        if (mounted) setState(() => _isAnimating = false);
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _bounceCtrl.dispose();
+    super.dispose();
+  }
+
+  void _triggerBounce() {
+    setState(() => _isAnimating = true);
+    _bounceCtrl.forward(from: 0);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    return MouseRegion(
+      onEnter: (_) {
+        setState(() => _isHovered = true);
+        _triggerBounce();
+      },
+      onExit: (_) => setState(() => _isHovered = false),
+      cursor: SystemMouseCursors.click,
+      child: GestureDetector(
+        onTap: () {
+          _triggerBounce();
+          // Small delay so animation is visible before onTap dismisses the popup
+          Future.delayed(const Duration(milliseconds: 120), widget.onTap);
+        },
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            AnimatedBuilder(
+              animation: _bounceAnim,
+              builder: (context, child) => Transform.scale(
+                // Play animation on tap (mobile) AND hover (desktop)
+                scale: (_isAnimating || _isHovered) ? _bounceAnim.value : 1.0,
+                child: child,
+              ),
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                decoration: BoxDecoration(
+                  color: _isHovered
+                      ? Colors.white.withOpacity(0.08)
+                      : Colors.transparent,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: _buildEmojiImage(widget.emoji, size: 32),
+              ),
+            ),
+            if (widget.label != null)
+              AnimatedOpacity(
+                // Show label both on hover (desktop) and during tap animation (mobile)
+                opacity: (_isHovered || _isAnimating) ? 1.0 : 0.0,
+                duration: const Duration(milliseconds: 120),
+                child: Text(
+                  widget.label!,
+                  style: TextStyle(
+                    fontSize: 9.5,
+                    fontWeight: FontWeight.w800,
+                    color: isDark ? Colors.white70 : Colors.black87,
+                  ),
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class LiveEmojiWidget extends StatefulWidget {
+  final String emoji;
+  final double size;
+  final bool animateMotion;
+
+  const LiveEmojiWidget({
+    super.key,
+    required this.emoji,
+    this.size = 20,
+    this.animateMotion = true,
+  });
+
+  @override
+  State<LiveEmojiWidget> createState() => _LiveEmojiWidgetState();
+}
+
+class _LiveEmojiWidgetState extends State<LiveEmojiWidget>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _motionCtrl;
+
+  @override
+  void initState() {
+    super.initState();
+    _motionCtrl = AnimationController(
+      vsync: this,
+      duration: _getDurationForEmoji(widget.emoji),
+    );
+    if (widget.animateMotion) {
+      _motionCtrl.repeat(reverse: true);
+    }
+  }
+
+  Duration _getDurationForEmoji(String e) {
+    if (e.contains('😭')) return const Duration(milliseconds: 350); // fast sobbing tremble
+    if (e.contains('🔥')) return const Duration(milliseconds: 550); // burning flame pulse
+    if (e.contains('💀')) return const Duration(milliseconds: 1300); // floaty ghost wobble
+    if (e.contains('🫶') || e.contains('❤️')) return const Duration(milliseconds: 650); // heartbeat
+    if (e.contains('👀')) return const Duration(milliseconds: 950); // side glance
+    if (e.contains('🤩')) return const Duration(milliseconds: 750); // starburst shimmer
+    return const Duration(milliseconds: 1100);
+  }
+
+  @override
+  void dispose() {
+    _motionCtrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final e = widget.emoji;
+    Widget rawImage = _buildRawEmojiImage(e, size: widget.size);
+
+    if (!widget.animateMotion) {
+      return rawImage;
+    }
+
+    return AnimatedBuilder(
+      animation: _motionCtrl,
+      builder: (context, child) {
+        final t = _motionCtrl.value;
+
+        if (e.contains('😭')) {
+          // Sobbing trembling shake (fast up & down vibration)
+          final dy = (t < 0.5 ? (t * 2) : (2 - t * 2)) * 2.4 - 1.2;
+          return Transform.translate(
+            offset: Offset(0, dy),
+            child: child,
+          );
+        } else if (e.contains('🔥')) {
+          // Burning flame scale pulse & upward float
+          final scale = 1.0 + 0.12 * t;
+          final dy = -1.5 * t;
+          return Transform.translate(
+            offset: Offset(0, dy),
+            child: Transform.scale(
+              scale: scale,
+              child: child,
+            ),
+          );
+        } else if (e.contains('💀')) {
+          // Floaty ghost wobble (vertical float + rotational tilt)
+          final dy = -3.5 * (0.5 - (t - 0.5).abs());
+          final angle = (t - 0.5) * 0.14;
+          return Transform.translate(
+            offset: Offset(0, dy),
+            child: Transform.rotate(
+              angle: angle,
+              child: child,
+            ),
+          );
+        } else if (e.contains('👀')) {
+          // Eye glance shift (horizontal translation)
+          final dx = (t - 0.5) * 3.2;
+          return Transform.translate(
+            offset: Offset(dx, 0),
+            child: child,
+          );
+        } else if (e.contains('🫶') || e.contains('❤️')) {
+          // Heartbeat pulse rhythm
+          final scale = 1.0 + 0.16 * (t < 0.35 ? t / 0.35 : (1.0 - t) / 0.65);
+          return Transform.scale(
+            scale: scale,
+            child: child,
+          );
+        } else if (e.contains('🤩')) {
+          // Starburst shimmer
+          final scale = 1.0 + 0.10 * t;
+          final angle = (t - 0.5) * 0.12;
+          return Transform.rotate(
+            angle: angle,
+            child: Transform.scale(scale: scale, child: child),
+          );
+        }
+
+        // Gentle breathing float default
+        final dy = -1.8 * t;
+        return Transform.translate(
+          offset: Offset(0, dy),
+          child: child,
+        );
+      },
+      child: rawImage,
+    );
+  }
+}
+
+Widget _buildRawEmojiImage(String emoji, {required double size}) {
   try {
     final runes = emoji.runes.toList();
     final cleanRunes = runes.where((r) => r != 0xFE0F).toList();
     final hex = cleanRunes.map((r) => r.toRadixString(16)).join('-');
-    
+
+    // Noto Animated 3D GIF URL
+    final notoGifUrl = 'https://fonts.gstatic.com/s/e/notoemoji/latest/$hex/512.gif';
+    // Static Twemoji PNG fallback
+    final twemojiUrl = 'https://cdnjs.cloudflare.com/ajax/libs/twemoji/14.0.2/72x72/$hex.png';
+
     return Image.network(
-      'https://cdnjs.cloudflare.com/ajax/libs/twemoji/14.0.2/72x72/$hex.png',
+      notoGifUrl,
       width: size,
       height: size,
       fit: BoxFit.contain,
-      errorBuilder: (context, error, stackTrace) => Text(
-        emoji,
-        style: TextStyle(
-          fontSize: size,
-          fontFamilyFallback: const ['Apple Color Emoji', 'Segoe UI Emoji', 'Noto Color Emoji', 'Android Emoji'],
+      gaplessPlayback: true,
+      errorBuilder: (context, error, stackTrace) => Image.network(
+        twemojiUrl,
+        width: size,
+        height: size,
+        fit: BoxFit.contain,
+        gaplessPlayback: true,
+        errorBuilder: (context, error, stackTrace) => Text(
+          emoji,
+          style: TextStyle(
+            fontSize: size,
+            fontFamilyFallback: const [
+              'Apple Color Emoji',
+              'Segoe UI Emoji',
+              'Noto Color Emoji',
+              'Android Emoji'
+            ],
+          ),
         ),
       ),
     );
@@ -2323,10 +2817,19 @@ Widget _buildEmojiImage(String emoji, {double size = 20}) {
       emoji,
       style: TextStyle(
         fontSize: size,
-        fontFamilyFallback: const ['Apple Color Emoji', 'Segoe UI Emoji', 'Noto Color Emoji', 'Android Emoji'],
+        fontFamilyFallback: const [
+          'Apple Color Emoji',
+          'Segoe UI Emoji',
+          'Noto Color Emoji',
+          'Android Emoji'
+        ],
       ),
     );
   }
+}
+
+Widget _buildEmojiImage(String emoji, {double size = 20, bool animateMotion = true}) {
+  return LiveEmojiWidget(emoji: emoji, size: size, animateMotion: animateMotion);
 }
 
 class _LikesSheet extends ConsumerStatefulWidget {
@@ -2351,7 +2854,7 @@ class _LikesSheetState extends ConsumerState<_LikesSheet> with SingleTickerProvi
     _reactionGroups = {'All': allReactors};
     
     for (var userId in allReactors) {
-      String reaction = '👍';
+      String reaction = '🔥'; // default to fire for legacy likes
       if (widget.post.reactions.containsKey(userId)) {
          reaction = widget.post.reactions[userId]!;
       }
@@ -2376,7 +2879,7 @@ class _LikesSheetState extends ConsumerState<_LikesSheet> with SingleTickerProvi
     if (widget.post.reactions.containsKey(userId)) {
       return widget.post.reactions[userId]!;
     }
-    return '👍';
+    return '🔥'; // fire as default
   }
 
   @override

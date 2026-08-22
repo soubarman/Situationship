@@ -35,14 +35,14 @@ class SpotlightFeedSection extends ConsumerWidget {
         final sessionAsync = ref.watch(spotlightSessionProvider);
         return sessionAsync.when(
           loading: () => const SizedBox(height: 120, child: Center(child: CircularProgressIndicator())),
-          error: (e, _) => Container(padding: const EdgeInsets.all(16), child: Text("Session Error: $e", style: const TextStyle(color: Colors.red))),
+          error: (e, _) => const SizedBox.shrink(),
           data: (session) {
-            if (session == null) return const Center(child: Text("Session is null"));
+            if (session == null) return const SizedBox.shrink();
 
             final bidsAsync = ref.watch(spotlightBidsProvider(session.id));
             return bidsAsync.when(
               loading: () => const SizedBox(height: 120, child: Center(child: CircularProgressIndicator())),
-              error: (e, _) => Container(padding: const EdgeInsets.all(16), child: Text("Bids Error: $e", style: const TextStyle(color: Colors.red))),
+              error: (e, _) => const SizedBox.shrink(),
               data: (bids) {
                 return Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -280,142 +280,210 @@ class SpotlightFeedCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final isTop3 = bid.rank <= 3;
     Color rankColor;
-    
+
     switch (bid.rank) {
-      case 1: rankColor = const Color(0xFFFFD700); break;
-      case 2: rankColor = const Color(0xFFE0E0E0); break;
-      case 3: rankColor = const Color(0xFFCD7F32); break;
-      default: rankColor = Colors.white24;
+      case 1:
+        rankColor = const Color(0xFFFFD700);
+        break;
+      case 2:
+        rankColor = const Color(0xFFE0E0E0);
+        break;
+      case 3:
+        rankColor = const Color(0xFFCD7F32);
+        break;
+      default:
+        rankColor = const Color(0xFFA855F7);
     }
 
     final isPlaceholder = bid.userId.isEmpty;
+
+    List<Color> getPlaceholderGradient() {
+      switch (bid.rank) {
+        case 1:
+          return [const Color(0xFFFEF08A), const Color(0xFFF59E0B)];
+        case 2:
+          return [const Color(0xFFA855F7), const Color(0xFF6366F1)];
+        case 3:
+          return [const Color(0xFFFF3CAC), Color(0xFF7C3AED)];
+        default:
+          return [const Color(0xFF00C6FF), const Color(0xFF0072FF)];
+      }
+    }
 
     return GestureDetector(
       onTap: () {
         if (!isPlaceholder && bid.userId.isNotEmpty) {
           context.push('/profile/view/${bid.userId}');
+        } else {
+          context.push('/spotlight');
         }
       },
       child: Container(
-      width: 100,
-      margin: const EdgeInsets.symmetric(horizontal: 4),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(
-          color: isTop3 ? rankColor : rankColor.withOpacity(0.3),
-          width: 1.5,
+        width: 104,
+        margin: const EdgeInsets.symmetric(horizontal: 4),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(
+            color: isTop3 ? rankColor : rankColor.withOpacity(0.5),
+            width: 1.5,
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: (isTop3 ? rankColor : const Color(0xFFA855F7)).withOpacity(0.25),
+              blurRadius: 12,
+              spreadRadius: 1,
+            ),
+          ],
         ),
-        boxShadow: isTop3 ? [
-          BoxShadow(
-            color: rankColor.withOpacity(0.15),
-            blurRadius: 12,
-            spreadRadius: 2,
-          )
-        ] : [],
-      ),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(18),
-        child: Stack(
-          fit: StackFit.expand,
-          children: [
-            // Background Image
-            if (!isPlaceholder)
-              Image.network(
-                bid.profileImageUrl,
-                fit: BoxFit.cover,
-              )
-            else
-              Container(color: Colors.black26),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(18),
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
+              // Background: User profile photo or Vibrant Gradient Placeholder
+              if (!isPlaceholder && bid.profileImageUrl.isNotEmpty)
+                Image.network(
+                  bid.profileImageUrl,
+                  fit: BoxFit.cover,
+                  errorBuilder: (_, __, ___) => Container(
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(colors: getPlaceholderGradient()),
+                    ),
+                  ),
+                )
+              else
+                Container(
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: getPlaceholderGradient(),
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                    ),
+                  ),
+                  child: Stack(
+                    alignment: Alignment.center,
+                    children: [
+                      Positioned.fill(
+                        child: Container(
+                          color: Colors.black.withOpacity(0.15),
+                        ),
+                      ),
+                      Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withOpacity(0.25),
+                          shape: BoxShape.circle,
+                          border: Border.all(
+                            color: Colors.white.withOpacity(0.6),
+                            width: 1.2,
+                          ),
+                        ),
+                        child: const Icon(Icons.add_rounded, color: Colors.white, size: 20),
+                      ),
+                    ],
+                  ),
+                ),
 
-            // Gradient overlay
-            Container(
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                  colors: [
-                    Colors.transparent,
-                    Colors.black.withOpacity(0.8),
-                  ],
-                  stops: const [0.5, 1.0],
+              // Gradient Overlay
+              Container(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: [
+                      Colors.transparent,
+                      Colors.black.withOpacity(0.85),
+                    ],
+                    stops: const [0.4, 1.0],
+                  ),
                 ),
               ),
-            ),
 
-            // Rank Badge
-            Positioned(
-              top: 8,
-              left: 8,
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
-                decoration: BoxDecoration(
-                  color: isTop3 ? rankColor : Colors.white.withOpacity(0.2),
-                  borderRadius: BorderRadius.circular(12),
+              // Rank Badge
+              Positioned(
+                top: 8,
+                left: 8,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                  decoration: BoxDecoration(
+                    color: isTop3 ? rankColor : Colors.black.withOpacity(0.55),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: Colors.white.withOpacity(0.4),
+                      width: 0.8,
+                    ),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      if (bid.rank == 1) const Text('👑 ', style: TextStyle(fontSize: 10)),
+                      if (bid.rank == 2) const Text('🥈 ', style: TextStyle(fontSize: 10)),
+                      if (bid.rank == 3) const Text('🥉 ', style: TextStyle(fontSize: 10)),
+                      Text(
+                        '#${bid.rank}',
+                        style: TextStyle(
+                          color: isTop3 ? Colors.black87 : Colors.white,
+                          fontWeight: FontWeight.w900,
+                          fontSize: 10.5,
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
+              ),
+
+              // Bottom Info
+              Positioned(
+                bottom: 8,
+                left: 8,
+                right: 8,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    if (bid.rank == 1) const Text('👑 ', style: TextStyle(fontSize: 10)),
                     Text(
-                      '#${bid.rank}',
-                      style: TextStyle(
-                        color: isTop3 ? Colors.black87 : Colors.white,
-                        fontWeight: FontWeight.bold,
-                        fontSize: 11,
+                      isPlaceholder ? 'Claim Slot' : '@${bid.username.toLowerCase().replaceAll(' ', '')}',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w900,
+                        fontSize: 11.5,
+                        letterSpacing: -0.2,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const SizedBox(height: 3),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+                      decoration: BoxDecoration(
+                        color: Colors.black.withOpacity(0.45),
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(
+                          color: Colors.white.withOpacity(0.2),
+                          width: 0.8,
+                        ),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(Icons.favorite_rounded, color: Color(0xFFFF4B4B), size: 11),
+                          const SizedBox(width: 3),
+                          Text(
+                            '${bid.amount}',
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.w900,
+                              fontSize: 10.5,
+                            ),
+                          ),
+                        ],
                       ),
                     ),
                   ],
                 ),
               ),
-            ),
-
-            // Bottom Info
-            Positioned(
-              bottom: 8,
-              left: 8,
-              right: 8,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    '@${bid.username.toLowerCase().replaceAll(' ', '')}',
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontWeight: FontWeight.bold,
-                      fontSize: 12,
-                    ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  const SizedBox(height: 4),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.15),
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        const Icon(Icons.favorite, color: Color(0xFFFF4B4B), size: 12),
-                        const SizedBox(width: 4),
-                        Text(
-                          '${bid.amount}', // Mocking likes using amount as discussed
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontWeight: FontWeight.bold,
-                            fontSize: 11,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
+            ],
+          ),
         ),
-      ),
       ),
     );
   }

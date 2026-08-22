@@ -73,9 +73,15 @@ class AuthController extends StateNotifier<AsyncValue<User?>> {
 
           if (kIsWeb) {
             final bytes = await avatarFile.readAsBytes();
-            await storageRef.putData(bytes);
+            await storageRef.putData(
+              bytes,
+              SettableMetadata(contentType: 'image/jpeg'),
+            );
           } else {
-            await storageRef.putFile(File(avatarFile.path));
+            await storageRef.putFile(
+              File(avatarFile.path),
+              SettableMetadata(contentType: 'image/jpeg'),
+            );
           }
 
           photoUrl = await storageRef.getDownloadURL();

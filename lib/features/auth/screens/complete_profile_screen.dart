@@ -174,9 +174,15 @@ class _CompleteProfileScreenState extends ConsumerState<CompleteProfileScreen>
         final storageRef = FirebaseStorage.instance.ref('avatars/${user.uid}.jpg');
         if (kIsWeb) {
           final bytes = await _avatarFile!.readAsBytes();
-          await storageRef.putData(bytes);
+          await storageRef.putData(
+            bytes,
+            SettableMetadata(contentType: 'image/jpeg'),
+          );
         } else {
-          await storageRef.putFile(File(_avatarFile!.path));
+          await storageRef.putFile(
+            File(_avatarFile!.path),
+            SettableMetadata(contentType: 'image/jpeg'),
+          );
         }
         photoUrl = await storageRef.getDownloadURL();
       }

@@ -1,6 +1,51 @@
 [build]
   publish = "build/web"
 
+# ── Admin panel — serve as static files (must come BEFORE the SPA catch-all) ──
+
+# Alias /admin-dashboard and /admin-dashboard/* to /admin static files
+[[redirects]]
+  from = "/admin-dashboard"
+  to = "/admin/index.html"
+  status = 200
+
+[[redirects]]
+  from = "/admin-dashboard/dashboard"
+  to = "/admin/dashboard/index.html"
+  status = 200
+
+[[redirects]]
+  from = "/admin-dashboard/*"
+  to = "/admin/:splat"
+  status = 200
+
+# Canonical /admin routes
+[[redirects]]
+  from = "/admin"
+  to = "/admin/index.html"
+  status = 200
+
+[[redirects]]
+  from = "/admin/"
+  to = "/admin/index.html"
+  status = 200
+
+[[redirects]]
+  from = "/admin/dashboard"
+  to = "/admin/dashboard/index.html"
+  status = 200
+
+[[redirects]]
+  from = "/admin/dashboard/"
+  to = "/admin/dashboard/index.html"
+  status = 200
+
+[[redirects]]
+  from = "/admin/*"
+  to = "/admin/:splat"
+  status = 200
+
+# ── Flutter SPA — catch-all for client-side routing ───────────────────────────
 [[redirects]]
   from = "/*"
   to = "/index.html"

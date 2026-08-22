@@ -3,8 +3,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../verification/presentation/widgets/s_badge_widget.dart';
 import '../../../core/models/user_model.dart';
 import '../../../core/providers/app_state_provider.dart';
+import '../../../shared/widgets/profile_choice_sheet.dart';
 
 class SearchScreen extends ConsumerStatefulWidget {
   const SearchScreen({super.key});
@@ -235,14 +237,14 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
   }
 }
 
-class _UserResultTile extends StatelessWidget {
+class _UserResultTile extends ConsumerWidget {
   final UserModel user;
   const _UserResultTile({required this.user});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     return InkWell(
-      onTap: () => context.push('/profile/view/${user.id}'),
+      onTap: () => ProfileChoiceSheet.navigateToProfile(context, ref, user.id),
       child: ListTile(
         contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
         leading: Stack(
@@ -274,7 +276,7 @@ class _UserResultTile extends StatelessWidget {
             Text(user.name, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 15)),
             if (user.isVerified) ...[
               const SizedBox(width: 4),
-              Icon(Icons.verified_rounded, size: 14, color: AppTheme.primaryBlue),
+              const SBadgeWidget(size: 14, showTooltip: false),
             ],
           ],
         ),

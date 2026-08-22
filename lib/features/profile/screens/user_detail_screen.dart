@@ -13,9 +13,12 @@ import '../../../core/models/chat_model.dart';
 import '../../../core/models/post_model.dart';
 import '../../feed/widgets/post_card.dart';
 import '../../../core/utils/location_helper.dart';
+import '../../verification/presentation/widgets/s_badge_widget.dart';
 import '../../../shared/widgets/background_orbs.dart';
 import '../../wallet/widgets/coin_gate_sheet.dart';
 import '../../../core/providers/access_provider.dart';
+import '../../../core/providers/firestore_provider.dart';
+import '../../../shared/widgets/profile_choice_sheet.dart';
 
 class UserDetailScreen extends ConsumerStatefulWidget {
   final String userId;
@@ -25,7 +28,8 @@ class UserDetailScreen extends ConsumerStatefulWidget {
   ConsumerState<UserDetailScreen> createState() => _UserDetailScreenState();
 }
 
-class _UserDetailScreenState extends ConsumerState<UserDetailScreen> {
+class _UserDetailScreenState extends ConsumerState<UserDetailScreen>
+    with TickerProviderStateMixin {
   int _activeTab = 0;
   double _sliderValue = 0.0;
   bool _isRequesting = false;
@@ -37,11 +41,34 @@ class _UserDetailScreenState extends ConsumerState<UserDetailScreen> {
 
   double? _deviceLat;
   double? _deviceLon;
+  bool _hasAskedChoice = false;
+
+  // Animation controllers
+  late final AnimationController _shimmerAnim;
+  late final AnimationController _storyRingAnim;
+  late final Animation<double> _pulseAnim;
 
   @override
   void initState() {
     super.initState();
     _fetchDeviceLocation();
+
+    // Shimmer/pulse for confess bar
+    _shimmerAnim = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 2200),
+    )..repeat();
+
+    // Spinning ring for Takes thumbnails
+    _storyRingAnim = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 3),
+    )..repeat();
+
+    // Pulse for lock icon
+    _pulseAnim = Tween<double>(begin: 0.92, end: 1.08).animate(
+      CurvedAnimation(parent: _shimmerAnim, curve: Curves.easeInOut),
+    );
   }
 
   bool _viewRecorded = false;
@@ -102,6 +129,8 @@ class _UserDetailScreenState extends ConsumerState<UserDetailScreen> {
 
   @override
   void dispose() {
+    _shimmerAnim.dispose();
+    _storyRingAnim.dispose();
     _confessionController.dispose();
     super.dispose();
   }
@@ -556,164 +585,432 @@ class _UserDetailScreenState extends ConsumerState<UserDetailScreen> {
     _showSuccess('Confession dismissed. No messages were sent.');
   }
 
-  Widget _buildConfessSwipeBar(bool isDark) {
-    return Container(
-      height: 56,
-      margin: const EdgeInsets.symmetric(horizontal: 24),
-      padding: const EdgeInsets.symmetric(horizontal: 4),
-      decoration: BoxDecoration(
-        color: isDark ? Colors.white.withOpacity(0.06) : const Color(0xFFF1F5F9),
-        borderRadius: BorderRadius.circular(28),
-        border: Border.all(
-          color: isDark ? Colors.white.withOpacity(0.12) : Colors.black.withOpacity(0.06),
-          width: 1.5,
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(isDark ? 0.0 : 0.02),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
+  Widget _buildConfessSwipeBar(UserModel currentUser, UserModel targetUser, bool isDark) {
+    final progress = _confessSwipeValue;
+    final trackBg = isDark ? const Color(0xFF1A1033) : const Color(0xFFF0E6FF);
+    const glowColor = Color(0xFF9333EA);
+    final labelColor = isDark ? Colors.white.withOpacity(0.9) : const Color(0xFF5B21B6);
+    final isIdle = progress < 0.05;
+
+    return AnimatedBuilder(
+      animation: _shimmerAnim,
+      builder: (context, child) {
+        final t = _shimmerAnim.value;
+        final pulse = 0.5 + 0.5 * (1 - (2 * t - 1).abs());
+        final pulseScale = 0.92 + 0.16 * pulse;
+        final glowOpacity = (isDark ? 0.25 : 0.12) + 0.2 * pulse;
+        final shimmerPos = -0.4 + t * 1.8;
+
+        return Container(
+          height: 62,
+          decoration: BoxDecoration(
+            color: trackBg,
+            borderRadius: BorderRadius.circular(31),
+            border: Border.all(
+              color: glowColor.withOpacity(isDark ? 0.55 : 0.4),
+              width: 1.5,
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: glowColor.withOpacity(glowOpacity),
+                blurRadius: 22,
+                spreadRadius: isIdle ? 2 : 0,
+                offset: const Offset(0, 5),
+              ),
+            ],
           ),
-        ],
-      ),
-      child: Stack(
-        children: [
-          Center(
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(31),
+            child: Stack(
               children: [
-                Icon(Icons.lock_rounded, size: 16, color: AppTheme.accentPurple.withOpacity(0.7)),
-                const SizedBox(width: 8),
-                const Text(
-                  'Swipe right to confess... 🤫',
-                  style: TextStyle(
-                    color: AppTheme.textSecondary,
-                    fontWeight: FontWeight.w800,
-                    fontSize: 14.5,
-                    letterSpacing: -0.2,
+                // Drag-fill track
+                Positioned.fill(
+                  child: FractionallySizedBox(
+                    alignment: Alignment.centerLeft,
+                    widthFactor: progress,
+                    child: Container(
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          colors: [
+                            glowColor.withOpacity(0.38),
+                            glowColor.withOpacity(0.15),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+
+                // Sweeping shimmer (idle only)
+                if (isIdle)
+                  Positioned.fill(
+                    child: FractionallySizedBox(
+                      alignment: Alignment(shimmerPos * 2 - 1, 0),
+                      widthFactor: 0.28,
+                      child: Container(
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            begin: Alignment.centerLeft,
+                            end: Alignment.centerRight,
+                            colors: [
+                              Colors.transparent,
+                              (isDark ? Colors.white : glowColor).withOpacity(0.13),
+                              Colors.transparent,
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+
+                // Label: pulsing lock + text + chevrons
+                Center(
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Transform.scale(
+                        scale: isIdle ? pulseScale : 1.0,
+                        child: Icon(
+                          progress > 0.6
+                              ? Icons.lock_open_rounded
+                              : Icons.lock_outline_rounded,
+                          size: 18,
+                          color: labelColor,
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        progress > 0.15
+                            ? (progress > 0.6 ? 'Almost there... 🔥' : 'Keep going...')
+                            : 'Swipe right to confess 🤫',
+                        style: TextStyle(
+                          color: labelColor,
+                          fontWeight: FontWeight.w800,
+                          fontSize: 14,
+                          letterSpacing: -0.1,
+                        ),
+                      ),
+                      if (isIdle) ...[const SizedBox(width: 8), _AnimatedChevrons(color: labelColor, animValue: t)],
+                    ],
+                  ),
+                ),
+
+                // Invisible slider on top
+                Positioned.fill(
+                  child: SliderTheme(
+                    data: SliderThemeData(
+                      trackHeight: 62,
+                      thumbShape: _CustomConfessThumbShape(isDark: isDark),
+                      overlayShape: SliderComponentShape.noOverlay,
+                      activeTrackColor: Colors.transparent,
+                      inactiveTrackColor: Colors.transparent,
+                    ),
+                    child: Slider(
+                      value: _confessSwipeValue,
+                      onChanged: (v) {
+                        setState(() => _confessSwipeValue = v);
+                        if (v > 0.88) {
+                          HapticFeedback.heavyImpact();
+                          setState(() => _confessSwipeValue = 0.0);
+                          _openConfessionBottomSheet(currentUser, targetUser, isDark);
+                        }
+                      },
+                      onChangeEnd: (v) {
+                        if (v < 0.88) setState(() => _confessSwipeValue = 0);
+                      },
+                    ),
                   ),
                 ),
               ],
             ),
           ),
-          Positioned.fill(
-            child: SliderTheme(
-              data: SliderThemeData(
-                trackHeight: 56,
-                thumbShape: _CustomConfessThumbShape(),
-                overlayShape: SliderComponentShape.noOverlay,
-                activeTrackColor: Colors.transparent,
-                inactiveTrackColor: Colors.transparent,
-              ),
-              child: Slider(
-                value: _confessSwipeValue,
-                onChanged: (v) {
-                  setState(() => _confessSwipeValue = v);
-                  if (v > 0.9) {
-                    HapticFeedback.heavyImpact();
-                    setState(() {
-                      _isConfessionActive = true;
-                      _confessSwipeValue = 0.0;
-                    });
-                  }
-                },
-                onChangeEnd: (v) {
-                  if (v < 0.9) {
-                    setState(() => _confessSwipeValue = 0);
-                  }
-                },
-              ),
-            ),
-          ),
-        ],
-      ),
+        );
+      },
     );
   }
 
-  Widget _buildActiveConfessionComposer(UserModel currentUser, UserModel targetUser, bool isDark) {
-    return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 24),
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: isDark ? Colors.white.withOpacity(0.05) : Colors.white,
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(
-          color: AppTheme.accentPurple.withOpacity(0.3),
-          width: 1.5,
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: AppTheme.accentPurple.withOpacity(0.08),
-            blurRadius: 16,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              const Icon(Icons.lock_rounded, size: 18, color: AppTheme.accentPurple),
-              const SizedBox(width: 8),
-              const Text(
-                'Anonymous Confession',
-                style: TextStyle(fontWeight: FontWeight.w800, color: AppTheme.accentPurple, fontSize: 14),
-              ),
-              const Spacer(),
-              GestureDetector(
-                onTap: _dismissConfession,
-                child: Container(
-                  padding: const EdgeInsets.all(4),
-                  decoration: BoxDecoration(
-                    color: Colors.grey.withOpacity(0.1),
-                    shape: BoxShape.circle,
+  void _openConfessionBottomSheet(UserModel currentUser, UserModel targetUser, bool isDark) {
+    _confessionController.clear();
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      useSafeArea: true,
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (context, setModalState) {
+            final sheetBg = isDark ? const Color(0xFF0F0C1D) : Colors.white;
+            final textCol = isDark ? Colors.white : const Color(0xFF1A1033);
+            final hintCol = isDark ? Colors.white.withOpacity(0.4) : const Color(0xFF8B7CB8);
+            final inputBg = isDark ? const Color(0xFF1B1730) : const Color(0xFFF7F3FF);
+            final borderCol = isDark ? const Color(0xFF3D2E6B) : const Color(0xFFE0D4FF);
+            final charCount = _confessionController.text.length;
+            final charColor = charCount > 170
+                ? const Color(0xFFEF4444)
+                : charCount > 130
+                    ? const Color(0xFFF59E0B)
+                    : hintCol;
+
+            return Container(
+              decoration: BoxDecoration(
+                color: sheetBg,
+                borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+                boxShadow: [
+                  BoxShadow(
+                    color: const Color(0xFF9333EA).withOpacity(0.25),
+                    blurRadius: 40,
+                    offset: const Offset(0, -8),
                   ),
-                  child: const Icon(Icons.close_rounded, size: 16, color: AppTheme.textSecondary),
-                ),
+                ],
               ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          TextField(
-            controller: _confessionController,
-            maxLines: 3,
-            maxLength: 200,
-            decoration: InputDecoration(
-              hintText: 'Type your secret confession here... Target won\'t know who sent it! 🤫',
-              hintStyle: TextStyle(color: isDark ? Colors.white30 : Colors.black38, fontSize: 13),
-              border: InputBorder.none,
-              enabledBorder: InputBorder.none,
-              focusedBorder: InputBorder.none,
-              contentPadding: EdgeInsets.zero,
-              counterText: '',
-            ),
-            style: const TextStyle(fontSize: 14, height: 1.4),
-          ),
-          const SizedBox(height: 12),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.end,
-            children: [
-              ElevatedButton.icon(
-                onPressed: _isSendingConfession ? null : () => _sendConfession(currentUser, targetUser),
-                icon: _isSendingConfession 
-                    ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                    : const Icon(Icons.check_circle_rounded, size: 18),
-                label: const Text('Send anonymously 🔒', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppTheme.accentPurple,
-                  foregroundColor: Colors.white,
-                  elevation: 2,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  // Gradient banner header
+                  Container(
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        colors: isDark
+                            ? [const Color(0xFF3B0764), const Color(0xFF1E0A3C)]
+                            : [const Color(0xFFF5F0FF), const Color(0xFFEDE9FF)],
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                      ),
+                      borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+                    ),
+                    padding: const EdgeInsets.fromLTRB(22, 14, 12, 18),
+                    child: Column(
+                      children: [
+                        // Drag handle
+                        Center(
+                          child: Container(
+                            width: 38,
+                            height: 4,
+                            margin: const EdgeInsets.only(bottom: 16),
+                            decoration: BoxDecoration(
+                              color: isDark ? Colors.white30 : const Color(0xFFB39DDB),
+                              borderRadius: BorderRadius.circular(4),
+                            ),
+                          ),
+                        ),
+                        Row(
+                          children: [
+                            Container(
+                              width: 50,
+                              height: 50,
+                              decoration: BoxDecoration(
+                                gradient: const LinearGradient(
+                                  colors: [Color(0xFF9333EA), Color(0xFFC084FC)],
+                                  begin: Alignment.topLeft,
+                                  end: Alignment.bottomRight,
+                                ),
+                                shape: BoxShape.circle,
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: const Color(0xFF9333EA).withOpacity(0.4),
+                                    blurRadius: 12,
+                                    offset: const Offset(0, 4),
+                                  ),
+                                ],
+                              ),
+                              child: const Icon(Icons.lock_rounded, size: 24, color: Colors.white),
+                            ),
+                            const SizedBox(width: 14),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    'Anonymous Confession',
+                                    style: TextStyle(
+                                      fontSize: 18,
+                                      fontWeight: FontWeight.w900,
+                                      color: isDark ? Colors.white : const Color(0xFF3B0764),
+                                      letterSpacing: -0.4,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 3),
+                                  Text(
+                                    '${targetUser.name} won\'t know who sent this 🤫',
+                                    style: TextStyle(
+                                      fontSize: 12.5,
+                                      fontWeight: FontWeight.w600,
+                                      color: isDark ? const Color(0xFFC084FC) : const Color(0xFF7C3AED),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            GestureDetector(
+                              onTap: () => Navigator.pop(context),
+                              child: Container(
+                                width: 36,
+                                height: 36,
+                                decoration: BoxDecoration(
+                                  color: isDark ? Colors.white.withOpacity(0.12) : Colors.black.withOpacity(0.07),
+                                  shape: BoxShape.circle,
+                                ),
+                                child: Icon(Icons.close_rounded, size: 20, color: isDark ? Colors.white70 : Colors.black54),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+
+                  // Body
+                  Padding(
+                    padding: EdgeInsets.fromLTRB(
+                      20, 20, 20,
+                      MediaQuery.of(context).viewInsets.bottom + 24,
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        // Text field
+                        Container(
+                          decoration: BoxDecoration(
+                            color: inputBg,
+                            borderRadius: BorderRadius.circular(18),
+                            border: Border.all(color: borderCol, width: 1.5),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              TextField(
+                                controller: _confessionController,
+                                autofocus: true,
+                                maxLines: 5,
+                                maxLength: 200,
+                                onChanged: (_) => setModalState(() {}),
+                                decoration: InputDecoration(
+                                  hintText: 'Write your secret for ${targetUser.name}... 💭',
+                                  hintStyle: TextStyle(color: hintCol, fontSize: 14.5, height: 1.5),
+                                  border: InputBorder.none,
+                                  enabledBorder: InputBorder.none,
+                                  focusedBorder: InputBorder.none,
+                                  contentPadding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+                                  counterText: '',
+                                ),
+                                style: TextStyle(
+                                  fontSize: 15.5,
+                                  height: 1.55,
+                                  color: textCol,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                              Padding(
+                                padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+                                child: Row(
+                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                  children: [
+                                    Text(
+                                      '✍️ Be honest, it\'s anonymous',
+                                      style: TextStyle(
+                                        fontSize: 11,
+                                        color: hintCol,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                    Text(
+                                      '$charCount/200',
+                                      style: TextStyle(
+                                        fontSize: 11.5,
+                                        fontWeight: FontWeight.w700,
+                                        color: charColor,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+
+                        const SizedBox(height: 16),
+
+                        // Send button
+                        GestureDetector(
+                          onTap: _isSendingConfession
+                              ? null
+                              : () {
+                                  final text = _confessionController.text.trim();
+                                  if (text.isEmpty) {
+                                    _showError('Type something to confess first! 💭');
+                                    return;
+                                  }
+                                  setModalState(() {});
+                                  Navigator.pop(context);
+                                  _sendConfession(currentUser, targetUser);
+                                },
+                          child: Container(
+                            height: 56,
+                            decoration: BoxDecoration(
+                              gradient: _isSendingConfession
+                                  ? null
+                                  : const LinearGradient(
+                                      colors: [Color(0xFF7C3AED), Color(0xFFC084FC)],
+                                      begin: Alignment.centerLeft,
+                                      end: Alignment.centerRight,
+                                    ),
+                              color: _isSendingConfession
+                                  ? (isDark ? Colors.white12 : Colors.black12)
+                                  : null,
+                              borderRadius: BorderRadius.circular(18),
+                              boxShadow: _isSendingConfession
+                                  ? []
+                                  : [
+                                      BoxShadow(
+                                        color: const Color(0xFF9333EA).withOpacity(0.45),
+                                        blurRadius: 20,
+                                        offset: const Offset(0, 8),
+                                      ),
+                                    ],
+                            ),
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                if (_isSendingConfession)
+                                  const SizedBox(
+                                    width: 20,
+                                    height: 20,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2.5,
+                                      color: Colors.white,
+                                    ),
+                                  )
+                                else
+                                  const Icon(Icons.lock_rounded, size: 20, color: Colors.white),
+                                const SizedBox(width: 10),
+                                Text(
+                                  _isSendingConfession ? 'Sending...' : 'Send Anonymously 🔒',
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.w900,
+                                    fontSize: 16,
+                                    color: Colors.white,
+                                    letterSpacing: -0.2,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
               ),
-            ],
-          ),
-        ],
-      ),
+            );
+          },
+        );
+      },
     );
   }
+
+
 
   Widget _buildMoodAndChipsSection(UserModel user, bool isDark) {
     return Container(
@@ -920,10 +1217,9 @@ class _UserDetailScreenState extends ConsumerState<UserDetailScreen> {
                               _buildInfoCard(user, currentUser, existingChat, isFollowing, isDark),
                               Padding(
                                 padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
-                                child: _isConfessionActive
-                                    ? _buildActiveConfessionComposer(currentUser, user, isDark)
-                                    : _buildConfessSwipeBar(isDark),
+                                child: _buildConfessSwipeBar(currentUser, user, isDark),
                               ),
+
                               _buildAboutMeChips(user, isDark),
                               _buildTabbedSections(user, currentUser, isDark),
                               const SizedBox(height: 130),
@@ -1021,22 +1317,75 @@ class _UserDetailScreenState extends ConsumerState<UserDetailScreen> {
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     _buildGlassIconBtn(Icons.arrow_back_ios_new_rounded, () => context.pop()),
+                    if (user.id == currentUser.id)
+                      GestureDetector(
+                        onTap: () => ProfileChoiceSheet.show(context, currentUser, isDark),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+                          decoration: BoxDecoration(
+                            gradient: const LinearGradient(
+                              colors: [Color(0xFF9333EA), Color(0xFFFF3CAC)],
+                            ),
+                            borderRadius: BorderRadius.circular(20),
+                            border: Border.all(
+                              color: Colors.white.withOpacity(0.5),
+                              width: 1.2,
+                            ),
+                            boxShadow: [
+                              BoxShadow(
+                                color: const Color(0xFF9333EA).withOpacity(0.4),
+                                blurRadius: 12,
+                                offset: const Offset(0, 3),
+                              ),
+                            ],
+                          ),
+                          child: const Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(Icons.remove_red_eye_rounded, size: 14, color: Colors.white),
+                              SizedBox(width: 6),
+                              Text(
+                                'Preview Mode 👁️',
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.w900,
+                                  fontSize: 12.5,
+                                  letterSpacing: -0.2,
+                                ),
+                              ),
+                              SizedBox(width: 4),
+                              Icon(Icons.swap_vert_rounded, size: 15, color: Colors.white),
+                            ],
+                          ),
+                        ),
+                      ),
                     PopupMenuButton<String>(
                       color: isDark ? const Color(0xFF1E1E24) : Colors.white,
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                       offset: const Offset(0, 50),
                       onSelected: (value) {
-                        if (value == 'share') {
+                        if (value == 'switch') {
+                          ProfileChoiceSheet.show(context, currentUser, isDark);
+                        } else if (value == 'share') {
                           ScaffoldMessenger.of(context).showSnackBar(
                             const SnackBar(content: Text('Profile link copied! ✨'), behavior: SnackBarBehavior.floating),
                           );
                         } else if (value == 'report') {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(content: Text('User reported 🚩'), behavior: SnackBarBehavior.floating),
-                          );
+                          _showReportUserSheet(context, isDark);
                         }
                       },
                       itemBuilder: (context) => [
+                        if (user.id == currentUser.id)
+                          PopupMenuItem(
+                            value: 'switch',
+                            child: Row(
+                              children: [
+                                const Icon(Icons.tune_rounded, size: 20, color: Color(0xFF9333EA)),
+                                const SizedBox(width: 12),
+                                Text('Profile Options', style: TextStyle(color: isDark ? Colors.white : Colors.black87, fontWeight: FontWeight.w700)),
+                              ],
+                            ),
+                          ),
                         PopupMenuItem(
                           value: 'share',
                           child: Row(
@@ -1114,16 +1463,28 @@ class _UserDetailScreenState extends ConsumerState<UserDetailScreen> {
                   ),
                   const SizedBox(height: 8),
                   // Name + age
-                  Text(
-                    '${user.name}, ${user.age}',
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 34,
-                      fontWeight: FontWeight.w900,
-                      letterSpacing: -1,
-                      height: 1.1,
-                      shadows: [Shadow(color: Colors.black38, blurRadius: 12)],
-                    ),
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Flexible(
+                        child: Text(
+                          '${user.name}, ${user.age}',
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 34,
+                            fontWeight: FontWeight.w900,
+                            letterSpacing: -1,
+                            height: 1.1,
+                            shadows: [Shadow(color: Colors.black38, blurRadius: 12)],
+                          ),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      if (user.isVerified) ...[
+                        const SizedBox(width: 8),
+                        const SBadgeWidget(size: 26),
+                      ],
+                    ],
                   ),
                   if ((user.location ?? '').isNotEmpty) ...
                   [
@@ -1288,36 +1649,101 @@ class _UserDetailScreenState extends ConsumerState<UserDetailScreen> {
 
           const SizedBox(height: 22),
 
-          // Bio
-          if ((user.bio ?? '').isNotEmpty)
+          // User's active Takes section (appears above Bio)
+          _buildUserTakesSection(user, isDark),
+
+          // Bio + Phone in a unified section card
+          if ((user.bio ?? '').isNotEmpty || (user.phoneNumber != null && user.phoneNumber!.isNotEmpty))
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 24),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text('Bio', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w800, color: isDark ? Colors.white38 : Colors.black38, letterSpacing: 1)),
-                  const SizedBox(height: 6),
-                  Text(
-                    user.bio!,
-                    style: TextStyle(
-                      fontSize: 15,
-                      color: isDark ? Colors.white.withOpacity(0.85) : Colors.black87,
-                      height: 1.55,
-                      fontWeight: FontWeight.w500,
-                    ),
+              padding: const EdgeInsets.symmetric(horizontal: 20),
+              child: Container(
+                decoration: BoxDecoration(
+                  color: isDark
+                      ? Colors.white.withOpacity(0.05)
+                      : Colors.white.withOpacity(0.7),
+                  borderRadius: BorderRadius.circular(24),
+                  border: Border.all(
+                    color: isDark
+                        ? Colors.white.withOpacity(0.08)
+                        : const Color(0xFFE8E0FF),
+                    width: 1.2,
                   ),
-                  const SizedBox(height: 16),
-                ],
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(isDark ? 0.12 : 0.04),
+                      blurRadius: 16,
+                      offset: const Offset(0, 4),
+                    ),
+                  ],
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    if ((user.bio ?? '').isNotEmpty) ...
+                    [
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(18, 18, 18, 14),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                Container(
+                                  width: 3,
+                                  height: 16,
+                                  decoration: BoxDecoration(
+                                    gradient: const LinearGradient(
+                                      colors: [Color(0xFF9B5DE5), Color(0xFFFF5069)],
+                                      begin: Alignment.topCenter,
+                                      end: Alignment.bottomCenter,
+                                    ),
+                                    borderRadius: BorderRadius.circular(4),
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                Text(
+                                  'About',
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w900,
+                                    color: isDark ? Colors.white54 : Colors.black45,
+                                    letterSpacing: 0.8,
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 10),
+                            Text(
+                              user.bio!,
+                              style: TextStyle(
+                                fontSize: 15,
+                                color: isDark ? Colors.white.withOpacity(0.88) : Colors.black.withOpacity(0.78),
+                                height: 1.6,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      if (user.phoneNumber != null && user.phoneNumber!.trim().isNotEmpty)
+                        Divider(
+                          height: 1,
+                          color: isDark ? Colors.white.withOpacity(0.07) : const Color(0xFFEDE8FF),
+                          indent: 18,
+                          endIndent: 18,
+                        ),
+                    ],
+                    // Phone Section
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 4),
+                      child: _buildPhoneSection(user, currentUser, isDark),
+                    ),
+                  ],
+                ),
               ),
             ),
-            
-          // Phone Section (Independent of Bio)
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 24),
-            child: _buildPhoneSection(user, currentUser, isDark),
-          ),
-          
-          const SizedBox(height: 16),
+
+          const SizedBox(height: 18),
         ],
       ),
     );
@@ -1340,22 +1766,16 @@ class _UserDetailScreenState extends ConsumerState<UserDetailScreen> {
 
     final displayedPhone = (isSelf || hasUnlocked) ? targetUser.phoneNumber! : '••••• •••••';
         
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: isDark ? Colors.white.withOpacity(0.05) : Colors.white.withOpacity(0.55),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(
-          color: isDark ? Colors.white.withOpacity(0.08) : Colors.white.withOpacity(0.65),
-          width: 1.2,
-        ),
-      ),
+    // Render as a flat row inside the parent card (no extra container)
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 10),
       child: Row(
         children: [
           Container(
-            padding: const EdgeInsets.all(10),
+            width: 40,
+            height: 40,
             decoration: BoxDecoration(
-              color: AppTheme.primaryBlue.withOpacity(0.12),
+              color: AppTheme.primaryBlue.withOpacity(isDark ? 0.18 : 0.1),
               shape: BoxShape.circle,
             ),
             child: const Icon(Icons.phone_rounded, color: AppTheme.primaryBlue, size: 20),
@@ -1365,46 +1785,76 @@ class _UserDetailScreenState extends ConsumerState<UserDetailScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text(
+                Text(
                   'PHONE NUMBER',
                   style: TextStyle(
-                    color: AppTheme.textSecondary,
+                    color: isDark ? Colors.white38 : Colors.black38,
                     fontSize: 10,
                     fontWeight: FontWeight.w900,
                     letterSpacing: 0.8,
                   ),
                 ),
-                const SizedBox(height: 4),
+                const SizedBox(height: 3),
                 Text(
                   displayedPhone,
                   style: TextStyle(
-                    color: isDark ? Colors.white : AppTheme.textPrimary,
-                    fontSize: 15,
+                    color: isDark ? Colors.white.withOpacity(0.87) : Colors.black87,
+                    fontSize: 15.5,
                     fontWeight: FontWeight.w800,
+                    letterSpacing: -0.3,
                   ),
                 ),
               ],
             ),
           ),
           if (isSelf || hasUnlocked)
-            IconButton(
-              icon: const Icon(Icons.copy_rounded, color: AppTheme.primaryBlue, size: 20),
-              onPressed: () {
+            GestureDetector(
+              onTap: () {
                 Clipboard.setData(ClipboardData(text: targetUser.phoneNumber ?? ''));
-                _showSuccess('Phone number copied to clipboard!');
+                _showSuccess('Phone number copied!');
               },
+              child: Container(
+                padding: const EdgeInsets.all(9),
+                decoration: BoxDecoration(
+                  color: AppTheme.primaryBlue.withOpacity(0.12),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(Icons.copy_rounded, color: AppTheme.primaryBlue, size: 18),
+              ),
             )
           else
-            ElevatedButton.icon(
-              onPressed: () => _unlockPhone(targetUser, currentUser),
-              icon: const Icon(Icons.lock_open_rounded, size: 14),
-              label: const Text('Unlock', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w800)),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppTheme.primaryBlue,
-                foregroundColor: Colors.white,
+            GestureDetector(
+              onTap: () => _unlockPhone(targetUser, currentUser),
+              child: Container(
                 padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                elevation: 0,
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(
+                    colors: [Color(0xFF3B82F6), Color(0xFF6366F1)],
+                  ),
+                  borderRadius: BorderRadius.circular(12),
+                  boxShadow: [
+                    BoxShadow(
+                      color: const Color(0xFF3B82F6).withOpacity(0.35),
+                      blurRadius: 10,
+                      offset: const Offset(0, 4),
+                    ),
+                  ],
+                ),
+                child: const Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.lock_open_rounded, size: 14, color: Colors.white),
+                    SizedBox(width: 6),
+                    Text(
+                      'Unlock',
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w800,
+                        color: Colors.white,
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
         ],
@@ -2212,15 +2662,15 @@ class _UserDetailScreenState extends ConsumerState<UserDetailScreen> {
           const SizedBox(width: 24),
           Container(width: 1, height: 18, color: isDark ? Colors.white10 : Colors.black12),
           const SizedBox(width: 24),
-          _buildTextAction(Icons.flag_rounded, 'Report', isDark),
+          _buildTextAction(Icons.flag_rounded, 'Report', isDark, onTap: () => _showReportUserSheet(context, isDark)),
         ],
       ),
     );
   }
 
-  Widget _buildTextAction(IconData icon, String label, bool isDark) {
+  Widget _buildTextAction(IconData icon, String label, bool isDark, {VoidCallback? onTap}) {
     return GestureDetector(
-      onTap: () => _showSuccess('$label coming soon! ✨'),
+      onTap: onTap ?? () => _showSuccess('$label coming soon! ✨'),
       child: Row(
         children: [
           Icon(icon, size: 18, color: isDark ? Colors.white38 : Colors.black45),
@@ -2237,57 +2687,546 @@ class _UserDetailScreenState extends ConsumerState<UserDetailScreen> {
       ),
     );
   }
-}
 
-class _CustomThumbShape extends SliderComponentShape {
-  @override
-  Size getPreferredSize(bool isEnabled, bool isDiscrete) => const Size(44, 44);
+  // ── Report User Bottom Sheet ─────────────────────────────────────
+  void _showReportUserSheet(BuildContext context, bool isDark) {
+    final reasons = [
+      'Fake profile',
+      'Harassment or bullying',
+      'Spam',
+      'Inappropriate content',
+      'Hate speech',
+      'Underage user',
+      'Other',
+    ];
+    String selectedReason = reasons.first;
+    final detailsController = TextEditingController();
 
-  @override
-  void paint(
-    PaintingContext context,
-    Offset center, {
-    required Animation<double> activationAnimation,
-    required Animation<double> enableAnimation,
-    required bool isDiscrete,
-    required TextPainter labelPainter,
-    required RenderBox parentBox,
-    required SliderThemeData sliderTheme,
-    required TextDirection textDirection,
-    required double value,
-    required double textScaleFactor,
-    required Size sizeWithOverflow,
-  }) {
-    final canvas = context.canvas;
-    
-    final paint = Paint()
-      ..color = Colors.white
-      ..style = PaintingStyle.fill;
+    showModalBottomSheet(
+      context: context,
+      useRootNavigator: true,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setState) {
+          return Container(
+            padding: EdgeInsets.only(
+              left: 24, right: 24, top: 24,
+              bottom: MediaQuery.of(ctx).viewInsets.bottom + 24,
+            ),
+            decoration: BoxDecoration(
+              color: isDark ? AppTheme.darkSurface : Colors.white,
+              borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Center(
+                  child: Container(
+                    width: 40, height: 4,
+                    decoration: BoxDecoration(
+                      color: Colors.grey.withOpacity(0.3),
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 20),
+                const Text('Report User', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+                const SizedBox(height: 4),
+                Text('Select a reason:', style: TextStyle(color: isDark ? Colors.white54 : Colors.black54, fontSize: 14)),
+                const SizedBox(height: 12),
+                Wrap(
+                  spacing: 8, runSpacing: 8,
+                  children: reasons.map((r) {
+                    final selected = r == selectedReason;
+                    return GestureDetector(
+                      onTap: () => setState(() => selectedReason = r),
+                      child: AnimatedContainer(
+                        duration: const Duration(milliseconds: 180),
+                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                        decoration: BoxDecoration(
+                          color: selected ? AppTheme.primaryBlue : (isDark ? Colors.white10 : Colors.grey.shade100),
+                          borderRadius: BorderRadius.circular(20),
+                          border: Border.all(
+                            color: selected ? AppTheme.primaryBlue : Colors.transparent,
+                          ),
+                        ),
+                        child: Text(
+                          r,
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                            color: selected ? Colors.white : (isDark ? Colors.white70 : Colors.black87),
+                          ),
+                        ),
+                      ),
+                    );
+                  }).toList(),
+                ),
+                const SizedBox(height: 16),
+                TextField(
+                  controller: detailsController,
+                  maxLines: 3,
+                  decoration: InputDecoration(
+                    hintText: 'Additional details (optional)...',
+                    hintStyle: TextStyle(color: isDark ? Colors.white38 : Colors.black38),
+                    filled: true,
+                    fillColor: isDark ? Colors.white10 : Colors.grey.shade100,
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(14),
+                      borderSide: BorderSide.none,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton(
+                    onPressed: () {
+                      Navigator.of(ctx).pop();
+                      _submitUserReport(selectedReason, detailsController.text, isDark);
+                    },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.redAccent,
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                    ),
+                    child: const Text('Submit Report', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 15)),
+                  ),
+                ),
+              ],
+            ),
+          );
+        },
+      ),
+    );
+  }
 
-    // Draw white circle thumb (radius 22)
-    canvas.drawCircle(center, 22, paint);
-
-    // Draw icon inside
-    const icon = Icons.send_rounded;
-    final textPainter = TextPainter(
-      text: TextSpan(
-        text: String.fromCharCode(icon.codePoint),
-        style: TextStyle(
-          fontSize: 20,
-          fontFamily: icon.fontFamily,
-          color: AppTheme.accentPink,
+  Future<void> _submitUserReport(String reason, String details, bool isDark) async {
+    final currentUser = ref.read(userDataStreamProvider).asData?.value;
+    if (currentUser == null) return;
+    try {
+      final docId = firestoreProvider.collection('reports').doc().id;
+      await firestoreProvider.collection('reports').doc(docId).set({
+        'id': docId,
+        'type': 'user',
+        'reportedUserId': widget.userId,
+        'reportedBy': currentUser.id,
+        'reporterName': currentUser.name,
+        'reason': reason,
+        'details': details,
+        'status': 'open',
+        'createdAt': DateTime.now().millisecondsSinceEpoch,
+        'resolvedAt': null,
+        'adminNote': null,
+      });
+    } catch (e) {
+      debugPrint('[Report] Failed to save: $e');
+    }
+    if (!mounted) return;
+    // Confirmation bottom sheet
+    showModalBottomSheet(
+      context: context,
+      useRootNavigator: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => Container(
+        padding: const EdgeInsets.all(28),
+        decoration: BoxDecoration(
+          color: isDark ? AppTheme.darkSurface : Colors.white,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.check_circle_rounded, color: AppTheme.success, size: 56),
+            const SizedBox(height: 16),
+            const Text('Report Submitted', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+            const SizedBox(height: 8),
+            Text(
+              'Thank you for keeping our community safe. We will review this report and notify you of the outcome.',
+              textAlign: TextAlign.center,
+              style: TextStyle(color: isDark ? Colors.white54 : Colors.black54, height: 1.5),
+            ),
+            const SizedBox(height: 20),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                onPressed: () => Navigator.of(ctx).pop(),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppTheme.primaryBlue,
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                ),
+                child: const Text('Done', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700)),
+              ),
+            ),
+          ],
         ),
       ),
-      textDirection: TextDirection.ltr,
-    )..layout();
-    
-    textPainter.paint(canvas, center - Offset(textPainter.width / 2, textPainter.height / 2));
+    );
+  }
+
+  Widget _buildUserTakesSection(UserModel user, bool isDark) {
+    final userTakesAsync = ref.watch(userTakesProvider(user.id));
+
+    return userTakesAsync.when(
+      data: (takes) {
+        if (takes.isEmpty) return const SizedBox.shrink();
+
+        return Padding(
+          padding: const EdgeInsets.only(bottom: 20),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Section header
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 20),
+                child: Row(
+                  children: [
+                    AnimatedBuilder(
+                      animation: _storyRingAnim,
+                      builder: (_, __) => Transform.rotate(
+                        angle: _storyRingAnim.value * 2 * 3.14159,
+                        child: Container(
+                          padding: const EdgeInsets.all(7),
+                          decoration: BoxDecoration(
+                            gradient: const LinearGradient(
+                              colors: [Color(0xFFFF3CAC), Color(0xFFFF8C42)],
+                              begin: Alignment.topLeft,
+                              end: Alignment.bottomRight,
+                            ),
+                            borderRadius: BorderRadius.circular(10),
+                            boxShadow: [
+                              BoxShadow(
+                                color: const Color(0xFFFF3CAC).withOpacity(0.4),
+                                blurRadius: 12,
+                                spreadRadius: 1,
+                                offset: const Offset(0, 3),
+                              ),
+                            ],
+                          ),
+                          child: const Icon(Icons.bolt_rounded, size: 15, color: Colors.white),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Text(
+                      'Takes',
+                      style: TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w900,
+                        color: isDark ? Colors.white : Colors.black87,
+                        letterSpacing: -0.3,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 3),
+                      decoration: BoxDecoration(
+                        gradient: const LinearGradient(
+                          colors: [Color(0xFFFF3CAC), Color(0xFFFF8C42)],
+                        ),
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: Text(
+                        '${takes.length}',
+                        style: const TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w900,
+                          color: Colors.white,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 12),
+              // Thumbnails list
+              SizedBox(
+                height: 130,
+                child: ListView.separated(
+                  padding: const EdgeInsets.symmetric(horizontal: 20),
+                  scrollDirection: Axis.horizontal,
+                  itemCount: takes.length,
+                  separatorBuilder: (_, __) => const SizedBox(width: 10),
+                  itemBuilder: (context, index) {
+                    final take = takes[index];
+
+                    return GestureDetector(
+                      onTap: () {
+                        context.pushNamed(
+                          'take-view',
+                          pathParameters: {'userId': user.id},
+                          extra: {
+                            'userName': user.name,
+                            'userAvatar': user.avatarUrl,
+                          },
+                        );
+                      },
+                      child: AnimatedBuilder(
+                        animation: _storyRingAnim,
+                        builder: (_, __) {
+                          return SizedBox(
+                            width: 90,
+                            height: 130,
+                            child: CustomPaint(
+                              painter: _SpinningRingPainter(
+                                angle: _storyRingAnim.value * 2 * 3.14159,
+                                radius: 20,
+                              ),
+                              child: Padding(
+                                padding: const EdgeInsets.all(3.5),
+                                child: _buildTakeThumbnail(take: take, user: user, isDark: isDark),
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+      loading: () => const SizedBox.shrink(),
+      error: (_, __) => const SizedBox.shrink(),
+    );
+  }
+
+  Widget _buildTakeThumbnail({
+    required Map<String, dynamic> take,
+    required UserModel user,
+    required bool isDark,
+  }) {
+    final rawImg = (take['imageUrl'] as String?) ?? (take['thumbnailUrl'] as String?) ?? (take['mediaUrl'] as String?);
+    final rawVid = (take['videoUrl'] as String?);
+    final String mediaUrl = (rawImg != null && rawImg.isNotEmpty)
+        ? rawImg
+        : (rawVid != null && rawVid.isNotEmpty)
+            ? rawVid
+            : (user.avatarUrl ?? '');
+
+    final bool isVideo = (rawVid != null && rawVid.isNotEmpty) || (take['isVideo'] as bool? ?? false);
+
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(16.5),
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          // 1. Blurred background image (image/video frame/avatar is visible blurred under glass)
+          if (mediaUrl.isNotEmpty)
+            ImageFiltered(
+              imageFilter: ImageFilter.blur(sigmaX: 6.0, sigmaY: 6.0),
+              child: Transform.scale(
+                scale: 1.2, // Slightly scaled up so blur edges fill container smoothly
+                child: Image.network(
+                  mediaUrl,
+                  fit: BoxFit.cover,
+                  errorBuilder: (_, __, ___) => _takePlaceholder(isDark, user),
+                ),
+              ),
+            )
+          else
+            _takePlaceholder(isDark, user),
+
+          // 2. Soft dark gradient scrim
+          Container(
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [
+                  Colors.black.withOpacity(0.1),
+                  Colors.black.withOpacity(0.55),
+                ],
+              ),
+            ),
+          ),
+
+          // 3. Glowing center play/eye icon badge
+          Center(
+            child: Container(
+              padding: const EdgeInsets.all(9),
+              decoration: BoxDecoration(
+                color: Colors.white.withOpacity(0.28),
+                shape: BoxShape.circle,
+                border: Border.all(
+                  color: Colors.white.withOpacity(0.7),
+                  width: 1.5,
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: const Color(0xFFFF3CAC).withOpacity(0.5),
+                    blurRadius: 12,
+                    spreadRadius: 1,
+                  ),
+                ],
+              ),
+              child: Icon(
+                isVideo ? Icons.play_arrow_rounded : Icons.visibility_rounded,
+                color: Colors.white,
+                size: 20,
+              ),
+            ),
+          ),
+
+          // 4. Top-right mini "TAKE" pill
+          Positioned(
+            top: 6,
+            right: 6,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+              decoration: BoxDecoration(
+                color: Colors.black.withOpacity(0.5),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(
+                  color: Colors.white.withOpacity(0.2),
+                  width: 0.8,
+                ),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    isVideo ? Icons.videocam_rounded : Icons.photo_camera_rounded,
+                    color: Colors.white70,
+                    size: 9,
+                  ),
+                  const SizedBox(width: 3),
+                  const Text(
+                    'TAKE',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 8.5,
+                      fontWeight: FontWeight.w900,
+                      letterSpacing: 0.5,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _takePlaceholder(bool isDark, UserModel user) {
+    final avatar = user.avatarUrl ?? '';
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        if (avatar.isNotEmpty)
+          ImageFiltered(
+            imageFilter: ImageFilter.blur(sigmaX: 7.0, sigmaY: 7.0),
+            child: Transform.scale(
+              scale: 1.25,
+              child: Image.network(avatar, fit: BoxFit.cover),
+            ),
+          )
+        else
+          Container(
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: isDark
+                    ? [const Color(0xFF3B0764), const Color(0xFF1E1B4B)]
+                    : [const Color(0xFFE9D5FF), const Color(0xFFC084FC)],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+            ),
+          ),
+      ],
+    );
   }
 }
 
-class _CustomConfessThumbShape extends SliderComponentShape {
+// ─── Animated chevrons for confess swipe bar ─────────────────────────────────
+class _AnimatedChevrons extends StatelessWidget {
+  final Color color;
+  final double animValue; // 0..1 looping
+  const _AnimatedChevrons({required this.color, required this.animValue});
+
   @override
-  Size getPreferredSize(bool isEnabled, bool isDiscrete) => const Size(44, 44);
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: List.generate(3, (i) {
+        // Each chevron lags behind the previous by 0.15
+        final phase = (animValue - i * 0.18).clamp(0.0, 1.0);
+        final opacity = 0.3 + 0.7 * (0.5 + 0.5 * (1 - (2 * phase - 1).abs()));
+        final offset = 3.0 * (0.5 + 0.5 * (1 - (2 * phase - 1).abs()));
+        return Transform.translate(
+          offset: Offset(offset, 0),
+          child: Icon(
+            Icons.chevron_right_rounded,
+            size: 16,
+            color: color.withOpacity(opacity),
+          ),
+        );
+      }),
+    );
+  }
+}
+
+// ─── Spinning gradient ring painter for Takes thumbnails ─────────────────────
+class _SpinningRingPainter extends CustomPainter {
+  final double angle;
+  final double radius;
+  const _SpinningRingPainter({required this.angle, required this.radius});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final rect = Rect.fromLTWH(0, 0, size.width, size.height);
+    final rrect = RRect.fromRectAndRadius(rect, Radius.circular(radius));
+
+    // Background (dark gap between ring and content)
+    final bgPaint = Paint()
+      ..color = Colors.black
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 3.5;
+    canvas.drawRRect(rrect, bgPaint);
+
+    // Rotating gradient ring
+    final gradient = SweepGradient(
+      startAngle: angle,
+      endAngle: angle + 3.14159 * 2,
+      colors: const [
+        Color(0xFFFF3CAC),
+        Color(0xFFFF8C42),
+        Color(0xFFFFE44D),
+        Color(0xFF7C3AED),
+        Color(0xFFFF3CAC),
+      ],
+      stops: const [0.0, 0.3, 0.55, 0.8, 1.0],
+    );
+
+    final ringPaint = Paint()
+      ..shader = gradient.createShader(rect)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 3.0
+      ..strokeCap = StrokeCap.round;
+
+    canvas.drawRRect(rrect, ringPaint);
+  }
+
+  @override
+  bool shouldRepaint(_SpinningRingPainter old) => old.angle != angle;
+}
+
+
+class _CustomConfessThumbShape extends SliderComponentShape {
+
+
+
+  final bool isDark;
+  _CustomConfessThumbShape({this.isDark = false});
+
+  @override
+  Size getPreferredSize(bool isEnabled, bool isDiscrete) => const Size(46, 46);
 
   @override
   void paint(
@@ -2306,14 +3245,29 @@ class _CustomConfessThumbShape extends SliderComponentShape {
   }) {
     final canvas = context.canvas;
     
-    final paint = Paint()
+    // Drop shadow
+    final shadowPaint = Paint()
+      ..color = const Color(0xFF9333EA).withOpacity(0.4)
+      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 8);
+    canvas.drawCircle(center + const Offset(0, 3), 22, shadowPaint);
+
+    // Gradient circle background
+    final rect = Rect.fromCircle(center: center, radius: 23);
+    final gradientPaint = Paint()
+      ..shader = const LinearGradient(
+        colors: [Color(0xFF9333EA), Color(0xFFC084FC)],
+        begin: Alignment.topLeft,
+        end: Alignment.bottomRight,
+      ).createShader(rect);
+    canvas.drawCircle(center, 23, gradientPaint);
+
+    // Inner white circle
+    final innerPaint = Paint()
       ..color = Colors.white
       ..style = PaintingStyle.fill;
+    canvas.drawCircle(center, 19, innerPaint);
 
-    // Draw white circle thumb (radius 22)
-    canvas.drawCircle(center, 22, paint);
-
-    // Draw lock open icon inside
+    // Lock open icon inside
     const icon = Icons.lock_open_rounded;
     final textPainter = TextPainter(
       text: TextSpan(
@@ -2321,7 +3275,7 @@ class _CustomConfessThumbShape extends SliderComponentShape {
         style: TextStyle(
           fontSize: 20,
           fontFamily: icon.fontFamily,
-          color: AppTheme.accentPurple,
+          color: const Color(0xFF9333EA),
         ),
       ),
       textDirection: TextDirection.ltr,
@@ -2330,3 +3284,4 @@ class _CustomConfessThumbShape extends SliderComponentShape {
     textPainter.paint(canvas, center - Offset(textPainter.width / 2, textPainter.height / 2));
   }
 }
+

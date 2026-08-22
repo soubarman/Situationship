@@ -7,13 +7,18 @@ service cloud.firestore {
       return request.auth != null;
     }
 
+    // Helper function to verify if the user is the designated admin
+    function isAdmin() {
+      return request.auth != null &&
+             request.auth.token.email == 'situationship@gmail.com';
+    }
+
     // ── Users ──────────────────────────────────────────────────────────────────
     match /users/{userId} {
       allow read: if isAuthenticated();
       allow create: if isAuthenticated() && request.auth.uid == userId;
-      // Users can only modify their own documents. Follow logic should be handled 
-      // securely (e.g. via cloud functions or carefully crafted field checks).
-      allow update, delete: if isAuthenticated() && request.auth.uid == userId;
+      // Users can only modify their own documents; admin can modify any.
+      allow update, delete: if isAdmin() || (isAuthenticated() && request.auth.uid == userId);
     }
 
     // ── Profile Views ──────────────────────────────────────────────────────────
@@ -128,5 +133,65 @@ service cloud.firestore {
         allow delete: if false; // Bids cannot be deleted once placed
       }
     }
+
+    // ── Verifications ─────────────────────────────────────────────────────────
+    // Users can read their own verification status.
+    // Admin email or backend service account (Admin SDK) can read all & write.
+    match /verifications/{userId} {
+      allow read: if isAuthenticated() && (
+        request.auth.uid == userId ||
+        request.auth.token.admin == true ||
+        isAdmin()
+      );
+      // Only admin dashboard can update (approve/reject); backend writes via Admin SDK
+      allow write: if isAdmin();
+    }
+
+    // ── Challenges ────────────────────────────────────────────────────────────
+    // Users can read their own challenges.
+    // Challenges are created by the backend.
+    match /challenges/{challengeId} {
+      allow read: if isAuthenticated() &&
+        resource.data.userId == request.auth.uid;
+      allow write: if false; // Backend only
+    }
+
+    // ── Verification Audit Logs ───────────────────────────────────────────────
+    // Only admins can read audit logs. No client writes.
+    match /verification_audit_logs/{logId} {
+      allow read: if isAuthenticated() && (
+        request.auth.token.admin == true ||
+        isAdmin()
+      );
+      allow write: if false;
+    }
+
+    // ── Coin Rewards ──────────────────────────────────────────────────────────
+    match /coin_rewards/{rewardId} {
+      allow read, write: if isAuthenticated() && request.auth.uid == resource.data.userId || isAdmin();
+      allow create: if isAuthenticated();
+    }
+
+    // ── Coin Milestones ───────────────────────────────────────────────────────
+    match /coin_milestones/{milestoneId} {
+      allow read: if isAuthenticated() && (
+        resource.data.userId == request.auth.uid ||
+        isAdmin()
+      );
+      allow write: if isAuthenticated() || isAdmin();
+    }
+    // ── Reports ───────────────────────────────────────────────────────────────
+    // Any authenticated user can create a report for themselves.
+    // Admin can read and update all reports (resolve/dismiss).
+    // Reporter can read their own reports.
+    match /reports/{reportId} {
+      allow create: if isAuthenticated() &&
+                    request.resource.data.reportedBy == request.auth.uid;
+      allow read: if isAdmin() ||
+                  (isAuthenticated() && resource.data.reportedBy == request.auth.uid);
+      allow update: if isAdmin();
+      allow delete: if false;
+    }
+
   }
 }

@@ -1,0 +1,32 @@
+
+# ─────────────────────────────────────────────────────────────────
+# Celery Worker Dockerfile
+# Same base as API but starts the Celery worker instead of uvicorn.
+# ─────────────────────────────────────────────────────────────────
+FROM python:3.11-slim
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ffmpeg \
+    libgl1 \
+    libglib2.0-0 \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+COPY app/ ./app/
+COPY scripts/ ./scripts/
+
+RUN mkdir -p /app/models/liveness
+RUN python scripts/download_models.py || echo "Model download skipped"
+
+RUN useradd -m -u 1000 appuser && chown -R appuser:appuser /app
+USER appuser
+
+# Start Celery worker with 2 concurrent processes
+# Increase --concurrency for more CPU cores on your server
+CMD ["celery", "-A", "app.workers.celery_app.celery_app", "worker", \
+     "--loglevel=info", "--concurrency=2", "--max-tasks-per-child=100"]

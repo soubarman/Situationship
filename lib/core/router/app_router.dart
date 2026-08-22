@@ -26,9 +26,13 @@ import '../../features/feed/screens/story_view_screen.dart';
 import '../../features/feed/screens/take_viewer_screen.dart';
 import '../../features/spotlight/screens/spotlight_screen.dart';
 import '../../features/wallet/screens/wallet_screen.dart';
+import '../../features/verification/presentation/screens/verification_intro_screen.dart';
+import '../../features/verification/presentation/screens/verification_record_screen.dart';
+import '../../features/verification/presentation/screens/verification_result_screen.dart';
 import '../providers/firebase_auth_provider.dart';
 import '../providers/app_state_provider.dart';
 import '../providers/shared_prefs_provider.dart';
+import '../../features/auth/screens/suspended_screen.dart';
 
 final appRouterProvider = Provider<GoRouter>((ref) {
   final router = GoRouter(
@@ -39,8 +43,10 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       final userProfile = ref.read(userDataStreamProvider);
 
       // 1. AUTH INITIALIZATION GUARD
-      // While Firebase is still initialising, stay on splash.
-      if (authState.isLoading) return '/splash';
+      // While Firebase is still initialising, stay on current location without kicking to /splash.
+      if (authState.isLoading) {
+        return state.matchedLocation == '/splash' ? null : null;
+      }
 
       final isLoggedIn = authState.asData?.value != null;
       final isProtected = ['/feed', '/match', '/chats', '/profile', '/communities', '/search', '/create-post', '/story'].any(
@@ -54,9 +60,10 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       }
 
       // 3. PROFILE DATA LOADING GUARD (FOR LOGGED IN USERS)
-      // Only proceed with redirects once we have a definitive answer from Firestore.
-      // This prevents the "flash" of dummy data and premature redirection loops.
-      if (userProfile.isLoading) return '/splash';
+      // Stay on current protected location while profile data loads from Firestore.
+      if (userProfile.isLoading) {
+        return state.matchedLocation == '/splash' ? null : null;
+      }
 
       // 4. PROFILE COMPLETION GUARD
       final user = userProfile.asData?.value;
@@ -68,6 +75,12 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       final prefs = ref.read(sharedPreferencesProvider);
       final hasRequestedPermissions = prefs.getBool('permissionsRequested') ?? false;
       final isPermissionsScreen = state.matchedLocation == '/permissions';
+
+      // 6. SUSPENSION GUARD
+      if (user != null && user.isCurrentlySuspended) {
+        if (state.matchedLocation != '/suspended') return '/suspended';
+        return null;
+      }
 
       if (!hasRequestedPermissions && !isProfileIncomplete) {
         if (!isPermissionsScreen) {
@@ -121,6 +134,11 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         builder: (context, state) => const PermissionsScreen(),
       ),
       GoRoute(
+        path: '/suspended',
+        name: 'suspended',
+        builder: (context, state) => const SuspendedScreen(),
+      ),
+      GoRoute(
         path: '/search',
         name: 'search',
         builder: (context, state) => const SearchScreen(),
@@ -134,6 +152,23 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         path: '/wallet',
         name: 'wallet',
         builder: (context, state) => const WalletScreen(),
+      ),
+      GoRoute(
+        path: '/verification',
+        name: 'verification',
+        builder: (context, state) => const VerificationIntroScreen(),
+        routes: [
+          GoRoute(
+            path: 'record',
+            name: 'verification-record',
+            builder: (context, state) => const VerificationRecordScreen(),
+          ),
+          GoRoute(
+            path: 'result',
+            name: 'verification-result',
+            builder: (context, state) => const VerificationResultScreen(),
+          ),
+        ],
       ),
       ShellRoute(
         builder: (context, state, child) => MainShell(child: child),

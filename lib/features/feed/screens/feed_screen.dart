@@ -102,7 +102,10 @@ class _FeedScreenState extends ConsumerState<FeedScreen> {
 
     return Scaffold(
       backgroundColor: isDark ? AppTheme.darkBg : const Color(0xFFF5F5F7),
-      body: RefreshIndicator(
+      body: Stack(
+        children: [
+          const BackgroundOrbs(),
+          RefreshIndicator(
             onRefresh: () async {
               await ref.read(postsPaginationProvider.notifier).refresh();
             },
@@ -211,6 +214,8 @@ class _FeedScreenState extends ConsumerState<FeedScreen> {
               ],
             ),
           ),
+        ],
+      ),
       floatingActionButton: Padding(
         padding: const EdgeInsets.only(bottom: 80.0),
         child: FloatingActionButton(
@@ -684,31 +689,50 @@ class _TabChip extends StatelessWidget {
         duration: const Duration(milliseconds: 220),
         curve: Curves.easeOutCubic,
         alignment: Alignment.center,
-        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 6),
+        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 8),
         decoration: BoxDecoration(
-          gradient: isSelected ? AppTheme.primaryGradient : null,
+          gradient: isSelected
+              ? const LinearGradient(
+                  colors: [Color(0xFF9333EA), Color(0xFFFF3CAC)],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                )
+              : null,
           color: isSelected
               ? null
-              : (isDark ? Colors.white.withOpacity(0.06) : Colors.white.withOpacity(0.85)),
+              : (isDark ? Colors.white.withOpacity(0.08) : Colors.white),
           borderRadius: BorderRadius.circular(50),
           border: Border.all(
             color: isSelected
-                ? Colors.transparent
-                : (isDark ? Colors.white.withOpacity(0.1) : Colors.black.withOpacity(0.07)),
-            width: 1.0,
+                ? Colors.white.withOpacity(0.4)
+                : (isDark ? Colors.white.withOpacity(0.12) : Colors.black.withOpacity(0.08)),
+            width: 1.2,
           ),
           boxShadow: isSelected
-              ? [BoxShadow(color: AppTheme.primaryBlue.withOpacity(0.3), blurRadius: 8, offset: const Offset(0, 2))]
-              : [],
+              ? [
+                  BoxShadow(
+                    color: const Color(0xFF9333EA).withOpacity(0.35),
+                    blurRadius: 10,
+                    offset: const Offset(0, 3),
+                  ),
+                ]
+              : [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(isDark ? 0.2 : 0.04),
+                    blurRadius: 6,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
         ),
         child: FittedBox(
           fit: BoxFit.scaleDown,
           child: Text(
             label,
             style: TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.w700,
-              color: isSelected ? Colors.white : (isDark ? Colors.white60 : AppTheme.textSecondary),
+              fontSize: 12.5,
+              fontWeight: isSelected ? FontWeight.w900 : FontWeight.w700,
+              color: isSelected ? Colors.white : (isDark ? Colors.white70 : Colors.black87),
+              letterSpacing: -0.2,
             ),
           ),
         ),

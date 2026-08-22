@@ -1,32 +1,56 @@
+import 'dart:math' as math;
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:shimmer/shimmer.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_core/firebase_core.dart';
+
 import '../../../core/theme/app_theme.dart';
 import '../../../core/providers/app_state_provider.dart';
 import '../../../core/providers/theme_provider.dart';
 import '../../../core/models/post_model.dart';
 import '../../../core/models/user_model.dart';
-import '../../../core/utils/seeder.dart';
+import '../../verification/presentation/widgets/s_badge_widget.dart';
 import '../../../core/providers/firebase_auth_provider.dart';
-import 'dart:ui';
 import '../../feed/widgets/post_card.dart';
-import '../../feed/screens/saved_posts_screen.dart';
 import '../../../shared/widgets/background_orbs.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_core/firebase_core.dart';
-import '../../../core/providers/access_provider.dart';
 import '../../wallet/widgets/coin_gate_sheet.dart';
+import '../../../shared/widgets/profile_choice_sheet.dart';
 
-class ProfileScreen extends ConsumerWidget {
+class ProfileScreen extends ConsumerStatefulWidget {
   const ProfileScreen({super.key});
+
+  @override
+  ConsumerState<ProfileScreen> createState() => _ProfileScreenState();
+}
+
+class _ProfileScreenState extends ConsumerState<ProfileScreen>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _ringAnim;
+
+  @override
+  void initState() {
+    super.initState();
+    _ringAnim = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 4),
+    )..repeat();
+  }
+
+  @override
+  void dispose() {
+    _ringAnim.dispose();
+    super.dispose();
+  }
 
   void _handleLogout(BuildContext context, WidgetRef ref) {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        backgroundColor: Theme.of(context).brightness == Brightness.dark 
-            ? AppTheme.darkSurface 
+        backgroundColor: Theme.of(context).brightness == Brightness.dark
+            ? AppTheme.darkSurface
             : Colors.white,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         title: const Text('Logout 🚪', style: TextStyle(fontWeight: FontWeight.w800)),
@@ -64,7 +88,6 @@ class ProfileScreen extends ConsumerWidget {
           child: Column(
             children: [
               const SizedBox(height: 100),
-              // Profile image shimmer
               Center(
                 child: Container(
                   width: 108,
@@ -76,7 +99,6 @@ class ProfileScreen extends ConsumerWidget {
                 ),
               ),
               const SizedBox(height: 16),
-              // Name shimmer
               Container(
                 width: 120,
                 height: 24,
@@ -86,7 +108,6 @@ class ProfileScreen extends ConsumerWidget {
                 ),
               ),
               const SizedBox(height: 8),
-              // Username shimmer
               Container(
                 width: 80,
                 height: 16,
@@ -96,80 +117,6 @@ class ProfileScreen extends ConsumerWidget {
                 ),
               ),
               const SizedBox(height: 32),
-              // Stats shimmer
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                children: List.generate(3, (i) => Column(
-                  children: [
-                    Container(
-                      width: 40,
-                      height: 20,
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Container(
-                      width: 30,
-                      height: 12,
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(6),
-                      ),
-                    ),
-                  ],
-                )),
-              ),
-              const SizedBox(height: 32),
-              // Bio shimmer
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 20),
-                child: Column(
-                  children: [
-                    Container(
-                      width: double.infinity,
-                      height: 16,
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    Container(
-                      width: 200,
-                      height: 16,
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 32),
-              // Grid shimmer
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 20),
-                child: GridView.builder(
-                  shrinkWrap: true,
-                  physics: const NeverScrollableScrollPhysics(),
-                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                    crossAxisCount: 3,
-                    crossAxisSpacing: 4,
-                    mainAxisSpacing: 4,
-                  ),
-                  itemCount: 9,
-                  itemBuilder: (context, index) {
-                    return Container(
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                    );
-                  },
-                ),
-              ),
             ],
           ),
         ),
@@ -178,11 +125,10 @@ class ProfileScreen extends ConsumerWidget {
   }
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  Widget build(BuildContext context) {
     final userDataAsync = ref.watch(userDataStreamProvider);
     final user = ref.watch(currentUserProvider);
-    
-    // Fetch all posts belonging to the user directly, independent of the active Feed filter
+
     final streamPosts = ref.watch(postsPaginationProvider).asData?.value ?? [];
     final localPosts = ref.watch(postsProvider);
     final List<PostModel> posts = [];
@@ -201,71 +147,78 @@ class ProfileScreen extends ConsumerWidget {
 
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
-    // Show loading shimmer while user data is loading
     if (userDataAsync.isLoading) {
       return _buildLoadingShimmer(isDark);
     }
 
     return Scaffold(
-      backgroundColor: isDark ? AppTheme.darkBg : AppTheme.lightBg,
+      backgroundColor: isDark ? AppTheme.darkBg : const Color(0xFFF8FAFC),
       body: Stack(
         children: [
-          // Background Effect
           const BackgroundOrbs(),
-          
           CustomScrollView(
             physics: const BouncingScrollPhysics(),
             slivers: [
-              // Glassmorphic Header (Avatar, Name, Actions)
+              // Header with rotating avatar ring & action buttons
               SliverToBoxAdapter(
                 child: SafeArea(
                   bottom: false,
                   child: Padding(
-                    padding: const EdgeInsets.fromLTRB(20, 64, 20, 0),
-                    child: _buildGlassHeader(context, ref, user, isDark),
+                    padding: const EdgeInsets.fromLTRB(20, 56, 20, 0),
+                    child: _buildGlassHeader(context, user, isDark),
                   ),
                 ),
               ),
-              
-              // Glassmorphic Stats Row
+
+              // Animated Glass Stats Row
               SliverToBoxAdapter(
                 child: _buildStats(user, posts.length, context, isDark),
               ),
 
               // Profile Visitors section
               SliverToBoxAdapter(
-                child: _buildVisitorsCard(context, ref, user, isDark),
+                child: _buildVisitorsCard(context, user, isDark),
               ),
-              
+
+              // About Me & Traits section
               SliverToBoxAdapter(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    _buildBio(user, context),
+                    _buildBio(user, context, isDark),
                     _buildInterests(user, context, isDark),
-                    _buildGridHeader(context, isDark),
+                    _buildGridHeader(context, isDark, posts.length),
                   ],
                 ),
               ),
-              
-              _buildPostsGrid(posts, context, isDark, ref),
+
+              _buildPostsGrid(posts, context, isDark),
               SliverPadding(padding: EdgeInsets.only(bottom: MediaQuery.of(context).padding.bottom + 120)),
             ],
           ),
 
-          // Custom Back Button (Placed last so it stays on top of the scroll view and receives clicks)
+          // Custom Back Button
           Positioned(
             top: MediaQuery.of(context).padding.top + 10,
             left: 10,
-            child: IconButton(
-              icon: Icon(Icons.arrow_back_ios_new_rounded, color: isDark ? Colors.white : Colors.black),
-              onPressed: () {
-                if (context.canPop()) {
-                  context.pop();
-                } else {
-                  context.go('/feed');
-                }
-              },
+            child: Container(
+              decoration: BoxDecoration(
+                color: isDark ? Colors.black.withOpacity(0.4) : Colors.white.withOpacity(0.6),
+                shape: BoxShape.circle,
+                border: Border.all(
+                  color: isDark ? Colors.white.withOpacity(0.12) : Colors.black.withOpacity(0.08),
+                ),
+              ),
+              child: IconButton(
+                icon: Icon(Icons.arrow_back_ios_new_rounded, size: 18, color: isDark ? Colors.white : Colors.black87),
+                onPressed: () {
+                  if (context.canPop()) {
+                    context.pop();
+                  } else {
+                    context.go('/feed');
+                  }
+                },
+              ),
             ),
           ),
         ],
@@ -273,46 +226,43 @@ class ProfileScreen extends ConsumerWidget {
     );
   }
 
-  Widget _buildGlassHeader(BuildContext context, WidgetRef ref, UserModel user, bool isDark) {
+  // ─── GLASS HEADER WITH ROTATING RING ───────────────────────────────────────
+  Widget _buildGlassHeader(BuildContext context, UserModel user, bool isDark) {
     return Row(
       crossAxisAlignment: CrossAxisAlignment.center,
       children: [
-        // Avatar with Glowing Border
-        Container(
-          width: 130,
-          height: 130,
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            gradient: const LinearGradient(
-              colors: [Color(0xFF00C6FF), Color(0xFF0072FF), AppTheme.accentPurple],
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-            ),
-            boxShadow: [
-              BoxShadow(
-                color: AppTheme.primaryBlue.withOpacity(0.5),
-                blurRadius: 20,
-                spreadRadius: 2,
-              ),
-            ],
-          ),
-          padding: const EdgeInsets.all(3),
-          child: Container(
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              color: isDark ? AppTheme.darkBg : AppTheme.lightBg,
-            ),
-            padding: const EdgeInsets.all(3),
-            child: CircleAvatar(
-              backgroundImage: NetworkImage(
-                user.avatarUrl ?? 'https://ui-avatars.com/api/?name=${Uri.encodeComponent(user.name)}&size=200&background=6ECBF5&color=fff&rounded=true',
-              ),
-            ),
+        // Avatar with animated rotating rainbow gradient ring
+        GestureDetector(
+          onTap: () => ProfileChoiceSheet.show(context, user, isDark),
+          child: AnimatedBuilder(
+            animation: _ringAnim,
+            builder: (_, __) {
+              return SizedBox(
+                width: 124,
+                height: 124,
+                child: CustomPaint(
+                  painter: _AvatarRingPainter(
+                    angle: _ringAnim.value * 2 * math.pi,
+                  ),
+                  child: Padding(
+                    padding: const EdgeInsets.all(4.5),
+                    child: ClipOval(
+                      child: Image.network(
+                        user.avatarUrl ??
+                            'https://ui-avatars.com/api/?name=${Uri.encodeComponent(user.name)}&size=200&background=6ECBF5&color=fff&rounded=true',
+                        fit: BoxFit.cover,
+                        errorBuilder: (_, __, ___) => const Icon(Icons.person, color: Colors.white, size: 50),
+                      ),
+                    ),
+                  ),
+                ),
+              );
+            },
           ),
         ),
-        const SizedBox(width: 20),
-        
-        // Name, Location, Actions
+        const SizedBox(width: 18),
+
+        // Name, Location, Action Buttons
         Expanded(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -324,8 +274,8 @@ class ProfileScreen extends ConsumerWidget {
                       user.name,
                       style: TextStyle(
                         color: isDark ? Colors.white : Colors.black87,
-                        fontSize: 24,
-                        fontWeight: FontWeight.w800,
+                        fontSize: 22,
+                        fontWeight: FontWeight.w900,
                         letterSpacing: -0.5,
                       ),
                       maxLines: 1,
@@ -334,44 +284,81 @@ class ProfileScreen extends ConsumerWidget {
                   ),
                   if (user.isVerified) ...[
                     const SizedBox(width: 6),
-                    const Icon(Icons.verified_rounded, color: AppTheme.primaryBlue, size: 20),
+                    const SBadgeWidget(size: 22),
                   ],
                 ],
               ),
-              if (user.location != null) ...[
+              if (user.location != null && user.location!.isNotEmpty) ...[
                 const SizedBox(height: 4),
-                Row(
-                  children: [
-                    Icon(Icons.location_on_rounded, size: 14, color: AppTheme.textSecondary.withOpacity(0.8)),
-                    const SizedBox(width: 4),
-                    Text(
-                      user.location!,
-                      style: TextStyle(color: AppTheme.textSecondary.withOpacity(0.8), fontSize: 13, fontWeight: FontWeight.w500),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 3),
+                  decoration: BoxDecoration(
+                    color: isDark ? Colors.white.withOpacity(0.08) : Colors.black.withOpacity(0.05),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: isDark ? Colors.white.withOpacity(0.1) : Colors.black.withOpacity(0.06),
                     ),
-                  ],
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.location_on_rounded, size: 12, color: Color(0xFFFF3CAC)),
+                      const SizedBox(width: 4),
+                      Text(
+                        user.location!,
+                        style: TextStyle(
+                          color: isDark ? Colors.white70 : Colors.black87,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ],
-              const SizedBox(height: 16),
-              
-              // Action Buttons
+              const SizedBox(height: 14),
+
+              // Action Buttons Row
               Row(
+                mainAxisSize: MainAxisSize.min,
                 children: [
-                  Expanded(
-                    child: _GlassButton(
-                      label: 'Edit Profile',
-                      icon: Icons.edit_rounded,
-                      onTap: () => context.push('/profile/edit'),
-                      isPrimary: true,
-                    ),
+                  // Edit Profile — icon only
+                  _buildIconButton(
+                    icon: Icons.edit_rounded,
+                    gradientColors: const [Color(0xFFFF3CAC), Color(0xFF7C3AED)],
+                    onTap: () => context.push('/profile/edit'),
+                  isDark: isDark,
                   ),
-                  const SizedBox(width: 10),
-                  _GlassButton(
-                    label: '',
+                  const SizedBox(width: 8),
+
+                  // View Public Button
+                  _buildIconButton(
+                    icon: Icons.remove_red_eye_rounded,
+                    gradientColors: [const Color(0xFF00C6FF), const Color(0xFF0072FF)],
+                    onTap: () => ProfileChoiceSheet.show(context, user, isDark),
+                    isDark: isDark,
+                  ),
+                  const SizedBox(width: 8),
+
+                  // Settings Button
+                  _buildIconButton(
                     icon: Icons.settings_rounded,
-                    onTap: () => _showSettingsSheet(context, ref),
-                    isPrimary: false,
-                    isIconOnly: true,
+                    gradientColors: isDark
+                        ? [Colors.white24, Colors.white10]
+                        : [Colors.black12, Colors.black26],
+                    onTap: () => _showSettingsSheet(context),
+                    isDark: isDark,
                   ),
+
+                  if (!user.isVerified) ...[
+                    const SizedBox(width: 8),
+                    _buildIconButton(
+                      icon: Icons.verified_user_rounded,
+                      gradientColors: [const Color(0xFFA855F7), const Color(0xFF6366F1)],
+                      onTap: () => context.push('/verification'),
+                      isDark: isDark,
+                    ),
+                  ],
                 ],
               ),
             ],
@@ -381,7 +368,38 @@ class ProfileScreen extends ConsumerWidget {
     );
   }
 
-  void _showSettingsSheet(BuildContext context, WidgetRef ref) {
+  Widget _buildIconButton({
+    required IconData icon,
+    required List<Color> gradientColors,
+    required VoidCallback onTap,
+    required bool isDark,
+  }) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        width: 38,
+        height: 38,
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(14),
+          gradient: LinearGradient(colors: gradientColors),
+          border: Border.all(
+            color: Colors.white.withOpacity(0.25),
+            width: 1.0,
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: gradientColors.first.withOpacity(0.3),
+              blurRadius: 8,
+              offset: const Offset(0, 3),
+            ),
+          ],
+        ),
+        child: Icon(icon, size: 18, color: Colors.white),
+      ),
+    );
+  }
+
+  void _showSettingsSheet(BuildContext context) {
     showModalBottomSheet(
       context: context,
       useRootNavigator: true,
@@ -391,30 +409,64 @@ class ProfileScreen extends ConsumerWidget {
     );
   }
 
+  // ─── STATS CARD ─────────────────────────────────────────────────────────────
   Widget _buildStats(UserModel user, int postCount, BuildContext context, bool isDark) {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 40, 20, 10),
+      padding: const EdgeInsets.fromLTRB(20, 24, 20, 10),
       child: ClipRRect(
-        borderRadius: BorderRadius.circular(24),
+        borderRadius: BorderRadius.circular(26),
         child: BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: 15, sigmaY: 15),
+          filter: ImageFilter.blur(sigmaX: 16, sigmaY: 16),
           child: Container(
-            padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 10),
+            padding: const EdgeInsets.symmetric(vertical: 18, horizontal: 12),
             decoration: BoxDecoration(
-              color: isDark ? Colors.white.withOpacity(0.05) : Colors.black.withOpacity(0.03),
-              borderRadius: BorderRadius.circular(24),
-              border: Border.all(
-                color: isDark ? Colors.white.withOpacity(0.1) : Colors.black.withOpacity(0.05),
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: isDark
+                    ? [const Color(0xFF2A1B40).withOpacity(0.7), const Color(0xFF161026).withOpacity(0.7)]
+                    : [Colors.white.withOpacity(0.9), const Color(0xFFF3E8FF).withOpacity(0.8)],
               ),
+              borderRadius: BorderRadius.circular(26),
+              border: Border.all(
+                color: isDark ? const Color(0xFF9333EA).withOpacity(0.35) : const Color(0xFF9333EA).withOpacity(0.2),
+                width: 1.3,
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: const Color(0xFF9333EA).withOpacity(isDark ? 0.2 : 0.08),
+                  blurRadius: 20,
+                  spreadRadius: 1,
+                  offset: const Offset(0, 6),
+                ),
+              ],
             ),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceEvenly,
               children: [
-                _StatItem(label: 'Followers', value: '${user.followers.length}'),
-                _Divider(isDark: isDark, isGlass: true),
-                _StatItem(label: 'Likes', value: '${user.likedBy.length}'),
-                _Divider(isDark: isDark, isGlass: true),
-                _StatItem(label: 'Photos', value: '$postCount'),
+                _StatItem(
+                  icon: Icons.people_alt_rounded,
+                  label: 'Followers',
+                  value: '${user.followers.length}',
+                  color: const Color(0xFF00C6FF),
+                  isDark: isDark,
+                ),
+                _Divider(isDark: isDark),
+                _StatItem(
+                  icon: Icons.favorite_rounded,
+                  label: 'Likes',
+                  value: '${user.likedBy.length}',
+                  color: const Color(0xFFFF3CAC),
+                  isDark: isDark,
+                ),
+                _Divider(isDark: isDark),
+                _StatItem(
+                  icon: Icons.photo_library_rounded,
+                  label: 'Posts',
+                  value: '$postCount',
+                  color: const Color(0xFFFF8C42),
+                  isDark: isDark,
+                ),
               ],
             ),
           ),
@@ -423,21 +475,21 @@ class ProfileScreen extends ConsumerWidget {
     );
   }
 
-  Widget _buildVisitorsCard(BuildContext context, WidgetRef ref, UserModel currentUser, bool isDark) {
+  // ─── PROFILE VISITORS CARD ──────────────────────────────────────────────────
+  Widget _buildVisitorsCard(BuildContext context, UserModel currentUser, bool isDark) {
     final db = FirebaseFirestore.instanceFor(app: Firebase.app(), databaseId: 'default');
-    
+
     return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-      stream: db.collection('profile_views')
-          .where('targetId', isEqualTo: currentUser.id)
-          .snapshots(),
+      stream: db.collection('profile_views').where('targetId', isEqualTo: currentUser.id).snapshots(),
       builder: (context, snapshot) {
         final allDocs = snapshot.hasData ? snapshot.data!.docs : [];
-        final sortedDocs = allDocs.toList()..sort((a, b) {
-          final aTime = a.data()['viewedAt'] as int? ?? 0;
-          final bTime = b.data()['viewedAt'] as int? ?? 0;
-          return bTime.compareTo(aTime);
-        });
-        
+        final sortedDocs = allDocs.toList()
+          ..sort((a, b) {
+            final aTime = a.data()['viewedAt'] as int? ?? 0;
+            final bTime = b.data()['viewedAt'] as int? ?? 0;
+            return bTime.compareTo(aTime);
+          });
+
         final Map<String, dynamic> uniqueVisitors = {};
         for (var doc in sortedDocs) {
           final visitorId = doc.data()['viewerId'] as String? ?? '';
@@ -446,88 +498,33 @@ class ProfileScreen extends ConsumerWidget {
           }
         }
         final docs = uniqueVisitors.values.toList();
-        
-        if (docs.isEmpty) {
-          return Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(24),
-              child: BackdropFilter(
-                filter: ImageFilter.blur(sigmaX: 15, sigmaY: 15),
-                child: Container(
-                  padding: const EdgeInsets.all(20),
-                  decoration: BoxDecoration(
-                    color: isDark ? Colors.white.withOpacity(0.05) : Colors.black.withOpacity(0.03),
-                    borderRadius: BorderRadius.circular(24),
-                    border: Border.all(
-                      color: isDark ? Colors.white.withOpacity(0.1) : Colors.black.withOpacity(0.05),
-                    ),
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          const Text('👻', style: TextStyle(fontSize: 16)),
-                          const SizedBox(width: 8),
-                          Text(
-                            'Profile Visitors',
-                            style: TextStyle(
-                              color: isDark ? Colors.white : Colors.black87,
-                              fontSize: 16,
-                              fontWeight: FontWeight.w800,
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 16),
-                      Center(
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(vertical: 12),
-                          child: Text(
-                            'No profile views yet! 👻\n(Views by others will appear here)',
-                            textAlign: TextAlign.center,
-                            style: TextStyle(
-                              color: isDark ? Colors.white60 : Colors.black54,
-                              fontSize: 13,
-                              height: 1.4,
-                            ),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-          );
-        }
-        
+
         return Padding(
           padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
           child: ClipRRect(
-            borderRadius: BorderRadius.circular(24),
+            borderRadius: BorderRadius.circular(26),
             child: BackdropFilter(
-              filter: ImageFilter.blur(sigmaX: 15, sigmaY: 15),
+              filter: ImageFilter.blur(sigmaX: 16, sigmaY: 16),
               child: Container(
                 padding: const EdgeInsets.all(20),
                 decoration: BoxDecoration(
                   gradient: LinearGradient(
-                    colors: isDark 
-                        ? [Colors.white.withOpacity(0.1), Colors.white.withOpacity(0.02)]
-                        : [Colors.black.withOpacity(0.05), Colors.black.withOpacity(0.01)],
+                    colors: isDark
+                        ? [const Color(0xFF231638).withOpacity(0.85), const Color(0xFF140C24).withOpacity(0.85)]
+                        : [Colors.white.withOpacity(0.95), const Color(0xFFF3E8FF).withOpacity(0.9)],
                     begin: Alignment.topLeft,
                     end: Alignment.bottomRight,
                   ),
-                  borderRadius: BorderRadius.circular(24),
+                  borderRadius: BorderRadius.circular(26),
                   border: Border.all(
-                    color: isDark ? Colors.white.withOpacity(0.15) : Colors.black.withOpacity(0.1),
+                    color: const Color(0xFFA855F7).withOpacity(isDark ? 0.35 : 0.2),
+                    width: 1.3,
                   ),
                   boxShadow: [
                     BoxShadow(
-                      color: (isDark ? Colors.purpleAccent : AppTheme.primaryBlue).withOpacity(0.1),
+                      color: const Color(0xFFA855F7).withOpacity(isDark ? 0.18 : 0.08),
                       blurRadius: 20,
-                      spreadRadius: -5,
+                      spreadRadius: 0,
                     ),
                   ],
                 ),
@@ -539,112 +536,167 @@ class ProfileScreen extends ConsumerWidget {
                       children: [
                         Row(
                           children: [
-                            const Text('👻', style: TextStyle(fontSize: 18)),
-                            const SizedBox(width: 8),
+                            Container(
+                              padding: const EdgeInsets.all(7),
+                              decoration: BoxDecoration(
+                                gradient: const LinearGradient(
+                                  colors: [Color(0xFFA855F7), Color(0xFF6366F1)],
+                                ),
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                              child: const Text('👻', style: TextStyle(fontSize: 14)),
+                            ),
+                            const SizedBox(width: 10),
                             Text(
                               'Profile Visitors',
                               style: TextStyle(
                                 color: isDark ? Colors.white : Colors.black87,
-                                fontSize: 18,
+                                fontSize: 16.5,
                                 fontWeight: FontWeight.w900,
+                                letterSpacing: -0.3,
                               ),
                             ),
+                            if (docs.isNotEmpty) ...[
+                              const SizedBox(width: 8),
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                decoration: BoxDecoration(
+                                  gradient: const LinearGradient(
+                                    colors: [Color(0xFF00C6FF), Color(0xFF0072FF)],
+                                  ),
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                child: Text(
+                                  '${docs.length}',
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w900,
+                                  ),
+                                ),
+                              ),
+                            ],
                           ],
                         ),
-                        if (docs.length <= 3 && docs.isNotEmpty)
-                          IconButton(
-                            icon: Icon(Icons.arrow_forward_ios_rounded, size: 16, color: isDark ? Colors.white54 : Colors.black54),
-                            onPressed: () => context.push('/profile/visitors'),
-                            padding: EdgeInsets.zero,
-                            constraints: const BoxConstraints(),
-                          ),
+                        IconButton(
+                          icon: Icon(Icons.arrow_forward_ios_rounded, size: 15, color: isDark ? Colors.white60 : Colors.black54),
+                          onPressed: () => context.push('/profile/visitors'),
+                          padding: EdgeInsets.zero,
+                          constraints: const BoxConstraints(),
+                        ),
                       ],
                     ),
-                    const SizedBox(height: 16),
-                    ListView.builder(
-                      shrinkWrap: true,
-                      physics: const NeverScrollableScrollPhysics(),
-                      padding: EdgeInsets.zero,
-                      itemCount: docs.length > 3 ? 3 : docs.length,
-                      itemBuilder: (context, index) {
-                        final data = docs[index].data();
-                        final visitorId = data['viewerId'] as String;
-                        final visitorName = data['viewerName'] as String? ?? 'User';
-                        final visitorAvatar = data['viewerAvatar'] as String?;
-                        
-                        final isUnlocked = currentUser.hasActiveSubscription || 
-                            currentUser.unlockedVisitors.contains(visitorId);
-                            
-                        return Padding(
-                          padding: const EdgeInsets.only(bottom: 12),
-                          child: Material(
-                            color: Colors.transparent,
-                            child: InkWell(
-                              borderRadius: BorderRadius.circular(20),
-                              onTap: (isUnlocked && visitorId.isNotEmpty) ? () => context.push('/profile/view/$visitorId') : (isUnlocked && visitorId.isEmpty ? () => ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('This profile is unavailable or was deleted.'))) : null),
-                              child: Row(
-                                children: [
-                                  CircleAvatar(
-                                    radius: 20,
-                                    backgroundImage: NetworkImage(
-                                      isUnlocked 
-                                          ? (visitorAvatar ?? 'https://ui-avatars.com/api/?name=${Uri.encodeComponent(visitorName)}')
-                                          : 'https://ui-avatars.com/api/?name=%3F&background=252E42&color=fff'
-                                    ),
-                                  ),
-                                  const SizedBox(width: 12),
-                                  Expanded(
-                                    child: Text(
-                                      isUnlocked ? visitorName : 'Ghost Visitor 👻',
-                                      style: TextStyle(
-                                        color: isDark ? Colors.white70 : Colors.black87,
-                                        fontSize: 14,
-                                        fontWeight: FontWeight.w700,
-                                      ),
-                                    ),
-                                  ),
-                                  if (!isUnlocked)
-                                    TextButton.icon(
-                                      onPressed: () => _unlockGhostView(context, ref, currentUser, visitorId),
-                                      icon: const Icon(Icons.lock_open_rounded, size: 14, color: AppTheme.primaryBlue),
-                                      label: const Text('Unlock', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w800, color: AppTheme.primaryBlue)),
-                                      style: TextButton.styleFrom(
-                                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                                        backgroundColor: AppTheme.primaryBlue.withOpacity(0.12),
-                                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                                      ),
-                                    )
-                                  else
-                                    const Icon(Icons.arrow_forward_ios_rounded, color: AppTheme.textSecondary, size: 14),
-                                ],
-                              ),
-                            ),
-                          ),
-                        );
-                      },
-                    ),
-                    if (docs.length > 3)
-                      Padding(
-                        padding: const EdgeInsets.only(top: 8),
-                        child: SizedBox(
-                          width: double.infinity,
-                          child: TextButton(
-                            onPressed: () => context.push('/profile/visitors'),
-                            style: TextButton.styleFrom(
-                              backgroundColor: isDark ? Colors.white.withOpacity(0.1) : Colors.black.withOpacity(0.05),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                            ),
-                            child: Text(
-                              'See All Visitors (${docs.length})',
-                              style: TextStyle(
-                                color: isDark ? Colors.white : Colors.black87,
-                                fontWeight: FontWeight.w800,
-                              ),
+                    const SizedBox(height: 14),
+
+                    if (docs.isEmpty)
+                      Center(
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 14),
+                          child: Text(
+                            'No profile views yet! 👻\n(Views by other users will appear here)',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              color: isDark ? Colors.white60 : Colors.black54,
+                              fontSize: 13,
+                              height: 1.4,
+                              fontWeight: FontWeight.w500,
                             ),
                           ),
                         ),
+                      )
+                    else
+                      ListView.builder(
+                        shrinkWrap: true,
+                        physics: const NeverScrollableScrollPhysics(),
+                        padding: EdgeInsets.zero,
+                        itemCount: docs.length > 3 ? 3 : docs.length,
+                        itemBuilder: (context, index) {
+                          final data = docs[index].data();
+                          final visitorId = data['viewerId'] as String;
+                          final visitorName = data['viewerName'] as String? ?? 'User';
+                          final visitorAvatar = data['viewerAvatar'] as String?;
+
+                          final isUnlocked = currentUser.hasActiveSubscription || currentUser.unlockedVisitors.contains(visitorId);
+
+                          return Padding(
+                            padding: const EdgeInsets.only(bottom: 10),
+                            child: InkWell(
+                              borderRadius: BorderRadius.circular(16),
+                              onTap: (isUnlocked && visitorId.isNotEmpty)
+                                  ? () => ProfileChoiceSheet.navigateToProfile(context, ref, visitorId)
+                                  : null,
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                                decoration: BoxDecoration(
+                                  color: isDark ? Colors.white.withOpacity(0.04) : Colors.black.withOpacity(0.03),
+                                  borderRadius: BorderRadius.circular(16),
+                                  border: Border.all(
+                                    color: isDark ? Colors.white.withOpacity(0.08) : Colors.black.withOpacity(0.05),
+                                  ),
+                                ),
+                                child: Row(
+                                  children: [
+                                    CircleAvatar(
+                                      radius: 19,
+                                      backgroundImage: NetworkImage(
+                                        isUnlocked
+                                            ? (visitorAvatar ?? 'https://ui-avatars.com/api/?name=${Uri.encodeComponent(visitorName)}')
+                                            : 'https://ui-avatars.com/api/?name=%3F&background=3B0764&color=fff',
+                                      ),
+                                    ),
+                                    const SizedBox(width: 12),
+                                    Expanded(
+                                      child: Text(
+                                        isUnlocked ? visitorName : 'Ghost Visitor 👻',
+                                        style: TextStyle(
+                                          color: isDark ? Colors.white : Colors.black87,
+                                          fontSize: 13.5,
+                                          fontWeight: FontWeight.w800,
+                                        ),
+                                      ),
+                                    ),
+                                    if (!isUnlocked)
+                                      GestureDetector(
+                                        onTap: () => _unlockGhostView(context, ref, currentUser, visitorId),
+                                        child: Container(
+                                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                                          decoration: BoxDecoration(
+                                            gradient: const LinearGradient(
+                                              colors: [Color(0xFF00C6FF), Color(0xFF0072FF)],
+                                            ),
+                                            borderRadius: BorderRadius.circular(12),
+                                            boxShadow: [
+                                              BoxShadow(
+                                                color: const Color(0xFF00C6FF).withOpacity(0.3),
+                                                blurRadius: 8,
+                                              ),
+                                            ],
+                                          ),
+                                          child: const Row(
+                                            mainAxisSize: MainAxisSize.min,
+                                            children: [
+                                              Icon(Icons.lock_open_rounded, size: 13, color: Colors.white),
+                                              SizedBox(width: 4),
+                                              Text(
+                                                'Unlock',
+                                                style: TextStyle(
+                                                  fontSize: 11.5,
+                                                  fontWeight: FontWeight.w900,
+                                                  color: Colors.white,
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                      )
+                                    else
+                                      Icon(Icons.arrow_forward_ios_rounded, color: isDark ? Colors.white38 : Colors.black38, size: 13),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          );
+                        },
                       ),
                   ],
                 ),
@@ -662,135 +714,264 @@ class ProfileScreen extends ConsumerWidget {
 
     try {
       final db = FirebaseFirestore.instanceFor(app: Firebase.app(), databaseId: 'default');
-      
+
       await db.runTransaction((tx) async {
         final userRef = db.collection('users').doc(currentUser.id);
         final snap = await tx.get(userRef);
         if (!snap.exists) return;
-        
+
         final unlocked = List<String>.from(snap.data()?['unlockedVisitors'] ?? []);
         if (!unlocked.contains(visitorId)) {
           unlocked.add(visitorId);
         }
-        
-        tx.update(userRef, {
-          'unlockedVisitors': unlocked,
-        });
+
+        tx.update(userRef, {'unlockedVisitors': unlocked});
       });
-      
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-        content: Text('Visitor identity unlocked! 👻🎉'),
-        backgroundColor: AppTheme.success,
-        behavior: SnackBarBehavior.floating,
-      ));
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text('Failed to unlock: $e'),
-        backgroundColor: AppTheme.error,
-        behavior: SnackBarBehavior.floating,
-      ));
+      debugPrint('Error unlocking ghost view: $e');
     }
   }
 
-  Widget _buildBio(UserModel user, BuildContext context) {
-    if (user.bio == null || user.bio!.isEmpty) return const SizedBox();
+  // ─── ABOUT ME & TRAITS ──────────────────────────────────────────────────────
+  Widget _buildBio(UserModel user, BuildContext context, bool isDark) {
+    if (user.bio == null || user.bio!.trim().isEmpty) return const SizedBox.shrink();
+
     return Padding(
-      padding: const EdgeInsets.fromLTRB(24, 24, 24, 8),
-      child: Text(
-        user.bio!,
-        style: const TextStyle(
-          fontSize: 15,
-          height: 1.5,
-          fontWeight: FontWeight.w400,
+      padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(22),
+        child: Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(18),
+          decoration: BoxDecoration(
+            color: isDark ? Colors.white.withOpacity(0.05) : Colors.white.withOpacity(0.8),
+            borderRadius: BorderRadius.circular(22),
+            border: Border.all(
+              color: isDark ? Colors.white.withOpacity(0.1) : Colors.black.withOpacity(0.06),
+            ),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Container(
+                    width: 3,
+                    height: 14,
+                    decoration: BoxDecoration(
+                      gradient: const LinearGradient(
+                        colors: [Color(0xFFFF3CAC), Color(0xFFFF8C42)],
+                      ),
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    'ABOUT ME',
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w900,
+                      color: isDark ? const Color(0xFFC084FC) : const Color(0xFF7C3AED),
+                      letterSpacing: 1.1,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 10),
+              Text(
+                user.bio!,
+                style: TextStyle(
+                  fontSize: 14.5,
+                  height: 1.5,
+                  fontWeight: FontWeight.w600,
+                  color: isDark ? Colors.white.withOpacity(0.92) : Colors.black87,
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
   }
 
   Widget _buildInterests(UserModel user, BuildContext context, bool isDark) {
-    if (user.interests == null || user.interests!.isEmpty) return const SizedBox();
-    
+    if (user.interests == null || user.interests!.isEmpty) return const SizedBox.shrink();
+
     return Padding(
-      padding: const EdgeInsets.only(top: 10, bottom: 20),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 24),
-        child: Wrap(
-          spacing: 8,
-          runSpacing: 12,
-          children: user.interests!.map((interest) {
-            return Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-              decoration: BoxDecoration(
-                color: isDark ? Colors.white.withOpacity(0.1) : AppTheme.primaryBlue.withOpacity(0.1),
-                borderRadius: BorderRadius.circular(20),
-                border: Border.all(
-                  color: isDark ? Colors.white.withOpacity(0.2) : AppTheme.primaryBlue.withOpacity(0.2),
-                ),
+      padding: const EdgeInsets.fromLTRB(20, 14, 20, 10),
+      child: Wrap(
+        spacing: 8,
+        runSpacing: 10,
+        children: user.interests!.map((interest) {
+          final label = interest.toString();
+          final icon = _getInterestIcon(label);
+          const color = Color(0xFF9333EA);
+
+          return Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+            decoration: BoxDecoration(
+              color: color.withOpacity(isDark ? 0.16 : 0.08),
+              borderRadius: BorderRadius.circular(18),
+              border: Border.all(
+                color: color.withOpacity(isDark ? 0.35 : 0.2),
+                width: 1.2,
               ),
-              child: Text(
-                interest.toString(),
-                style: TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w600,
-                  color: isDark ? Colors.white : AppTheme.primaryBlue,
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(icon, style: const TextStyle(fontSize: 13)),
+                const SizedBox(width: 6),
+                Text(
+                  label,
+                  style: TextStyle(
+                    fontSize: 12.5,
+                    fontWeight: FontWeight.w800,
+                    color: isDark ? Colors.white : const Color(0xFF5B21B6),
+                  ),
                 ),
-              ),
-            );
-          }).toList(),
-        ),
+              ],
+            ),
+          );
+        }).toList(),
       ),
     );
   }
 
-  Widget _buildGridHeader(BuildContext context, bool isDark) {
+  String _getInterestIcon(String label) {
+    final l = label.toLowerCase();
+    if (l.contains('music')) return '🎵';
+    if (l.contains('movie')) return '🎬';
+    if (l.contains('book')) return '📚';
+    if (l.contains('travel')) return '✈️';
+    if (l.contains('food')) return '🍔';
+    if (l.contains('fitness')) return '🏋️';
+    if (l.contains('game') || l.contains('gaming')) return '🎮';
+    if (l.contains('pet') || l.contains('cat') || l.contains('dog')) return '🐾';
+    if (l.contains('dance')) return '💃';
+    if (l.contains('art')) return '🎨';
+    return '✨';
+  }
+
+  Widget _buildGridHeader(BuildContext context, bool isDark, int count) {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(24, 30, 24, 20),
-      child: Text(
-        'Photos & Video', 
-        style: TextStyle(
-          fontSize: 18, 
-          fontWeight: FontWeight.w800,
-          color: isDark ? Colors.white : Colors.black87,
-        ),
+      padding: const EdgeInsets.fromLTRB(20, 24, 20, 14),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(7),
+            decoration: BoxDecoration(
+              gradient: const LinearGradient(
+                colors: [Color(0xFFFF3CAC), Color(0xFFFF8C42)],
+              ),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: const Icon(Icons.photo_library_rounded, size: 15, color: Colors.white),
+          ),
+          const SizedBox(width: 10),
+          Text(
+            'Photos & Videos',
+            style: TextStyle(
+              fontSize: 17,
+              fontWeight: FontWeight.w900,
+              color: isDark ? Colors.white : Colors.black87,
+              letterSpacing: -0.3,
+            ),
+          ),
+          const SizedBox(width: 8),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 3),
+            decoration: BoxDecoration(
+              gradient: const LinearGradient(
+                colors: [Color(0xFFFF3CAC), Color(0xFFFF8C42)],
+              ),
+              borderRadius: BorderRadius.circular(20),
+            ),
+            child: Text(
+              '$count',
+              style: const TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w900,
+                color: Colors.white,
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
 
-  SliverPadding _buildPostsGrid(
-    List<PostModel> posts,
-    BuildContext context,
-    bool isDark,
-    WidgetRef ref,
-  ) {
+  // ─── POSTS GRID ─────────────────────────────────────────────────────────────
+  SliverPadding _buildPostsGrid(List<PostModel> posts, BuildContext context, bool isDark) {
+    if (posts.isEmpty) {
+      return SliverPadding(
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
+        sliver: SliverToBoxAdapter(
+          child: Container(
+            padding: const EdgeInsets.all(28),
+            decoration: BoxDecoration(
+              color: isDark ? Colors.white.withOpacity(0.04) : Colors.black.withOpacity(0.03),
+              borderRadius: BorderRadius.circular(22),
+              border: Border.all(
+                color: isDark ? Colors.white.withOpacity(0.08) : Colors.black.withOpacity(0.05),
+              ),
+            ),
+            child: Column(
+              children: [
+                const Icon(Icons.photo_camera_outlined, size: 40, color: Colors.white38),
+                const SizedBox(height: 10),
+                Text(
+                  'No photos uploaded yet 📸',
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w700,
+                    color: isDark ? Colors.white60 : Colors.black54,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
     return SliverPadding(
-      padding: const EdgeInsets.symmetric(horizontal: 16),
+      padding: const EdgeInsets.symmetric(horizontal: 20),
       sliver: SliverGrid(
         gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
           crossAxisCount: 2,
           crossAxisSpacing: 12,
           mainAxisSpacing: 12,
-          childAspectRatio: 0.8, // Taller portrait ratio
+          childAspectRatio: 0.82,
         ),
         delegate: SliverChildBuilderDelegate(
           (context, index) {
             final post = posts[index];
+            final mediaUrl = post.imageUrl ?? '';
+
             return GestureDetector(
               onTap: () => _showPostDetail(context, post, posts),
-              child: Hero(
-                tag: 'post_${post.id}',
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(20),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(20),
+                child: Container(
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(
+                      color: isDark ? Colors.white.withOpacity(0.12) : Colors.black.withOpacity(0.08),
+                      width: 1.2,
+                    ),
+                  ),
                   child: Stack(
                     fit: StackFit.expand,
                     children: [
-                      if (post.imageUrl != null && post.imageUrl!.isNotEmpty)
+                      if (mediaUrl.isNotEmpty)
                         Image.network(
-                          post.imageUrl!,
+                          mediaUrl,
                           fit: BoxFit.cover,
-                          errorBuilder: (context, error, stackTrace) => Container(
+                          errorBuilder: (_, __, ___) => Container(
                             color: isDark ? Colors.white10 : Colors.black12,
                             child: const Center(
-                              child: Icon(Icons.broken_image_rounded, color: AppTheme.textSecondary, size: 28),
+                              child: Icon(Icons.broken_image_rounded, color: Colors.white38, size: 28),
                             ),
                           ),
                         )
@@ -798,74 +979,67 @@ class ProfileScreen extends ConsumerWidget {
                         Container(
                           decoration: BoxDecoration(
                             gradient: LinearGradient(
-                              begin: Alignment.topLeft,
-                              end: Alignment.bottomRight,
-                              colors: [
-                                AppTheme.primaryBlue.withOpacity(isDark ? 0.25 : 0.12),
-                                AppTheme.primaryGreen.withOpacity(isDark ? 0.25 : 0.12),
-                              ],
+                              colors: [const Color(0xFFFF3CAC).withOpacity(0.3), const Color(0xFF7C3AED).withOpacity(0.3)],
                             ),
                           ),
                           child: Center(
-                            child: _buildEmojiImage(post.mood!.split(' ').first, size: 40),
+                            child: Text(post.mood!, style: const TextStyle(fontSize: 32)),
                           ),
                         )
                       else
                         Container(
                           color: isDark ? Colors.white10 : Colors.black12,
-                          child: const Center(child: Text('✨', style: TextStyle(fontSize: 40))),
+                          child: const Center(child: Text('✨', style: TextStyle(fontSize: 32))),
                         ),
 
-                      // Vignette bottom gradient
-                      Container(
-                        decoration: BoxDecoration(
-                          gradient: LinearGradient(
-                            begin: Alignment.topCenter,
-                            end: Alignment.bottomCenter,
-                            colors: [
-                              Colors.transparent,
-                              Colors.transparent,
-                              Colors.black.withOpacity(0.7),
-                            ],
-                            stops: const [0.0, 0.5, 1.0],
-                          ),
-                        ),
-                      ),
-
-                      // Stats counters row
+                      // Bottom gradient scrim with likes
                       Positioned(
-                        bottom: 12,
-                        left: 12,
-                        right: 12,
-                        child: Row(
-                          children: [
-                            Icon(Icons.favorite_rounded, color: Colors.white.withOpacity(0.9), size: 14),
-                            const SizedBox(width: 4),
-                            Text(
-                              '${post.likes.length}',
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontSize: 13,
-                                fontWeight: FontWeight.w800,
+                        left: 0,
+                        right: 0,
+                        bottom: 0,
+                        height: 50,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                            decoration: BoxDecoration(
+                              gradient: LinearGradient(
+                                begin: Alignment.topCenter,
+                                end: Alignment.bottomCenter,
+                                colors: [Colors.transparent, Colors.black.withOpacity(0.67)],
                               ),
                             ),
-                            if (post.commentCount > 0) ...[
-                              const SizedBox(width: 12),
-                              Icon(Icons.chat_bubble_rounded, color: Colors.white.withOpacity(0.9), size: 12),
-                              const SizedBox(width: 4),
-                              Text(
-                                '${post.commentCount}',
-                                style: const TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 13,
-                                  fontWeight: FontWeight.w800,
-                                ),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Row(
+                                children: [
+                                  const Icon(Icons.favorite_rounded, size: 14, color: Colors.redAccent),
+                                  const SizedBox(width: 4),
+                                  Text(
+                                    '${post.likes.length}',
+                                    style: const TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w800,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              Row(
+                                children: [
+                                  const Icon(Icons.chat_bubble_rounded, size: 13, color: Colors.white70),
+                                  const SizedBox(width: 4),
+                                  Text(
+                                    '${post.commentCount}',
+                                    style: const TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w800,
+                                    ),
+                                  ),
+                                ],
                               ),
                             ],
-                            const Spacer(),
-                            if (post.isReel)
-                              const Icon(Icons.play_circle_fill_rounded, color: Colors.white, size: 18),
-                          ],
+                          ),
                         ),
                       ),
                     ],
@@ -880,88 +1054,23 @@ class ProfileScreen extends ConsumerWidget {
     );
   }
 
-  void _showPostDetail(BuildContext context, PostModel post, List<PostModel> allPosts) {
-    final initialIndex = allPosts.indexWhere((p) => p.id == post.id);
+  void _showPostDetail(BuildContext context, PostModel post, List<PostModel> posts) {
     showModalBottomSheet(
       context: context,
-      useRootNavigator: true,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      useSafeArea: true,
-      builder: (_) => _ProfilePostsScrollSheet(
-        posts: allPosts,
-        initialIndex: initialIndex >= 0 ? initialIndex : 0,
-      ),
-    );
-  }
-}
-
-// ─── Glassmorphic Button ────────────────────────────────────────────────────
-
-class _GlassButton extends StatelessWidget {
-  final String label;
-  final IconData icon;
-  final VoidCallback onTap;
-  final bool isPrimary;
-  final bool isIconOnly;
-
-  const _GlassButton({
-    required this.label,
-    required this.icon,
-    required this.onTap,
-    this.isPrimary = false,
-    this.isIconOnly = false,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    
-    return GestureDetector(
-      onTap: onTap,
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(20),
-        child: BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-          child: Container(
-            height: 36,
-            width: isIconOnly ? 36 : null,
-            padding: EdgeInsets.symmetric(horizontal: isIconOnly ? 0 : 12),
-            decoration: BoxDecoration(
-              color: isPrimary 
-                  ? AppTheme.primaryBlue.withOpacity(isDark ? 0.2 : 0.1) 
-                  : (isDark ? Colors.white.withOpacity(0.1) : Colors.black.withOpacity(0.05)),
-              borderRadius: BorderRadius.circular(20),
-              border: Border.all(
-                color: isPrimary 
-                    ? AppTheme.primaryBlue.withOpacity(isDark ? 0.4 : 0.2)
-                    : (isDark ? Colors.white.withOpacity(0.1) : Colors.black.withOpacity(0.05)),
-              ),
-            ),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(
-                  icon, 
-                  size: 18, 
-                  color: isPrimary 
-                      ? (isDark ? Colors.white : AppTheme.primaryBlue)
-                      : (isDark ? Colors.white70 : Colors.black87),
-                ),
-                if (!isIconOnly) ...[
-                  const SizedBox(width: 8),
-                  Text(
-                    label,
-                    style: TextStyle(
-                      color: isPrimary 
-                          ? (isDark ? Colors.white : AppTheme.primaryBlue)
-                          : (isDark ? Colors.white70 : Colors.black87),
-                      fontSize: 13,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                ],
-              ],
+      builder: (context) => Container(
+        height: MediaQuery.of(context).size.height * 0.85,
+        decoration: BoxDecoration(
+          color: Theme.of(context).brightness == Brightness.dark ? AppTheme.darkBg : AppTheme.lightBg,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+        ),
+        child: ClipRRect(
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+          child: Scaffold(
+            body: PostCard(
+              post: post,
+              onLike: () {},
             ),
           ),
         ),
@@ -970,121 +1079,116 @@ class _GlassButton extends StatelessWidget {
   }
 }
 
-// ─── Premium Scrollable Profile Posts Sheet ───────────────────────────────────
+// ─── ROTATING AVATAR RING PAINTER ────────────────────────────────────────────
+class _AvatarRingPainter extends CustomPainter {
+  final double angle;
+  const _AvatarRingPainter({required this.angle});
 
-class _ProfilePostsScrollSheet extends ConsumerStatefulWidget {
-  final List<PostModel> posts;
-  final int initialIndex;
+  @override
+  void paint(Canvas canvas, Size size) {
+    final rect = Rect.fromLTWH(0, 0, size.width, size.height);
 
-  const _ProfilePostsScrollSheet({
-    required this.posts,
-    required this.initialIndex,
+    final bgPaint = Paint()
+      ..color = Colors.black.withOpacity(0.3)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 4.0;
+    canvas.drawOval(rect, bgPaint);
+
+    final gradient = SweepGradient(
+      startAngle: angle,
+      endAngle: angle + math.pi * 2,
+      colors: const [
+        Color(0xFFFF3CAC),
+        Color(0xFFFF8C42),
+        Color(0xFFFFE44D),
+        Color(0xFF00C6FF),
+        Color(0xFF7C3AED),
+        Color(0xFFFF3CAC),
+      ],
+    );
+
+    final ringPaint = Paint()
+      ..shader = gradient.createShader(rect)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 3.5
+      ..strokeCap = StrokeCap.round;
+
+    canvas.drawOval(rect, ringPaint);
+  }
+
+  @override
+  bool shouldRepaint(_AvatarRingPainter old) => old.angle != angle;
+}
+
+// ─── HELPER STAT ITEM ────────────────────────────────────────────────────────
+class _StatItem extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final String value;
+  final Color color;
+  final bool isDark;
+
+  const _StatItem({
+    required this.icon,
+    required this.label,
+    required this.value,
+    required this.color,
+    required this.isDark,
   });
 
   @override
-  ConsumerState<_ProfilePostsScrollSheet> createState() => _ProfilePostsScrollSheetState();
-}
-
-class _ProfilePostsScrollSheetState extends ConsumerState<_ProfilePostsScrollSheet> {
-  late ScrollController _scrollController;
-
-  @override
-  void initState() {
-    super.initState();
-    // Estimate 540px height per post card to jump directly to the target post on load
-    const double estimateHeight = 540.0;
-    _scrollController = ScrollController(
-      initialScrollOffset: widget.initialIndex * estimateHeight,
-    );
-  }
-
-  @override
-  void dispose() {
-    _scrollController.dispose();
-    super.dispose();
-  }
-
-  @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final currentUser = ref.watch(currentUserProvider);
-
-    return DraggableScrollableSheet(
-      initialChildSize: 0.95,
-      minChildSize: 0.5,
-      maxChildSize: 0.98,
-      builder: (context, sheetScrollController) => Container(
-        decoration: BoxDecoration(
-          color: isDark ? AppTheme.darkBg : const Color(0xFFF8FAFC),
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
-        ),
-        child: Column(
+    return Column(
+      children: [
+        Row(
+          mainAxisSize: MainAxisSize.min,
           children: [
-            // Handle bar
-            Container(
-              margin: const EdgeInsets.only(top: 12, bottom: 8),
-              width: 40,
-              height: 4,
-              decoration: BoxDecoration(
-                color: isDark ? Colors.white24 : Colors.black12,
-                borderRadius: BorderRadius.circular(10),
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-              child: Row(
-                children: [
-                  IconButton(
-                    icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 20),
-                    onPressed: () => Navigator.pop(context),
-                  ),
-                  const Spacer(),
-                  Text(
-                    'Posts',
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.w800,
-                      color: isDark ? Colors.white : Colors.black87,
-                    ),
-                  ),
-                  const Spacer(),
-                  const SizedBox(width: 48), // balance back button space
-                ],
-              ),
-            ),
-            const Divider(height: 1, thickness: 0.5),
-            Expanded(
-              child: ListView.builder(
-                controller: _scrollController,
-                physics: const BouncingScrollPhysics(),
-                padding: const EdgeInsets.only(bottom: 80),
-                itemCount: widget.posts.length,
-                itemBuilder: (context, index) {
-                  final post = widget.posts[index];
-                  return Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 6),
-                    child: PostCard(
-                      key: ValueKey(post.id),
-                      post: post,
-                      onLike: () {
-                        ref
-                            .read(postsProvider.notifier)
-                            .toggleLike(post.id, currentUser.id);
-                      },
-                    ),
-                  );
-                },
+            Icon(icon, size: 16, color: color),
+            const SizedBox(width: 6),
+            Text(
+              value,
+              style: TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.w900,
+                color: isDark ? Colors.white : Colors.black87,
+                letterSpacing: -0.4,
               ),
             ),
           ],
         ),
-      ),
+        const SizedBox(height: 4),
+        Text(
+          label,
+          style: TextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.w700,
+            color: isDark ? Colors.white60 : Colors.black54,
+          ),
+        ),
+      ],
     );
   }
 }
 
+class _Divider extends StatelessWidget {
+  final bool isDark;
+
+  const _Divider({required this.isDark});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      height: 32,
+      width: 1.2,
+      color: isDark ? Colors.white.withOpacity(0.14) : Colors.black.withOpacity(0.1),
+    );
+  }
+}
+
+// ─── SETTINGS SHEET ──────────────────────────────────────────────────────────
 class _SettingsSheet extends StatelessWidget {
   final WidgetRef ref;
+
   const _SettingsSheet({required this.ref});
 
   @override
@@ -1100,312 +1204,122 @@ class _SettingsSheet extends StatelessWidget {
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Container(
-            width: 40, height: 4,
-            margin: const EdgeInsets.only(bottom: 20),
-            decoration: BoxDecoration(
-              color: Colors.grey.withOpacity(0.3), borderRadius: BorderRadius.circular(2)),
+          Center(
+            child: Container(
+              width: 38,
+              height: 4,
+              decoration: BoxDecoration(
+                color: isDark ? Colors.white24 : Colors.black26,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
           ),
-          const Text('Settings ⚙️', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800)),
+          const SizedBox(height: 18),
+          Text(
+            'Settings & Preferences ⚙️',
+            style: TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.w900,
+              color: isDark ? Colors.white : Colors.black87,
+            ),
+          ),
           const SizedBox(height: 20),
-          // Theme selection container
-          Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: isDark ? AppTheme.darkCard : const Color(0xFFF3F6FF),
-              borderRadius: BorderRadius.circular(20),
-              border: Border.all(
-                color: isDark ? AppTheme.darkBorder : Colors.black.withOpacity(0.04),
+          Text(
+            'Appearance Theme',
+            style: TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w700,
+              color: isDark ? Colors.white60 : Colors.black54,
+            ),
+          ),
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              Expanded(
+                child: _themeOption(
+                  context,
+                  mode: ThemeMode.system,
+                  label: 'System',
+                  icon: Icons.brightness_auto_rounded,
+                  isSelected: themeMode == ThemeMode.system,
+                  isDark: isDark,
+                ),
               ),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Icon(
-                      themeMode == ThemeMode.dark
-                          ? Icons.dark_mode_rounded
-                          : (themeMode == ThemeMode.light
-                              ? Icons.light_mode_rounded
-                              : Icons.settings_suggest_rounded),
-                      color: AppTheme.primaryBlue,
-                      size: 20,
-                    ),
-                    const SizedBox(width: 10),
-                    const Text(
-                      'Appearance',
-                      style: TextStyle(
-                        fontSize: 15,
-                        fontWeight: FontWeight.w700,
-                        letterSpacing: -0.2,
-                      ),
-                    ),
-                  ],
+              const SizedBox(width: 8),
+              Expanded(
+                child: _themeOption(
+                  context,
+                  mode: ThemeMode.light,
+                  label: 'Light',
+                  icon: Icons.light_mode_rounded,
+                  isSelected: themeMode == ThemeMode.light,
+                  isDark: isDark,
                 ),
-                const SizedBox(height: 14),
-                Row(
-                  children: [
-                    Expanded(
-                      child: _buildThemeOption(
-                        context,
-                        ref,
-                        mode: ThemeMode.light,
-                        label: 'Light',
-                        icon: Icons.light_mode_rounded,
-                        isSelected: themeMode == ThemeMode.light,
-                        isDark: isDark,
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: _buildThemeOption(
-                        context,
-                        ref,
-                        mode: ThemeMode.dark,
-                        label: 'Dark',
-                        icon: Icons.dark_mode_rounded,
-                        isSelected: themeMode == ThemeMode.dark,
-                        isDark: isDark,
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: _buildThemeOption(
-                        context,
-                        ref,
-                        mode: ThemeMode.system,
-                        label: 'System',
-                        icon: Icons.settings_suggest_rounded,
-                        isSelected: themeMode == ThemeMode.system,
-                        isDark: isDark,
-                      ),
-                    ),
-                  ],
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: _themeOption(
+                  context,
+                  mode: ThemeMode.dark,
+                  label: 'Dark',
+                  icon: Icons.dark_mode_rounded,
+                  isSelected: themeMode == ThemeMode.dark,
+                  isDark: isDark,
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
-          const SizedBox(height: 12),
-          // Notifications
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-            decoration: BoxDecoration(
-              color: isDark ? AppTheme.darkCard : const Color(0xFFF3F6FF),
-              borderRadius: BorderRadius.circular(16),
-            ),
-            child: Row(
-              children: [
-                Icon(Icons.notifications_outlined, color: AppTheme.primaryGreen),
-                const SizedBox(width: 12),
-                const Expanded(child: Text('Notifications', style: TextStyle(fontWeight: FontWeight.w600))),
-                Switch(
-                  value: true,
-                  activeColor: AppTheme.primaryBlue,
-                  onChanged: (_) {},
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 12),
-          // Privacy
-          ListTile(
-            contentPadding: const EdgeInsets.symmetric(horizontal: 16),
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-            tileColor: isDark ? AppTheme.darkCard : const Color(0xFFF3F6FF),
-            leading: Icon(Icons.privacy_tip_outlined, color: AppTheme.accentPurple),
-            title: const Text('Privacy Policy', style: TextStyle(fontWeight: FontWeight.w600)),
-            trailing: const Icon(Icons.chevron_right_rounded),
-            onTap: () {
-              // Usually you'd use url_launcher to open a webpage here
-              showDialog(
-                context: context,
-                builder: (context) => AlertDialog(
-                  backgroundColor: isDark ? AppTheme.darkSurface : Colors.white,
-                  title: const Text('Privacy Policy', style: TextStyle(fontWeight: FontWeight.w700)),
-                  content: const SingleChildScrollView(
-                    child: Text(
-                      'Your privacy is our priority.\n\n'
-                      'We collect basic profile information and match preferences to provide our service. '
-                      'Your data is never sold to third parties.\n\n'
-                      'If you delete your account, all personal data is permanently wiped from our servers within 30 days.',
-                      style: TextStyle(height: 1.5),
-                    ),
-                  ),
-                  actions: [
-                    TextButton(
-                      onPressed: () => Navigator.pop(context),
-                      child: const Text('Got it'),
-                    ),
-                  ],
-                ),
-              );
-            },
-          ),
-          const SizedBox(height: 12),
-          // Saved Posts (Bookmarks)
-          ListTile(
-            contentPadding: const EdgeInsets.symmetric(horizontal: 16),
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-            tileColor: isDark ? AppTheme.darkCard : const Color(0xFFF3F6FF),
-            leading: const Icon(Icons.bookmark_outline, color: AppTheme.primaryBlue),
-            title: const Text('Saved Posts', style: TextStyle(fontWeight: FontWeight.w600)),
-            trailing: const Icon(Icons.chevron_right_rounded),
-            onTap: () {
-              Navigator.pop(context);
-              Navigator.push(
-                context,
-                MaterialPageRoute(builder: (_) => const SavedPostsScreen()),
-              );
-            },
-          ),
-           const SizedBox(height: 20),
-          // Logout
+          const SizedBox(height: 24),
           SizedBox(
             width: double.infinity,
-            child: ElevatedButton.icon(
+            child: ElevatedButton(
               onPressed: () {
-                Navigator.pop(context); // Close sheet
-                // Re-use the existing logout dialog
-                showDialog(
-                  context: context,
-                  builder: (ctx) => AlertDialog(
-                    backgroundColor: Theme.of(ctx).brightness == Brightness.dark 
-                        ? AppTheme.darkSurface 
-                        : Colors.white,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-                    title: const Text('Logout 🚪', style: TextStyle(fontWeight: FontWeight.w800)),
-                    content: const Text('Are you sure you want to log out? We\'ll miss you! ✨'),
-                    actions: [
-                      TextButton(
-                        onPressed: () => Navigator.pop(ctx),
-                        child: Text('Cancel', style: TextStyle(color: AppTheme.textSecondary)),
-                      ),
-                      ElevatedButton(
-                        onPressed: () {
-                          Navigator.pop(ctx);
-                          ref.read(authControllerProvider.notifier).signOut();
-                          ctx.go('/login');
-                        },
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: AppTheme.error,
-                          foregroundColor: Colors.white,
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                        ),
-                        child: const Text('Logout'),
-                      ),
-                    ],
-                  ),
-                );
+                Navigator.pop(context);
+                ref.read(authControllerProvider.notifier).signOut();
+                context.go('/login');
               },
-              icon: const Icon(Icons.logout_rounded),
-              label: const Text('Logout', style: TextStyle(fontWeight: FontWeight.w700)),
               style: ElevatedButton.styleFrom(
-                backgroundColor: AppTheme.error.withOpacity(0.1),
-                foregroundColor: AppTheme.error,
-                elevation: 0,
-                padding: const EdgeInsets.symmetric(vertical: 16),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                backgroundColor: Colors.redAccent,
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
               ),
+              child: const Text('Logout 🚪', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 15)),
             ),
           ),
-          const SizedBox(height: 12),
-          // Delete Account
-          SizedBox(
-            width: double.infinity,
-            child: TextButton.icon(
-              onPressed: () {
-                Navigator.pop(context); // Close sheet
-                showDialog(
-                  context: context,
-                  builder: (ctx) => AlertDialog(
-                    backgroundColor: Theme.of(ctx).brightness == Brightness.dark 
-                        ? AppTheme.darkSurface 
-                        : Colors.white,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-                    title: const Text('Delete Account 🚨', style: TextStyle(fontWeight: FontWeight.w800, color: AppTheme.error)),
-                    content: const Text('Are you completely sure? This action is permanent and cannot be undone. All your matches, messages, and profile data will be permanently erased.'),
-                    actions: [
-                      TextButton(
-                        onPressed: () => Navigator.pop(ctx),
-                        child: Text('Cancel', style: TextStyle(color: AppTheme.textSecondary)),
-                      ),
-                      ElevatedButton(
-                        onPressed: () async {
-                          Navigator.pop(ctx);
-                          // We call delete account via the auth provider
-                          try {
-                            // Example delete logic - typically you'd trigger a cloud function or provider method
-                            await ref.read(authControllerProvider.notifier).deleteAccount();
-                            ctx.go('/login');
-                          } catch (e) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(content: Text('Failed to delete account. You may need to re-authenticate first.')),
-                            );
-                          }
-                        },
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: AppTheme.error,
-                          foregroundColor: Colors.white,
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                        ),
-                        child: const Text('Delete Permanently'),
-                      ),
-                    ],
-                  ),
-                );
-              },
-              icon: const Icon(Icons.delete_forever_rounded, size: 20),
-              label: const Text('Delete Account', style: TextStyle(fontWeight: FontWeight.w600)),
-              style: TextButton.styleFrom(
-                foregroundColor: AppTheme.error.withOpacity(0.8),
-                padding: const EdgeInsets.symmetric(vertical: 16),
-              ),
-            ),
-          ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 10),
         ],
       ),
     );
   }
 
-  Widget _buildThemeOption(
-    BuildContext context,
-    WidgetRef ref, {
+  Widget _themeOption(
+    BuildContext context, {
     required ThemeMode mode,
     required String label,
     required IconData icon,
     required bool isSelected,
     required bool isDark,
   }) {
-    final activeColor = AppTheme.primaryBlue;
+    const activeColor = Color(0xFF9333EA);
     return GestureDetector(
-      onTap: () {
-        ref.read(themeModeProvider.notifier).setThemeMode(mode);
-      },
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 200),
+      onTap: () => ref.read(themeModeProvider.notifier).setThemeMode(mode),
+      child: Container(
         padding: const EdgeInsets.symmetric(vertical: 12),
         decoration: BoxDecoration(
           color: isSelected
-              ? activeColor.withOpacity(0.12)
-              : (isDark ? Colors.white.withOpacity(0.04) : Colors.white),
+              ? activeColor.withOpacity(0.15)
+              : (isDark ? Colors.white.withOpacity(0.04) : Colors.black.withOpacity(0.04)),
           borderRadius: BorderRadius.circular(14),
           border: Border.all(
-            color: isSelected
-                ? activeColor
-                : (isDark ? AppTheme.darkBorder : Colors.black.withOpacity(0.08)),
+            color: isSelected ? activeColor : (isDark ? Colors.white12 : Colors.black12),
             width: isSelected ? 1.8 : 1.0,
           ),
         ),
         child: Column(
           children: [
-            Icon(
-              icon,
-              size: 20,
-              color: isSelected ? activeColor : (isDark ? Colors.white60 : Colors.black54),
-            ),
+            Icon(icon, size: 20, color: isSelected ? activeColor : (isDark ? Colors.white60 : Colors.black54)),
             const SizedBox(height: 6),
             Text(
               label,
@@ -1417,118 +1331,6 @@ class _SettingsSheet extends StatelessWidget {
             ),
           ],
         ),
-      ),
-    );
-  }
-}
-
-class _HeaderActionButton extends StatelessWidget {
-  final IconData icon;
-  final VoidCallback onTap;
-  final bool isDark;
-
-  const _HeaderActionButton({
-    required this.icon,
-    required this.onTap,
-    required this.isDark,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return IconButton(
-      onPressed: onTap,
-      icon: Container(
-        padding: const EdgeInsets.all(8),
-        decoration: BoxDecoration(
-          color: isDark ? Colors.black.withOpacity(0.3) : Colors.white.withOpacity(0.2),
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(
-            color: isDark ? Colors.white.withOpacity(0.1) : Colors.white.withOpacity(0.4),
-          ),
-        ),
-        child: Icon(icon, size: 18, color: isDark ? Colors.white : Colors.black87),
-      ),
-    );
-  }
-}
-
-class _StatItem extends StatelessWidget {
-  final String label;
-  final String value;
-
-  const _StatItem({required this.label, required this.value});
-
-  @override
-  Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    return Column(
-      children: [
-        Text(
-          value,
-          style: TextStyle(
-            fontSize: 22,
-            fontWeight: FontWeight.w800,
-            color: isDark ? Colors.white : AppTheme.primaryBlue,
-            letterSpacing: -0.5,
-          ),
-        ),
-        const SizedBox(height: 4),
-        Text(
-          label,
-          style: TextStyle(
-            fontSize: 12,
-            fontWeight: FontWeight.w600,
-            color: isDark ? Colors.white70 : AppTheme.textSecondary,
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class _Divider extends StatelessWidget {
-  final bool isDark;
-  final bool isGlass;
-  
-  const _Divider({required this.isDark, this.isGlass = false});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      height: 36,
-      width: 1,
-      color: isGlass 
-          ? (isDark ? Colors.white.withOpacity(0.2) : Colors.black.withOpacity(0.1))
-          : (isDark ? AppTheme.darkBorder : Colors.grey.withOpacity(0.2)),
-    );
-  }
-}
-
-Widget _buildEmojiImage(String emoji, {double size = 20}) {
-  try {
-    final runes = emoji.runes.toList();
-    final cleanRunes = runes.where((r) => r != 0xFE0F).toList();
-    final hex = cleanRunes.map((r) => r.toRadixString(16)).join('-');
-    
-    return Image.network(
-      'https://cdnjs.cloudflare.com/ajax/libs/twemoji/14.0.2/72x72/$hex.png',
-      width: size,
-      height: size,
-      fit: BoxFit.contain,
-      errorBuilder: (context, error, stackTrace) => Text(
-        emoji,
-        style: TextStyle(
-          fontSize: size,
-          fontFamilyFallback: const ['Apple Color Emoji', 'Segoe UI Emoji', 'Noto Color Emoji', 'Android Emoji'],
-        ),
-      ),
-    );
-  } catch (_) {
-    return Text(
-      emoji,
-      style: TextStyle(
-        fontSize: size,
-        fontFamilyFallback: const ['Apple Color Emoji', 'Segoe UI Emoji', 'Noto Color Emoji', 'Android Emoji'],
       ),
     );
   }

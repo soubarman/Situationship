@@ -1,0 +1,992 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Situationship — Verification Dashboard</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/admin/css/styles.css">
+</head>
+<body>
+
+<div class="dashboard-layout">
+  <!-- ── Sidebar ──────────────────────────────────────────────── -->
+  <aside class="sidebar">
+    <div class="sidebar-logo">
+      <div class="brand">
+        <div class="s-badge" style="width:30px;height:30px;font-size:14px;">S</div>
+        <span class="brand-name">Situationship</span>
+      </div>
+      <div class="brand-sub">Verification Console</div>
+    </div>
+
+    <nav>
+      <div class="nav-item active" id="nav-verifications" onclick="showSection('verifications')">
+        <span class="nav-icon">🔍</span>
+        Verifications
+        <span class="nav-badge" id="pending-nav-count">0</span>
+      </div>
+      <div class="nav-item" id="nav-reports" onclick="showSection('reports')">
+        <span class="nav-icon">🚩</span>
+        Reports
+        <span class="nav-badge" id="reports-nav-count" style="display:none">0</span>
+      </div>
+      <div class="nav-item" id="nav-users" onclick="showSection('users')">
+        <span class="nav-icon">👥</span>
+        Users
+      </div>
+      <div class="nav-item" id="nav-stats" onclick="showSection('stats')">
+        <span class="nav-icon">📊</span>
+        Overview
+      </div>
+    </nav>
+
+    <div class="sidebar-footer">
+      <div class="sidebar-user">
+        <div class="sidebar-user-avatar" id="admin-avatar">A</div>
+        <div class="sidebar-user-info">
+          <div class="sidebar-user-name" id="admin-name">Loading…</div>
+          <div class="sidebar-user-role">Admin</div>
+        </div>
+      </div>
+      <button class="btn-signout" onclick="handleSignOut()">Sign Out</button>
+    </div>
+  </aside>
+
+  <!-- ── Main Content ─────────────────────────────────────────── -->
+  <main class="main-content">
+    <!-- ── Stats Section ──────────────────────────────────────── -->
+    <section id="section-stats" style="display:none;">
+      <div class="page-header">
+        <h1>Overview</h1>
+        <p>Real-time verification statistics</p>
+      </div>
+
+      <div class="stats-grid" id="stats-grid">
+        <div class="glass-card stat-card">
+          <div class="stat-label">Pending Review</div>
+          <div class="stat-value orange" id="stat-pending">—</div>
+          <div class="stat-sub">Awaiting manual decision</div>
+        </div>
+        <div class="glass-card stat-card">
+          <div class="stat-label">Approved</div>
+          <div class="stat-value green" id="stat-approved">—</div>
+          <div class="stat-sub">S badge granted</div>
+        </div>
+        <div class="glass-card stat-card">
+          <div class="stat-label">Rejected</div>
+          <div class="stat-value red" id="stat-rejected">—</div>
+          <div class="stat-sub">Verification failed</div>
+        </div>
+        <div class="glass-card stat-card">
+          <div class="stat-label">Total</div>
+          <div class="stat-value purple" id="stat-total">—</div>
+          <div class="stat-sub">All verifications</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ── Verifications Section ───────────────────────────────── -->
+    <section id="section-verifications">
+      <div class="page-header" style="display:flex;justify-content:space-between;align-items:flex-start;">
+        <div>
+          <h1>Verifications</h1>
+          <p>Review and moderate identity verification submissions</p>
+        </div>
+        <button class="btn-primary" style="width:auto;padding:10px 18px;" onclick="loadVerifications()">
+          ↻ Refresh
+        </button>
+      </div>
+
+      <!-- Tabs -->
+      <div class="tabs">
+        <button class="tab-btn active" onclick="switchTab('review')" id="tab-review">Pending Review</button>
+        <button class="tab-btn" onclick="switchTab('all')" id="tab-all">All</button>
+      </div>
+
+      <!-- Error banner -->
+      <div id="table-error" class="error-banner hidden"></div>
+
+      <!-- Table -->
+      <div class="glass-card section-card">
+        <div class="section-header">
+          <h2 id="table-title">Pending Review</h2>
+          <span id="table-count" style="color:var(--text-muted);font-size:13px;"></span>
+        </div>
+        <div class="table-wrap">
+          <table id="verifications-table">
+            <thead>
+              <tr>
+                <th>User</th>
+                <th>Status</th>
+                <th>Score</th>
+                <th>Attempts</th>
+                <th>Last Attempt</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody id="verifications-body">
+              <tr><td colspan="6"><div class="empty-state"><div class="empty-icon">⏳</div><p>Loading…</p></div></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+    <!-- ── Reports Section ──────────────────────────────────── -->
+    <section id="section-reports" style="display:none;">
+      <div class="page-header" style="display:flex;justify-content:space-between;align-items:flex-start;">
+        <div>
+          <h1>Reports</h1>
+          <p>Review and moderate user & post reports</p>
+        </div>
+        <button class="btn-primary" style="width:auto;padding:10px 18px;" onclick="loadReports()">
+          ↻ Refresh
+        </button>
+      </div>
+      <div class="tabs">
+        <button class="tab-btn active" onclick="switchReportTab('open')" id="rtab-open">Open</button>
+        <button class="tab-btn" onclick="switchReportTab('resolved')" id="rtab-resolved">Resolved</button>
+        <button class="tab-btn" onclick="switchReportTab('dismissed')" id="rtab-dismissed">Dismissed</button>
+      </div>
+      <div id="report-table-error" class="error-banner hidden"></div>
+      <div class="glass-card section-card">
+        <div class="section-header">
+          <h2 id="report-table-title">Open Reports</h2>
+          <span id="report-table-count" style="color:var(--text-muted);font-size:13px;"></span>
+        </div>
+        <div class="table-wrap">
+          <table id="reports-table">
+            <thead>
+              <tr>
+                <th>Type</th>
+                <th>Reporter</th>
+                <th>Reported</th>
+                <th>Reason</th>
+                <th>Date</th>
+                <th>Status</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody id="reports-body">
+              <tr><td colspan="7"><div class="empty-state"><div class="empty-icon">⏳</div><p>Loading…</p></div></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- ── Users Section ─────────────────────────────────────── -->
+    <section id="section-users" style="display:none;">
+      <div class="page-header">
+        <h1>Users</h1>
+        <p>Search, moderate, and manage all user accounts</p>
+      </div>
+      <div class="glass-card" style="padding:16px 20px;margin-bottom:20px;">
+        <div style="display:flex;gap:12px;align-items:center;">
+          <input type="text" id="user-search-input" placeholder="Search by name, email or UID…"
+            style="flex:1;padding:10px 14px;border-radius:12px;border:1px solid var(--border);background:var(--bg-card);color:var(--text-primary);font-size:14px;outline:none;"
+            oninput="onUserSearch(this.value)">
+          <button class="btn-primary" style="width:auto;padding:10px 18px;" onclick="loadUsers()">Search</button>
+        </div>
+      </div>
+      <div id="user-table-error" class="error-banner hidden"></div>
+      <div class="glass-card section-card">
+        <div class="section-header">
+          <h2>All Users</h2>
+          <span id="user-table-count" style="color:var(--text-muted);font-size:13px;"></span>
+        </div>
+        <div class="table-wrap">
+          <table id="users-table">
+            <thead>
+              <tr>
+                <th>User</th>
+                <th>Gender</th>
+                <th>Verified</th>
+                <th>Status</th>
+                <th>Joined</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody id="users-body">
+              <tr><td colspan="6"><div class="empty-state"><div class="empty-icon">⏳</div><p>Loading…</p></div></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    </main>
+</div>
+
+<!-- ── Detail Panel ─────────────────────────────────────────────── -->
+<div id="panel-overlay" class="panel-overlay hidden" onclick="closePanel(event)">
+  <div class="detail-panel" id="detail-panel">
+    <div class="panel-header">
+      <button class="btn-icon" onclick="closePanel()" title="Close">✕</button>
+      <h2 id="panel-title">Verification Detail</h2>
+    </div>
+    <div class="panel-body" id="panel-body">
+      <p style="color:var(--text-secondary)">Loading…</p>
+    </div>
+  </div>
+</div>
+
+<!-- ── Toast Container ──────────────────────────────────────────── -->
+<div class="toast-container" id="toast-container"></div>
+
+<!-- Firebase + App Scripts -->
+<script type="module">
+  import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.13.0/firebase-app.js';
+  import { getAuth, onAuthStateChanged, signOut } from 'https://www.gstatic.com/firebasejs/10.13.0/firebase-auth.js';
+  import {
+    getFirestore, collection, doc, getDoc, getDocs, setDoc,
+    query, where, orderBy, limit, updateDoc, serverTimestamp, addDoc
+  } from 'https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore.js';
+
+  // ── REPLACE WITH YOUR FIREBASE CONFIG ──────────────────────────
+  const firebaseConfig = {
+    apiKey: "AIzaSyBo21crFp9ui4bXzqHxFJnGoMmOH8uDoVg",
+    authDomain: "situation-ship.firebaseapp.com",
+    projectId: "situation-ship",
+    storageBucket: "situation-ship.firebasestorage.app",
+    messagingSenderId: "990817672883",
+    appId: "1:990817672883:web:b9d16252fcd56fee4c9ac6"
+  };
+
+  const app = initializeApp(firebaseConfig);
+  const auth = getAuth(app);
+  const db = getFirestore(app);
+
+  // Make available globally
+  window._auth = auth;
+  window._db = db;
+  window._query = query;
+  window._collection = collection;
+  window._doc = doc;
+  window._getDoc = getDoc;
+  window._getDocs = getDocs;
+  window._setDoc = setDoc;
+  window._where = where;
+  window._orderBy = orderBy;
+  window._limit = limit;
+  window._updateDoc = updateDoc;
+  window._serverTimestamp = serverTimestamp;
+  window._addDoc = addDoc;
+  window._signOut = signOut;
+
+  // ── Strict admin whitelist ─────────────────────────────────────
+  const ALLOWED_ADMIN_EMAIL = 'situationship@gmail.com';
+
+  // Auth guard
+  onAuthStateChanged(auth, async (user) => {
+    if (!user) {
+      window.location.href = '/admin/index.html';
+      return;
+    }
+
+    // Strict email check — no localhost bypass, no claims bypass
+    if (user.email !== ALLOWED_ADMIN_EMAIL) {
+      await signOut(auth);
+      window.location.href = '/admin/index.html';
+      return;
+    }
+
+    window._currentUser = user;
+    window._idToken = await user.getIdToken();
+
+    // Set admin info in sidebar
+    document.getElementById('admin-name').textContent = user.email || 'Admin';
+    document.getElementById('admin-avatar').textContent = (user.email || 'A')[0].toUpperCase();
+
+    // Load initial data
+    await loadVerifications();
+    await loadStats();
+  });
+</script>
+
+<script>
+  // ── State ──────────────────────────────────────────────────────
+  let currentTab = 'review';
+  let currentPanelUserId = null;
+
+  // ── Navigation ─────────────────────────────────────────────────
+  function showSection(name) {
+    ['stats','verifications','reports','users'].forEach(s => {
+      const el = document.getElementById('section-' + s);
+      if (el) el.style.display = (s === name) ? 'block' : 'none';
+    });
+    document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
+    const navEl = document.getElementById('nav-' + name);
+    if (navEl) navEl.classList.add('active');
+    if (name === 'reports') loadReports();
+    if (name === 'users') loadUsers();
+    if (name === 'stats') loadStats();
+  }
+
+  function switchTab(tab) {
+    currentTab = tab;
+    document.getElementById('tab-review').classList.toggle('active', tab === 'review');
+    document.getElementById('tab-all').classList.toggle('active', tab === 'all');
+    loadVerifications();
+  }
+
+  // ── Load Verifications ─────────────────────────────────────────
+  async function loadVerifications() {
+    const tbody = document.getElementById('verifications-body');
+    tbody.innerHTML = '<tr><td colspan="6"><div class="empty-state"><div class="empty-icon">⏳</div><p>Loading…</p></div></td></tr>';
+
+    try {
+      const db = window._db;
+      const col = window._collection(db, 'verifications');
+
+      let q;
+      if (currentTab === 'review') {
+        q = window._query(col, window._where('verificationStatus', '==', 'manual_review'), window._limit(100));
+        document.getElementById('table-title').textContent = 'Pending Review';
+      } else {
+        q = window._query(col, window._limit(100));
+        document.getElementById('table-title').textContent = 'All Verifications';
+      }
+
+      const snap = await window._getDocs(q);
+      const items = [];
+      snap.forEach(d => items.push({ userId: d.id, ...d.data() }));
+
+      // Update pending count in nav
+      if (currentTab === 'review') {
+        const cnt = items.length;
+        document.getElementById('pending-nav-count').textContent = cnt;
+        document.getElementById('table-count').textContent = `${cnt} submission${cnt !== 1 ? 's' : ''}`;
+      }
+
+      if (items.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="6"><div class="empty-state"><div class="empty-icon">✅</div><p>No verifications in this view</p></div></td></tr>';
+        return;
+      }
+
+      // Fetch user details for each
+      const rows = await Promise.all(items.map(item => buildRow(item)));
+      tbody.innerHTML = rows.join('');
+
+    } catch (err) {
+      document.getElementById('table-error').textContent = '⚠ Failed to load: ' + err.message;
+      document.getElementById('table-error').classList.remove('hidden');
+    }
+  }
+
+  async function buildRow(item) {
+    let userName = item.userId.substring(0, 8) + '…';
+    let userEmail = '—';
+    let avatarHtml = `<div class="user-avatar-placeholder">${userName[0].toUpperCase()}</div>`;
+
+    try {
+      const userDoc = await window._getDoc(window._doc(window._db, 'users', item.userId));
+      if (userDoc.exists()) {
+        const u = userDoc.data();
+        userName = u.name || userName;
+        userEmail = u.email || userEmail;
+        const photoUrl = u.profileImage || u.avatarUrl;
+        if (photoUrl) {
+          avatarHtml = `<img src="${photoUrl}" alt="${userName}" onerror="this.style.display='none'">`;
+        }
+      }
+    } catch (_) {}
+
+    const score = item.verificationScore;
+    const scoreClass = score >= 0.82 ? 'score-high' : score >= 0.65 ? 'score-medium' : 'score-low';
+    const scoreText = score != null ? (score * 100).toFixed(1) + '%' : '—';
+
+    const status = item.verificationStatus || 'unknown';
+    const badgeClass = {
+      manual_review: 'badge-review',
+      approved: 'badge-approved',
+      rejected: 'badge-rejected',
+      pending: 'badge-pending',
+    }[status] || 'badge-pending';
+
+    const date = item.lastAttemptAt?.toDate?.()?.toLocaleDateString() || '—';
+    const attempts = item.verificationAttempts || 0;
+
+    return `
+      <tr>
+        <td>
+          <div class="user-cell">
+            <div class="user-avatar">${avatarHtml}</div>
+            <div class="user-info-cell">
+              <div class="user-name-row">
+                ${escapeHtml(userName)}
+                ${item.verifiedBadge === 'S' ? '<div class="s-badge">S</div>' : ''}
+              </div>
+              <div class="user-email">${escapeHtml(userEmail)}</div>
+            </div>
+          </div>
+        </td>
+        <td><span class="badge ${badgeClass}">${statusLabel(status)}</span></td>
+        <td><span class="score-cell ${scoreClass}">${scoreText}</span></td>
+        <td>${attempts}/5</td>
+        <td>${date}</td>
+        <td>
+          <div class="action-cell">
+            <button class="btn-approve" onclick="openPanel('${item.userId}')">Review</button>
+            ${status === 'manual_review' ? `
+              <button class="btn-approve" onclick="quickApprove('${item.userId}')">✓</button>
+              <button class="btn-reject" onclick="quickReject('${item.userId}')">✗</button>
+            ` : ''}
+          </div>
+        </td>
+      </tr>
+    `;
+  }
+
+  // ── Detail Panel ───────────────────────────────────────────────
+  async function openPanel(userId) {
+    currentPanelUserId = userId;
+    document.getElementById('panel-overlay').classList.remove('hidden');
+    document.getElementById('panel-body').innerHTML = '<p style="color:var(--text-secondary)">Loading…</p>';
+
+    try {
+      const verDoc = await window._getDoc(window._doc(window._db, 'verifications', userId));
+      const userDoc = await window._getDoc(window._doc(window._db, 'users', userId));
+
+      const ver = verDoc.exists() ? verDoc.data() : {};
+      const user = userDoc.exists() ? userDoc.data() : {};
+
+      document.getElementById('panel-title').textContent = user.name || userId;
+
+      const score = ver.verificationScore || 0;
+      const breakdown = ver.scoreBreakdown || {};
+      const status = ver.verificationStatus || 'unknown';
+
+      document.getElementById('panel-body').innerHTML = `
+        <!-- User Info -->
+        <div class="panel-section">
+          <div class="panel-section-title">User Information</div>
+          <div class="info-row"><span class="info-label">Name</span><span class="info-value">${escapeHtml(user.name || '—')}</span></div>
+          <div class="info-row"><span class="info-label">Email</span><span class="info-value">${escapeHtml(user.email || '—')}</span></div>
+          <div class="info-row"><span class="info-label">User ID</span><span class="info-value" style="font-size:11px;font-family:monospace;">${userId}</span></div>
+        </div>
+
+        <!-- Profile Photo -->
+        ${(user.profileImage || user.avatarUrl) ? `
+          <div class="panel-section">
+            <div class="panel-section-title">Profile Photo</div>
+            <img src="${user.profileImage || user.avatarUrl}" alt="Profile"
+              style="width:100%;max-height:280px;object-fit:contain;border-radius:12px;background:var(--bg-card);">
+          </div>
+        ` : ''}
+
+        <!-- Verification Status -->
+        <div class="panel-section">
+          <div class="panel-section-title">Verification Status</div>
+          <div class="info-row">
+            <span class="info-label">Status</span>
+            <span class="badge ${getBadgeClass(status)}">${statusLabel(status)}</span>
+          </div>
+          <div class="info-row"><span class="info-label">Final Score</span><span class="info-value ${scoreColorClass(score)}">${(score * 100).toFixed(2)}%</span></div>
+          <div class="info-row"><span class="info-label">Attempts</span><span class="info-value">${ver.verificationAttempts || 0} / 5</span></div>
+          <div class="info-row"><span class="info-label">Verified By</span><span class="info-value">${ver.verifiedBy || '—'}</span></div>
+          ${ver.verificationReason ? `<div class="info-row"><span class="info-label">Reason</span><span class="info-value" style="max-width:200px;text-align:right;color:var(--text-secondary)">${escapeHtml(ver.verificationReason)}</span></div>` : ''}
+        </div>
+
+        <!-- Score Breakdown -->
+        ${Object.keys(breakdown).length > 0 ? `
+          <div class="panel-section">
+            <div class="panel-section-title">AI Score Breakdown</div>
+            ${scoreBar('Face Match', breakdown.raw_best_similarity || 0, 'Face similarity vs profile photo')}
+            ${scoreBar('Liveness', breakdown.raw_avg_liveness || 0, 'Anti-spoofing probability')}
+            ${scoreBar('Image Quality', breakdown.raw_avg_quality || 0, 'Video frame sharpness')}
+            <div class="info-row" style="margin-top:8px;">
+              <span class="info-label">Usable Frames</span>
+              <span class="info-value">${ver.usableFrames || 0} / ${ver.totalFrames || 0}</span>
+            </div>
+          </div>
+        ` : ''}
+
+        <!-- Admin Actions -->
+        ${status !== 'approved' ? `
+          <div class="panel-section">
+            <div class="panel-section-title">Admin Decision</div>
+            <div id="panel-action-error" class="error-banner hidden"></div>
+            <div class="panel-actions">
+              <button class="btn-approve" onclick="adminApprove('${userId}')">✓ Approve</button>
+              <button class="btn-reject" onclick="adminReject('${userId}')">✗ Reject</button>
+              <button class="btn-reset" onclick="adminReset('${userId}')">↩ Allow Re-attempt</button>
+            </div>
+          </div>
+        ` : `
+          <div class="panel-section">
+            <div class="success-banner">✅ This user has been verified. S badge granted.</div>
+            <button class="btn-reject" style="width:100%;margin-top:8px;" onclick="adminRevoke('${userId}')">Revoke Verification</button>
+          </div>
+        `}
+      `;
+
+    } catch (err) {
+      document.getElementById('panel-body').innerHTML = `<div class="error-banner">Failed to load: ${err.message}</div>`;
+    }
+  }
+
+  function scoreBar(label, value, tooltip) {
+    const pct = Math.round(value * 100);
+    const cls = pct >= 82 ? 'green' : pct >= 65 ? 'orange' : 'red';
+    return `
+      <div class="score-bar-row" title="${tooltip}">
+        <div class="score-bar-label">
+          <span style="color:var(--text-secondary)">${label}</span>
+          <span>${pct}%</span>
+        </div>
+        <div class="score-bar-track">
+          <div class="score-bar-fill ${cls}" style="width:${pct}%"></div>
+        </div>
+      </div>
+    `;
+  }
+
+  function closePanel(e) {
+    if (e && e.target !== document.getElementById('panel-overlay')) return;
+    document.getElementById('panel-overlay').classList.add('hidden');
+    currentPanelUserId = null;
+  }
+
+  // ── Admin Actions ──────────────────────────────────────────────
+  async function adminApprove(userId) {
+    const reason = 'Manually approved by admin';
+    await callAdminApi(userId, 'approve', reason);
+  }
+
+  async function adminReject(userId) {
+    const reason = prompt('Enter rejection reason (required):');
+    if (!reason) return;
+    await callAdminApi(userId, 'reject', reason);
+  }
+
+  async function adminReset(userId) {
+    const reason = prompt('Enter reset reason (optional):') || 'Reset by admin';
+    await callAdminApi(userId, 'request-new', reason);
+  }
+
+  async function adminRevoke(userId) {
+    if (!confirm('Revoke this user\'s verification? This will remove their S badge.')) return;
+    await callAdminApi(userId, 'reject', 'Verification revoked by admin');
+  }
+
+  async function quickApprove(userId) {
+    if (!confirm(`Approve verification for ${userId}?`)) return;
+    await callAdminApi(userId, 'approve', 'Quick approved by admin');
+  }
+
+  async function quickReject(userId) {
+    const reason = prompt('Rejection reason:');
+    if (!reason) return;
+    await callAdminApi(userId, 'reject', reason);
+  }
+
+  async function callAdminApi(userId, action, reason) {
+    try {
+      const db = window._db;
+      const adminEmail = (window._currentUser && window._currentUser.email) ? window._currentUser.email : 'situationship@gmail.com';
+
+      let verifData = {};
+      let userData = {};
+
+      if (action === 'approve') {
+        verifData = {
+          verificationStatus: 'approved',
+          isVerified: true,
+          verifiedBadge: 'S',
+          verificationReason: reason || 'Approved by admin',
+          verifiedBy: adminEmail,
+          verifiedAt: Date.now()
+        };
+        userData = {
+          isVerified: true,
+          verifiedBadge: 'S',
+          verificationStatus: 'approved'
+        };
+      } else if (action === 'reject') {
+        verifData = {
+          verificationStatus: 'rejected',
+          isVerified: false,
+          verifiedBadge: null,
+          verificationReason: reason || 'Rejected by admin',
+          verifiedBy: adminEmail,
+          verifiedAt: Date.now()
+        };
+        userData = {
+          isVerified: false,
+          verifiedBadge: null,
+          verificationStatus: 'rejected'
+        };
+      } else if (action === 'request-new') {
+        verifData = {
+          verificationStatus: 'not_started',
+          isVerified: false,
+          verifiedBadge: null,
+          verificationReason: reason || 'Reset by admin',
+          verificationAttempts: 0,
+          verifiedBy: adminEmail,
+          verifiedAt: Date.now()
+        };
+        userData = {
+          isVerified: false,
+          verifiedBadge: null,
+          verificationStatus: 'not_started'
+        };
+      }
+
+      // Update /verifications/{userId}
+      const verifRef = window._doc(db, 'verifications', userId);
+      const verifSnap = await window._getDoc(verifRef);
+      if (verifSnap.exists()) {
+        await window._updateDoc(verifRef, verifData);
+      } else {
+        await window._setDoc(verifRef, { userId, ...verifData });
+      }
+
+      // Update /users/{userId}
+      const userRef = window._doc(db, 'users', userId);
+      const userSnap = await window._getDoc(userRef);
+      if (userSnap.exists()) {
+        await window._updateDoc(userRef, userData);
+      }
+
+      showToast(`✓ ${action.charAt(0).toUpperCase() + action.slice(1)} successful`, 'success');
+      document.getElementById('panel-overlay').classList.add('hidden');
+      await loadVerifications();
+      await loadStats();
+    } catch (err) {
+      showToast('Error: ' + err.message, 'error');
+    }
+  }
+
+  // ── Stats ──────────────────────────────────────────────────────
+  async function loadStats() {
+    try {
+      const db = window._db;
+      const col = window._collection(db, 'verifications');
+      const snap = await window._getDocs(col);
+
+      let pending = 0;
+      let approved = 0;
+      let rejected = 0;
+      let total = 0;
+
+      snap.forEach(d => {
+        const data = d.data();
+        total++;
+        const status = data.verificationStatus;
+        if (status === 'manual_review' || status === 'pending') {
+          pending++;
+        } else if (status === 'approved') {
+          approved++;
+        } else if (status === 'rejected') {
+          rejected++;
+        }
+      });
+
+      document.getElementById('stat-pending').textContent  = pending;
+      document.getElementById('stat-approved').textContent = approved;
+      document.getElementById('stat-rejected').textContent = rejected;
+      document.getElementById('stat-total').textContent    = total;
+      document.getElementById('pending-nav-count').textContent = pending;
+    } catch (err) {
+      console.warn('Failed to load stats:', err);
+    }
+  }
+
+  // ── Sign Out ───────────────────────────────────────────────────
+  async function handleSignOut() {
+    await window._signOut(window._auth);
+    window.location.href = '/admin/index.html';
+  }
+
+  // ── Toast ──────────────────────────────────────────────────────
+  function showToast(msg, type) {
+    const container = document.getElementById('toast-container');
+    const toast = document.createElement('div');
+    toast.className = `toast toast-${type}`;
+    toast.textContent = msg;
+    container.appendChild(toast);
+    setTimeout(() => toast.remove(), 3500);
+  }
+
+  // ── Helpers ────────────────────────────────────────────────────
+  function escapeHtml(str) {
+    return String(str)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;');
+  }
+
+  function statusLabel(status) {
+    return {
+      manual_review: '🔍 Review',
+      approved: '✓ Approved',
+      rejected: '✗ Rejected',
+      pending: '⏳ Processing',
+      not_started: '— Not Started',
+    }[status] || status;
+  }
+
+  function getBadgeClass(status) {
+    return {
+      manual_review: 'badge-review',
+      approved: 'badge-approved',
+      rejected: 'badge-rejected',
+      pending: 'badge-pending',
+    }[status] || 'badge-pending';
+  }
+
+  function scoreColorClass(score) {
+    if (score >= 0.82) return 'score-high';
+    if (score >= 0.65) return 'score-medium';
+    return 'score-low';
+  }
+
+  // Make functions globally accessible
+  window.showSection = showSection;
+  window.switchTab = switchTab;
+  window.loadVerifications = loadVerifications;
+  window.openPanel = openPanel;
+  window.closePanel = closePanel;
+  window.adminApprove = adminApprove;
+  window.adminReject = adminReject;
+  window.adminReset = adminReset;
+  window.adminRevoke = adminRevoke;
+  window.quickApprove = quickApprove;
+  window.quickReject = quickReject;
+  window.handleSignOut = handleSignOut;
+  window.switchReportTab = switchReportTab;
+  window.loadReports = loadReports;
+  window.resolveReport = resolveReport;
+  window.dismissReport = dismissReport;
+  window.loadUsers = loadUsers;
+  window.onUserSearch = onUserSearch;
+  window.warnUser = warnUser;
+  window.suspendUser = suspendUser;
+  window.unsuspendUser = unsuspendUser;
+  window.deleteUser = deleteUser;
+</script>
+
+<script>
+  // ── Reports Logic ──────────────────────────────────────────────
+  let currentReportTab = 'open';
+
+  function switchReportTab(tab) {
+    currentReportTab = tab;
+    ['open','resolved','dismissed'].forEach(t => {
+      document.getElementById('rtab-' + t).classList.toggle('active', t === tab);
+    });
+    loadReports();
+  }
+
+  async function loadReports() {
+    const tbody = document.getElementById('reports-body');
+    tbody.innerHTML = '<tr><td colspan="7"><div class="empty-state"><div class="empty-icon">⏳</div><p>Loading…</p></div></td></tr>';
+    const titles = { open: 'Open Reports', resolved: 'Resolved Reports', dismissed: 'Dismissed Reports' };
+    document.getElementById('report-table-title').textContent = titles[currentReportTab];
+    try {
+      const db = window._db;
+      const col = window._collection(db, 'reports');
+      const q = window._query(col, window._where('status', '==', currentReportTab), window._limit(100));
+      const snap = await window._getDocs(q);
+      const reports = [];
+      snap.forEach(d => reports.push({ id: d.id, ...d.data() }));
+      document.getElementById('report-table-count').textContent = reports.length + ' record' + (reports.length !== 1 ? 's' : '');
+      const badge = document.getElementById('reports-nav-count');
+      if (currentReportTab === 'open') {
+        badge.textContent = reports.length;
+        badge.style.display = reports.length > 0 ? 'inline-flex' : 'none';
+      }
+      if (reports.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="7"><div class="empty-state"><div class="empty-icon">✔</div><p>No ' + currentReportTab + ' reports</p></div></td></tr>';
+        return;
+      }
+      tbody.innerHTML = reports.map(function(r) {
+        const date = r.createdAt ? new Date(r.createdAt).toLocaleDateString() : '—';
+        const typeTag = r.type === 'user'
+          ? '<span class="badge badge-review">User</span>'
+          : '<span class="badge badge-pending">Post</span>';
+        const statusTag = r.status === 'open'
+          ? '<span class="badge badge-review">Open</span>'
+          : r.status === 'resolved'
+            ? '<span class="badge badge-approved">Resolved</span>'
+            : '<span class="badge badge-rejected">Dismissed</span>';
+        const actions = r.status === 'open'
+          ? '<button class="btn-sm btn-approve" onclick="resolveReport(\'' + r.id + '\',\'' + (r.reportedBy||'') + '\')">✔ Resolve</button> <button class="btn-sm btn-reject" onclick="dismissReport(\'' + r.id + '\',\'' + (r.reportedBy||'') + '\')">Dismiss</button>'
+          : '<span style="color:var(--text-muted);font-size:12px;">' + (r.adminNote ? escapeHtml(r.adminNote) : '—') + '</span>';
+        return '<tr><td>' + typeTag + '</td><td style="font-size:13px;">' + escapeHtml(r.reporterName || r.reportedBy || '—') + '</td><td style="font-size:13px;">' + escapeHtml(r.reportedUserId || r.postId || '—') + '</td><td>' + escapeHtml(r.reason || '—') + '</td><td style="font-size:12px;color:var(--text-muted);">' + date + '</td><td>' + statusTag + '</td><td><div style="display:flex;gap:6px;flex-wrap:wrap;">' + actions + '</div></td></tr>';
+      }).join('');
+    } catch (err) {
+      document.getElementById('report-table-error').textContent = '⚠ Failed to load: ' + err.message;
+      document.getElementById('report-table-error').classList.remove('hidden');
+    }
+  }
+
+  async function resolveReport(reportId, reportedBy) {
+    const note = prompt('Enter a note to send to the reporter (optional):') || 'Your report has been reviewed and resolved.';
+    try {
+      const db = window._db;
+      await window._updateDoc(window._doc(db, 'reports', reportId), {
+        status: 'resolved', adminNote: note, resolvedAt: window._serverTimestamp()
+      });
+      if (reportedBy) {
+        await window._addDoc(window._collection(db, 'notifications'), {
+          userId: reportedBy, senderId: 'admin', senderName: 'Situationship Team',
+          senderAvatar: null, type: 'report_resolved', title: '✅ Report Resolved',
+          body: note, createdAt: Date.now(), isRead: false
+        });
+      }
+      showToast('✔ Report resolved & reporter notified', 'success');
+      loadReports();
+    } catch (err) { showToast('Error: ' + err.message, 'error'); }
+  }
+
+  async function dismissReport(reportId, reportedBy) {
+    const note = prompt('Note to send to reporter (optional):') || 'After review, no violation was found.';
+    try {
+      const db = window._db;
+      await window._updateDoc(window._doc(db, 'reports', reportId), {
+        status: 'dismissed', adminNote: note, resolvedAt: window._serverTimestamp()
+      });
+      if (reportedBy) {
+        await window._addDoc(window._collection(db, 'notifications'), {
+          userId: reportedBy, senderId: 'admin', senderName: 'Situationship Team',
+          senderAvatar: null, type: 'report_resolved', title: '🚫 Report Update',
+          body: note, createdAt: Date.now(), isRead: false
+        });
+      }
+      showToast('Report dismissed', 'success');
+      loadReports();
+    } catch (err) { showToast('Error: ' + err.message, 'error'); }
+  }
+
+  // ── Users Logic ────────────────────────────────────────────────
+  let allUsersCache = [];
+  let userSearchQuery = '';
+
+  function onUserSearch(val) {
+    userSearchQuery = val.toLowerCase();
+    renderUsersTable(allUsersCache);
+  }
+
+  async function loadUsers() {
+    const tbody = document.getElementById('users-body');
+    tbody.innerHTML = '<tr><td colspan="6"><div class="empty-state"><div class="empty-icon">⏳</div><p>Loading…</p></div></td></tr>';
+    try {
+      const db = window._db;
+      const snap = await window._getDocs(window._query(window._collection(db, 'users'), window._limit(200)));
+      allUsersCache = [];
+      snap.forEach(d => allUsersCache.push({ id: d.id, ...d.data() }));
+      renderUsersTable(allUsersCache);
+    } catch (err) {
+      document.getElementById('user-table-error').textContent = '⚠ Failed to load: ' + err.message;
+      document.getElementById('user-table-error').classList.remove('hidden');
+    }
+  }
+
+  function renderUsersTable(users) {
+    const q = userSearchQuery;
+    const filtered = q ? users.filter(u =>
+      (u.name||'').toLowerCase().includes(q) ||
+      (u.email||'').toLowerCase().includes(q) ||
+      (u.id||'').toLowerCase().includes(q)) : users;
+    document.getElementById('user-table-count').textContent = filtered.length + ' user' + (filtered.length !== 1 ? 's' : '');
+    const tbody = document.getElementById('users-body');
+    if (!filtered.length) {
+      tbody.innerHTML = '<tr><td colspan="6"><div class="empty-state"><div class="empty-icon">👥</div><p>No users found</p></div></td></tr>';
+      return;
+    }
+    tbody.innerHTML = filtered.map(function(u) {
+      const isSusp = u.isSuspended === true;
+      const isDel  = u.isDeleted === true;
+      const statusTag = isDel
+        ? '<span class="badge badge-rejected">🗑 Deleted</span>'
+        : isSusp
+          ? '<span class="badge badge-review">🔒 Suspended</span>'
+          : '<span class="badge badge-approved">✓ Active</span>';
+      const verBadge = u.isVerified
+        ? '<span class="badge badge-approved">✓ Verified</span>'
+        : '<span style="color:var(--text-muted);font-size:12px;">—</span>';
+      const joined = u.createdAt ? new Date(u.createdAt).toLocaleDateString() : '—';
+      const avatar = u.name ? u.name[0].toUpperCase() : '?';
+      const uid = escapeHtml(u.id);
+      const uname = escapeHtml(u.name || u.id);
+      const actions = isDel
+        ? '<span style="color:var(--text-muted);font-size:12px;">Deleted</span>'
+        : '<button class="btn-sm" style="background:rgba(255,193,7,.15);color:#ffc107;" onclick="warnUser(\'' + uid + '\',\'' + uname + '\')">⚠ Warn</button> '
+          + (isSusp
+              ? '<button class="btn-sm btn-approve" onclick="unsuspendUser(\'' + uid + '\')">🔓 Unsuspend</button> '
+              : '<button class="btn-sm" style="background:rgba(255,82,82,.15);color:#ff5252;" onclick="suspendUser(\'' + uid + '\',\'' + uname + '\')">🔒 Suspend</button> ')
+          + '<button class="btn-sm btn-reject" onclick="deleteUser(\'' + uid + '\',\'' + uname + '\')">🗑 Delete</button>';
+      return '<tr><td><div style="display:flex;align-items:center;gap:10px;"><div class="sidebar-user-avatar" style="width:32px;height:32px;font-size:13px;flex-shrink:0;">' + avatar + '</div><div><div style="font-weight:600;font-size:13px;">' + escapeHtml(u.name||'—') + '</div><div style="font-size:11px;color:var(--text-muted);">' + escapeHtml(u.email||u.id) + '</div></div></div></td><td style="font-size:13px;text-transform:capitalize;">' + escapeHtml(u.gender||'—') + '</td><td>' + verBadge + '</td><td>' + statusTag + '</td><td style="font-size:12px;color:var(--text-muted);">' + joined + '</td><td><div style="display:flex;gap:6px;flex-wrap:wrap;">' + actions + '</div></td></tr>';
+    }).join('');
+  }
+
+  async function warnUser(userId, userName) {
+    const reason = prompt('Warning message to send to ' + userName + ':');
+    if (!reason) return;
+    try {
+      const db = window._db;
+      await window._addDoc(window._collection(db, 'notifications'), {
+        userId, senderId: 'admin', senderName: 'Situationship Team',
+        senderAvatar: null, type: 'admin_warning', title: '⚠️ Account Warning',
+        body: reason, createdAt: Date.now(), isRead: false
+      });
+      showToast('⚠️ Warning sent to ' + userName, 'success');
+    } catch (err) { showToast('Error: ' + err.message, 'error'); }
+  }
+
+  async function suspendUser(userId, userName) {
+    const reason = prompt('Reason for suspending ' + userName + ' (shown to user):');
+    if (reason === null) return;
+    const daysStr = prompt('Suspend for how many days? (leave blank for permanent):');
+    const days = parseInt(daysStr);
+    const suspendedUntil = (!daysStr || isNaN(days)) ? null : Date.now() + days * 86400000;
+    try {
+      const db = window._db;
+      await window._updateDoc(window._doc(db, 'users', userId), {
+        isSuspended: true,
+        suspensionReason: reason || 'Violation of community guidelines',
+        suspendedUntil: suspendedUntil
+      });
+      await window._addDoc(window._collection(db, 'notifications'), {
+        userId, senderId: 'admin', senderName: 'Situationship Team',
+        senderAvatar: null, type: 'account_suspended', title: '🔒 Account Suspended',
+        body: reason || 'Your account has been suspended.', createdAt: Date.now(), isRead: false
+      });
+      showToast('🔒 ' + userName + ' suspended', 'success');
+      loadUsers();
+    } catch (err) { showToast('Error: ' + err.message, 'error'); }
+  }
+
+  async function unsuspendUser(userId) {
+    try {
+      const db = window._db;
+      await window._updateDoc(window._doc(db, 'users', userId), {
+        isSuspended: false, suspensionReason: null, suspendedUntil: null
+      });
+      showToast('🔓 User unsuspended', 'success');
+      loadUsers();
+    } catch (err) { showToast('Error: ' + err.message, 'error'); }
+  }
+
+  async function deleteUser(userId, userName) {
+    if (!confirm('Soft-delete account for ' + userName + '? This will anonymise their data.')) return;
+    try {
+      const db = window._db;
+      await window._updateDoc(window._doc(db, 'users', userId), {
+        isDeleted: true, isSuspended: true,
+        name: '[Deleted User]', email: '', bio: '',
+        avatarUrl: null, photos: [], phoneNumber: null,
+        deletedAt: window._serverTimestamp()
+      });
+      showToast('🗑 ' + userName + ' account deleted', 'success');
+      loadUsers();
+    } catch (err) { showToast('Error: ' + err.message, 'error'); }
+  }
+</script>
+</body>
+</html>

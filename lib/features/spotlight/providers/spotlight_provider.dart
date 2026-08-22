@@ -1,9 +1,11 @@
+import 'package:flutter/foundation.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/spotlight_model.dart';
 import 'location_provider.dart';
 import 'package:situationship/core/providers/app_state_provider.dart';
+import 'package:situationship/core/providers/firebase_auth_provider.dart';
 
 
 // ─── Helper: get session ID from location state ───────────────────────────────
@@ -21,6 +23,10 @@ final _sessionIdProvider = Provider<String?>((ref) {
 // ─── Session stream ───────────────────────────────────────────────────────────
 
 final spotlightSessionProvider = StreamProvider<SpotlightSession?>((ref) {
+  final authState = ref.watch(authStateChangesProvider);
+  final user = authState.asData?.value;
+  if (user == null) return const Stream.empty();
+
   final sessionId = ref.watch(_sessionIdProvider);
   if (sessionId == null) return const Stream.empty();
 
@@ -28,6 +34,9 @@ final spotlightSessionProvider = StreamProvider<SpotlightSession?>((ref) {
       .collection('spotlight_sessions')
       .doc(sessionId)
       .snapshots()
+      .handleError((err) {
+        debugPrint('[Spotlight] Session stream error: $err');
+      })
       .map((snapshot) {
     if (!snapshot.exists) {
       // Auto-create a virtual session for this zone (no write needed — bids create it)
@@ -49,6 +58,10 @@ final spotlightSessionProvider = StreamProvider<SpotlightSession?>((ref) {
 
 final spotlightBidsProvider =
     StreamProvider.family<List<SpotlightBid>, String>((ref, sessionId) {
+  final authState = ref.watch(authStateChangesProvider);
+  final user = authState.asData?.value;
+  if (user == null) return Stream.value([]);
+
   return FirebaseFirestore.instanceFor(app: Firebase.app(), databaseId: 'default')
       .collection('spotlight_sessions')
       .doc(sessionId)
@@ -56,6 +69,9 @@ final spotlightBidsProvider =
       .orderBy('amount', descending: true)
       .limit(30)
       .snapshots()
+      .handleError((err) {
+        debugPrint('[Spotlight] Bids stream error: $err');
+      })
       .map((snapshot) {
     final bids = snapshot.docs
         .map((doc) => SpotlightBid.fromMap(doc.id, doc.data()))

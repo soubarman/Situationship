@@ -645,16 +645,27 @@ Widget _buildEmojiImage(String emoji, {double size = 20}) {
     final cleanRunes = runes.where((r) => r != 0xFE0F).toList();
     final hex = cleanRunes.map((r) => r.toRadixString(16)).join('-');
     
+    final notoGifUrl = 'https://fonts.gstatic.com/s/e/notoemoji/latest/$hex/512.gif';
+    final twemojiUrl = 'https://cdnjs.cloudflare.com/ajax/libs/twemoji/14.0.2/72x72/$hex.png';
+
     return Image.network(
-      'https://cdnjs.cloudflare.com/ajax/libs/twemoji/14.0.2/72x72/$hex.png',
+      notoGifUrl,
       width: size,
       height: size,
       fit: BoxFit.contain,
-      errorBuilder: (context, error, stackTrace) => Text(
-        emoji,
-        style: TextStyle(
-          fontSize: size,
-          fontFamilyFallback: const ['Apple Color Emoji', 'Segoe UI Emoji', 'Noto Color Emoji', 'Android Emoji'],
+      gaplessPlayback: true,
+      errorBuilder: (context, error, stackTrace) => Image.network(
+        twemojiUrl,
+        width: size,
+        height: size,
+        fit: BoxFit.contain,
+        gaplessPlayback: true,
+        errorBuilder: (context, error, stackTrace) => Text(
+          emoji,
+          style: TextStyle(
+            fontSize: size,
+            fontFamilyFallback: const ['Apple Color Emoji', 'Segoe UI Emoji', 'Noto Color Emoji', 'Android Emoji'],
+          ),
         ),
       ),
     );

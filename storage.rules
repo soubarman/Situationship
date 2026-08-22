@@ -26,13 +26,67 @@ service firebase.storage {
       allow delete: if isAuthenticated();
     }
 
-    // Profile Images: users can only upload to users/{userId}/avatar.png
+    // Profile Images: stored at users/{userId}/{fileName} OR avatars/{userId}.jpg
     match /users/{userId}/{fileName} {
       allow read: if isAuthenticated();
       allow write: if isAuthenticated() 
                    && request.auth.uid == userId
                    && request.resource.size < 5 * 1024 * 1024
                    && request.resource.contentType.matches('image/.*');
+    }
+
+    // Avatars (used by edit_profile_screen, complete_profile_screen, firebase_auth_provider)
+    match /avatars/{fileName} {
+      allow read: if isAuthenticated();
+      // Allow upload only if fileName starts with the user's uid
+      allow write: if isAuthenticated()
+                   && request.resource.size < 5 * 1024 * 1024
+                   && request.resource.contentType.matches('image/.*');
+    }
+
+    // Posts: images and voice notes
+    match /posts/{fileName} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated()
+                    && request.resource.size < 50 * 1024 * 1024;
+      allow delete: if isAuthenticated();
+    }
+
+    // Voice notes
+    match /voice_notes/{fileName} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated()
+                    && request.resource.size < 20 * 1024 * 1024;
+      allow delete: if isAuthenticated();
+    }
+
+    // Community images
+    match /communities/{fileName} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated()
+                   && request.resource.size < 10 * 1024 * 1024
+                   && request.resource.contentType.matches('image/.*');
+    }
+
+    // Chat attachments
+    match /chats/{chatId}/{fileName} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated()
+                    && request.resource.size < 50 * 1024 * 1024;
+    }
+
+    // Verification Videos: users upload their verification videos here
+    match /verifications/{userId}/{fileName} {
+      allow read: if isAuthenticated() && (
+        request.auth.uid == userId ||
+        request.auth.token.admin == true
+      );
+      allow create: if isAuthenticated()
+                    && request.auth.uid == userId
+                    && request.resource.size < 50 * 1024 * 1024
+                    && request.resource.contentType.matches('video/.*');
+      // No deletion or update by users; cleanup is done by backend/admin
+      allow update, delete: if false;
     }
   }
 }

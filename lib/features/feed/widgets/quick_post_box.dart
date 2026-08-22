@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -298,25 +299,25 @@ class _QuickPostBoxState extends ConsumerState<QuickPostBox> {
 
     return AnimatedContainer(
       duration: const Duration(milliseconds: 220),
-      margin: const EdgeInsets.fromLTRB(16, 12, 16, 6),
+      margin: const EdgeInsets.fromLTRB(14, 10, 14, 8),
       decoration: BoxDecoration(
-        color: isDark ? AppTheme.darkCard : Colors.white,
-        borderRadius: BorderRadius.circular(24),
+        color: isDark ? const Color(0xFF131724) : Colors.white,
+        borderRadius: BorderRadius.circular(28),
         border: Border.all(
           color: _isFocused
-              ? AppTheme.primaryBlue.withOpacity(0.5)
+              ? const Color(0xFF8B5CF6).withOpacity(0.5)
               : (isDark
-                  ? Colors.white.withOpacity(0.08)
+                  ? Colors.white.withOpacity(0.1)
                   : Colors.black.withOpacity(0.06)),
           width: _isFocused ? 1.5 : 1.0,
         ),
         boxShadow: [
           BoxShadow(
             color: _isFocused
-                ? AppTheme.primaryBlue.withOpacity(0.12)
-                : Colors.black.withOpacity(isDark ? 0.25 : 0.06),
-            blurRadius: _isFocused ? 20 : 10,
-            offset: const Offset(0, 3),
+                ? const Color(0xFF8B5CF6).withOpacity(0.15)
+                : Colors.black.withOpacity(isDark ? 0.35 : 0.08),
+            blurRadius: _isFocused ? 24 : 14,
+            offset: const Offset(0, 4),
           ),
         ],
       ),
@@ -325,52 +326,77 @@ class _QuickPostBoxState extends ConsumerState<QuickPostBox> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           // ── Handle and Close Button ─────────────────────────────────────
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-               const SizedBox(width: 48), // Balance the close button
-               // Drag handle
-               Container(
-                 margin: const EdgeInsets.only(top: 10),
-                 width: 36,
-                 height: 4,
-                 decoration: BoxDecoration(
-                   color: isDark ? Colors.white24 : Colors.black12,
-                   borderRadius: BorderRadius.circular(2),
-                 ),
-               ),
-               Padding(
-                 padding: const EdgeInsets.only(top: 6, right: 6),
-                 child: GestureDetector(
-                   onTap: () => Navigator.of(context).pop(),
-                   child: Container(
-                     padding: const EdgeInsets.all(4),
-                     decoration: BoxDecoration(
-                       shape: BoxShape.circle,
-                       border: Border.all(color: isDark ? Colors.white24 : Colors.black12),
-                     ),
-                     child: Icon(Icons.close_rounded, color: isDark ? Colors.white70 : Colors.black87, size: 16),
-                   ),
-                 ),
-               ),
-            ],
+          Padding(
+            padding: const EdgeInsets.fromLTRB(18, 12, 14, 0),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                Row(
+                  children: [
+                    Container(
+                      width: 7,
+                      height: 7,
+                      decoration: const BoxDecoration(
+                        color: Color(0xFF10B981),
+                        shape: BoxShape.circle,
+                      ),
+                    ),
+                    const SizedBox(width: 6),
+                    Text(
+                      'Share to Feed',
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                        color: isDark ? Colors.white70 : const Color(0xFF475569),
+                      ),
+                    ),
+                  ],
+                ),
+                // Drag handle
+                Container(
+                  width: 32,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: isDark ? Colors.white24 : Colors.black12,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+                GestureDetector(
+                  onTap: () => Navigator.of(context).pop(),
+                  child: Container(
+                    width: 28,
+                    height: 28,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: isDark ? Colors.white.withOpacity(0.08) : Colors.black.withOpacity(0.05),
+                      border: Border.all(color: isDark ? Colors.white12 : Colors.black12),
+                    ),
+                    child: Icon(
+                      Icons.close_rounded,
+                      color: isDark ? Colors.white70 : Colors.black87,
+                      size: 15,
+                    ),
+                  ),
+                ),
+              ],
+            ),
           ),
+
+          const SizedBox(height: 8),
 
           // ── Text input row ──────────────────────────────────────────────
           Padding(
-            padding: const EdgeInsets.fromLTRB(16, 0, 16, 0),
+            padding: const EdgeInsets.fromLTRB(18, 4, 18, 6),
             child: TextField(
               controller: _captionCtrl,
               focusNode: _focusNode,
               onChanged: (_) => setState(() {}),
               decoration: InputDecoration(
-                hintText: 'Share your vibe...',
+                hintText: "What's on your mind? Share a thought, vibe or plan...",
                 hintStyle: TextStyle(
-                  color: isDark
-                      ? Colors.white38
-                      : const Color(0xFFADB5BD),
-                  fontSize: 15,
+                  color: isDark ? Colors.white38 : const Color(0xFF94A3B8),
+                  fontSize: 14.5,
                   fontWeight: FontWeight.w400,
                 ),
                 border: InputBorder.none,
@@ -386,7 +412,7 @@ class _QuickPostBoxState extends ConsumerState<QuickPostBox> {
               style: TextStyle(
                 fontSize: 15,
                 fontWeight: FontWeight.w500,
-                color: isDark ? Colors.white : AppTheme.textPrimary,
+                color: isDark ? Colors.white : const Color(0xFF0F172A),
                 height: 1.4,
               ),
               maxLines: null,
@@ -397,20 +423,18 @@ class _QuickPostBoxState extends ConsumerState<QuickPostBox> {
           // ── Mood chip (when selected) ────────────────────────────────────
           if (hasMood)
             Padding(
-              padding: const EdgeInsets.fromLTRB(16, 10, 16, 0),
+              padding: const EdgeInsets.fromLTRB(18, 8, 18, 0),
               child: Row(
                 children: [
                   Text(
                     'Feeling: ',
                     style: TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w500,
-                      color: isDark
-                          ? Colors.white54
-                          : AppTheme.textSecondary,
+                      fontSize: 12.5,
+                      fontWeight: FontWeight.w600,
+                      color: isDark ? Colors.white54 : const Color(0xFF64748B),
                     ),
                   ),
-                  const SizedBox(width: 2),
+                  const SizedBox(width: 4),
                   _MoodChip(
                     emoji: _selectedMoodEmoji!,
                     label: _selectedMoodLabel!,
@@ -426,7 +450,7 @@ class _QuickPostBoxState extends ConsumerState<QuickPostBox> {
           // ── Plan preview card (when selected) ───────────────────────────
           if (_planTitle != null)
             Padding(
-              padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+              padding: const EdgeInsets.fromLTRB(18, 10, 18, 0),
               child: Container(
                 width: double.infinity,
                 decoration: BoxDecoration(
@@ -454,7 +478,6 @@ class _QuickPostBoxState extends ConsumerState<QuickPostBox> {
                   padding: const EdgeInsets.all(14),
                   child: Row(
                     children: [
-                      // Gradient icon bubble
                       Container(
                         padding: const EdgeInsets.all(10),
                         decoration: BoxDecoration(
@@ -475,7 +498,6 @@ class _QuickPostBoxState extends ConsumerState<QuickPostBox> {
                         child: const Icon(Icons.calendar_today_rounded, size: 18, color: Colors.white),
                       ),
                       const SizedBox(width: 12),
-                      // Plan details
                       Expanded(
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
@@ -524,7 +546,6 @@ class _QuickPostBoxState extends ConsumerState<QuickPostBox> {
                         ),
                       ),
                       const SizedBox(width: 8),
-                      // Remove button
                       GestureDetector(
                         onTap: () => setState(() {
                           _planTitle = null;
@@ -549,7 +570,7 @@ class _QuickPostBoxState extends ConsumerState<QuickPostBox> {
           // ── Voice preview card (when selected) ──────────────────────────
           if (_attachedVoicePath != null)
             Padding(
-              padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+              padding: const EdgeInsets.fromLTRB(18, 10, 18, 0),
               child: Container(
                 width: double.infinity,
                 decoration: BoxDecoration(
@@ -577,7 +598,6 @@ class _QuickPostBoxState extends ConsumerState<QuickPostBox> {
                   padding: const EdgeInsets.all(14),
                   child: Row(
                     children: [
-                      // Gradient mic bubble
                       Container(
                         padding: const EdgeInsets.all(10),
                         decoration: BoxDecoration(
@@ -598,7 +618,6 @@ class _QuickPostBoxState extends ConsumerState<QuickPostBox> {
                         child: const Icon(Icons.mic_rounded, size: 18, color: Colors.white),
                       ),
                       const SizedBox(width: 12),
-                      // Waveform bars + label
                       Expanded(
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
@@ -613,7 +632,6 @@ class _QuickPostBoxState extends ConsumerState<QuickPostBox> {
                               ),
                             ),
                             const SizedBox(height: 6),
-                            // Decorative waveform bars
                             Row(
                               children: List.generate(18, (i) {
                                 final heights = [8.0, 14.0, 10.0, 18.0, 12.0, 20.0, 10.0, 16.0, 8.0, 14.0, 12.0, 18.0, 10.0, 16.0, 8.0, 12.0, 14.0, 10.0];
@@ -632,7 +650,6 @@ class _QuickPostBoxState extends ConsumerState<QuickPostBox> {
                         ),
                       ),
                       const SizedBox(width: 8),
-                      // Remove button
                       GestureDetector(
                         onTap: () => setState(() {
                           _attachedVoicePath = null;
@@ -655,11 +672,11 @@ class _QuickPostBoxState extends ConsumerState<QuickPostBox> {
           // ── Image preview ────────────────────────────────────────────────
           if (_imageFile != null)
             Padding(
-              padding: const EdgeInsets.fromLTRB(16, 10, 16, 0),
+              padding: const EdgeInsets.fromLTRB(18, 10, 18, 0),
               child: Stack(
                 children: [
                   ClipRRect(
-                    borderRadius: BorderRadius.circular(12),
+                    borderRadius: BorderRadius.circular(16),
                     child: kIsWeb
                         ? Image.network(_imageFile!.path,
                             height: 160,
@@ -671,18 +688,18 @@ class _QuickPostBoxState extends ConsumerState<QuickPostBox> {
                             fit: BoxFit.cover),
                   ),
                   Positioned(
-                    top: 6,
-                    right: 6,
+                    top: 8,
+                    right: 8,
                     child: GestureDetector(
                       onTap: () => setState(() => _imageFile = null),
                       child: Container(
-                        padding: const EdgeInsets.all(4),
+                        padding: const EdgeInsets.all(6),
                         decoration: const BoxDecoration(
                           color: Colors.black54,
                           shape: BoxShape.circle,
                         ),
                         child: const Icon(Icons.close_rounded,
-                            color: Colors.white, size: 16),
+                            color: Colors.white, size: 14),
                       ),
                     ),
                   ),
@@ -690,100 +707,154 @@ class _QuickPostBoxState extends ConsumerState<QuickPostBox> {
               ),
             ),
 
-          // ── Action bar ───────────────────────────────────────────────────
-          const SizedBox(height: 16),
+          // ── Action Bar with Modern Tool Pills ─────────────────────────────
+          const SizedBox(height: 14),
           SingleChildScrollView(
             scrollDirection: Axis.horizontal,
             physics: const BouncingScrollPhysics(),
-            padding: const EdgeInsets.symmetric(horizontal: 16),
+            padding: const EdgeInsets.symmetric(horizontal: 18),
             child: Row(
               children: [
                 _ToolBtn(
-                  icon: Icons.image_outlined,
-                  label: 'Upload',
-                  color: const Color(0xFF4CA0DB),
+                  icon: Icons.image_rounded,
+                  label: 'Photo',
+                  color: const Color(0xFF3B82F6),
                   onTap: _pickPhoto,
                 ),
                 const SizedBox(width: 8),
                 _ToolBtn(
-                  icon: Icons.mic_none,
+                  icon: Icons.mic_rounded,
                   label: 'Voice',
-                  color: const Color(0xFFD66B7C),
+                  color: const Color(0xFFF43F5E),
                   onTap: kIsWeb ? () => _snack('Voice recording not supported on web') : _openVoiceRecorder,
                 ),
                 const SizedBox(width: 8),
                 _ToolBtn(
-                  icon: Icons.camera_alt_outlined,
+                  icon: Icons.camera_alt_rounded,
                   label: 'Take',
-                  color: const Color(0xFFE5B945),
+                  color: const Color(0xFFF59E0B),
                   onTap: _openTake,
                 ),
                 const SizedBox(width: 8),
                 _ToolBtn(
-                  icon: Icons.calendar_today_outlined,
+                  icon: Icons.calendar_today_rounded,
                   label: 'Plan',
-                  color: const Color(0xFF4EAE8D),
+                  color: const Color(0xFF10B981),
                   onTap: _openPlanDialog,
                 ),
                 const SizedBox(width: 8),
                 _ToolBtn(
-                  icon: Icons.sentiment_satisfied_alt_outlined,
+                  icon: Icons.mood_rounded,
                   label: 'Mood',
-                  color: const Color(0xFFA17EC7),
+                  color: const Color(0xFF8B5CF6),
                   onTap: _openMoodPicker,
                 ),
               ],
             ),
           ),
+
+          const SizedBox(height: 14),
+
+          // ── Priority Placement Modern Card ────────────────────────────────
           Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            child: Row(
-              children: [
-                const Icon(Icons.bolt, color: AppTheme.primaryBlue, size: 18),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Priority Feed Placement',
-                        style: TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w700,
-                          color: isDark ? Colors.white : AppTheme.textPrimary,
-                        ),
-                      ),
-                      const SizedBox(height: 2),
-                      const Text(
-                        'Bubble to top (Free with Premium / 10 coins)',
-                        style: TextStyle(fontSize: 10, color: AppTheme.textTertiary),
-                      ),
-                    ],
+            padding: const EdgeInsets.symmetric(horizontal: 18),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              decoration: BoxDecoration(
+                color: isDark ? const Color(0xFF191D2C) : const Color(0xFFF1F5F9),
+                borderRadius: BorderRadius.circular(18),
+                border: Border.all(
+                  color: _isPriority
+                      ? const Color(0xFF8B5CF6).withOpacity(0.5)
+                      : (isDark ? Colors.white.withOpacity(0.06) : Colors.black.withOpacity(0.04)),
+                ),
+              ),
+              child: Row(
+                children: [
+                  Container(
+                    width: 32,
+                    height: 32,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF06B6D4).withOpacity(0.15),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: const Center(
+                      child: Icon(Icons.bolt_rounded, color: Color(0xFF06B6D4), size: 18),
+                    ),
                   ),
-                ),
-                Switch(
-                  value: _isPriority,
-                  activeColor: AppTheme.primaryBlue,
-                  onChanged: (val) {
-                    setState(() => _isPriority = val);
-                  },
-                ),
-              ],
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Priority Feed Placement',
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w800,
+                            color: isDark ? Colors.white : const Color(0xFF0F172A),
+                          ),
+                        ),
+                        const SizedBox(height: 1),
+                        Text(
+                          'Bubble to top · 10 coins / Free for VIP',
+                          style: TextStyle(
+                            fontSize: 10.5,
+                            color: isDark ? Colors.white54 : const Color(0xFF64748B),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Transform.scale(
+                    scale: 0.85,
+                    child: Switch(
+                      value: _isPriority,
+                      activeColor: const Color(0xFF8B5CF6),
+                      activeTrackColor: const Color(0xFF8B5CF6).withOpacity(0.4),
+                      inactiveThumbColor: isDark ? Colors.white54 : Colors.grey[400],
+                      inactiveTrackColor: isDark ? Colors.white12 : Colors.grey[200],
+                      onChanged: (val) {
+                        HapticFeedback.selectionClick();
+                        setState(() => _isPriority = val);
+                      },
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
-          const SizedBox(height: 16),
+
+          const SizedBox(height: 14),
+
+          // ── Bottom Aura Indicator & Post Button ───────────────────────────
           Padding(
-            padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+            padding: const EdgeInsets.fromLTRB(18, 0, 18, 16),
             child: Row(
               children: [
-                const Icon(Icons.bolt_rounded, color: Color(0xFFD1A041), size: 18),
-                const SizedBox(width: 6),
-                Text(
-                  '+5 aura on first post today',
-                  style: TextStyle(
-                    fontSize: 12.5,
-                    fontWeight: FontWeight.w600,
-                    color: isDark ? Colors.white70 : Colors.black87,
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF59E0B).withOpacity(0.15),
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(
+                      color: const Color(0xFFF59E0B).withOpacity(0.3),
+                      width: 1,
+                    ),
+                  ),
+                  child: const Row(
+                    children: [
+                      Icon(Icons.auto_awesome_rounded, color: Color(0xFFF59E0B), size: 14),
+                      SizedBox(width: 5),
+                      Text(
+                        '+5 aura on first post',
+                        style: TextStyle(
+                          fontSize: 11.5,
+                          fontWeight: FontWeight.w800,
+                          color: Color(0xFFF59E0B),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
                 const Spacer(),
@@ -801,7 +872,7 @@ class _QuickPostBoxState extends ConsumerState<QuickPostBox> {
   }
 }
 
-// ─── Tool button (Photo / Mood) ────────────────────────────────────────────────
+// ─── Modern Tool Button Capsule ──────────────────────────────────────────────
 
 class _ToolBtn extends StatelessWidget {
   final IconData icon;
@@ -819,12 +890,15 @@ class _ToolBtn extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
-      onTap: onTap,
+      onTap: () {
+        HapticFeedback.selectionClick();
+        onTap();
+      },
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+        padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 7),
         decoration: BoxDecoration(
           color: color.withOpacity(0.12),
-          borderRadius: BorderRadius.circular(20),
+          borderRadius: BorderRadius.circular(16),
           border: Border.all(
             color: color.withOpacity(0.3),
             width: 1,
@@ -833,14 +907,14 @@ class _ToolBtn extends StatelessWidget {
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(icon, color: color, size: 16),
-            const SizedBox(width: 6),
+            Icon(icon, color: color, size: 15),
+            const SizedBox(width: 5),
             Text(
               label,
               style: TextStyle(
                 color: color,
-                fontWeight: FontWeight.bold,
-                fontSize: 13,
+                fontWeight: FontWeight.w800,
+                fontSize: 12.5,
               ),
             ),
           ],
@@ -850,7 +924,7 @@ class _ToolBtn extends StatelessWidget {
   }
 }
 
-// ─── Post button ───────────────────────────────────────────────────────────────
+// ─── Post Button ─────────────────────────────────────────────────────────────
 
 class _PostButton extends StatefulWidget {
   final bool isSaving;
@@ -876,25 +950,32 @@ class _PostButtonState extends State<_PostButton> {
       onTapDown: (_) => setState(() => _pressed = true),
       onTapUp: (_) {
         setState(() => _pressed = false);
-        if (!widget.isSaving) widget.onTap();
+        if (!widget.isSaving) {
+          HapticFeedback.mediumImpact();
+          widget.onTap();
+        }
       },
       onTapCancel: () => setState(() => _pressed = false),
       child: AnimatedScale(
-        scale: _pressed ? 0.94 : 1.0,
+        scale: _pressed ? 0.95 : 1.0,
         duration: const Duration(milliseconds: 100),
         child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 10),
+          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 10),
           decoration: BoxDecoration(
             gradient: widget.isSaving
                 ? null
-                : AppTheme.primaryGradient,
-            color: widget.isSaving ? const Color(0xFFD0D0D0) : null,
-            borderRadius: BorderRadius.circular(50),
+                : const LinearGradient(
+                    colors: [Color(0xFF4F75FF), Color(0xFF8B5CF6)],
+                    begin: Alignment.centerLeft,
+                    end: Alignment.centerRight,
+                  ),
+            color: widget.isSaving ? const Color(0xFF475569) : null,
+            borderRadius: BorderRadius.circular(22),
             boxShadow: widget.isSaving
                 ? []
                 : [
                     BoxShadow(
-                      color: AppTheme.primaryBlue.withOpacity(0.35),
+                      color: const Color(0xFF4F75FF).withOpacity(0.4),
                       blurRadius: 12,
                       offset: const Offset(0, 4),
                     ),
@@ -913,9 +994,9 @@ class _PostButtonState extends State<_PostButton> {
                   'Post',
                   style: TextStyle(
                     color: Colors.white,
-                    fontWeight: FontWeight.w700,
-                    fontSize: 15,
-                    letterSpacing: 0.2,
+                    fontWeight: FontWeight.w900,
+                    fontSize: 14.5,
+                    letterSpacing: -0.2,
                   ),
                 ),
         ),
@@ -1137,16 +1218,27 @@ Widget _buildEmojiImage(String emoji, {double size = 20}) {
     final cleanRunes = runes.where((r) => r != 0xFE0F).toList();
     final hex = cleanRunes.map((r) => r.toRadixString(16)).join('-');
     
+    final notoGifUrl = 'https://fonts.gstatic.com/s/e/notoemoji/latest/$hex/512.gif';
+    final twemojiUrl = 'https://cdnjs.cloudflare.com/ajax/libs/twemoji/14.0.2/72x72/$hex.png';
+
     return Image.network(
-      'https://cdnjs.cloudflare.com/ajax/libs/twemoji/14.0.2/72x72/$hex.png',
+      notoGifUrl,
       width: size,
       height: size,
       fit: BoxFit.contain,
-      errorBuilder: (context, error, stackTrace) => Text(
-        emoji,
-        style: TextStyle(
-          fontSize: size,
-          fontFamilyFallback: const ['Apple Color Emoji', 'Segoe UI Emoji', 'Noto Color Emoji', 'Android Emoji'],
+      gaplessPlayback: true,
+      errorBuilder: (context, error, stackTrace) => Image.network(
+        twemojiUrl,
+        width: size,
+        height: size,
+        fit: BoxFit.contain,
+        gaplessPlayback: true,
+        errorBuilder: (context, error, stackTrace) => Text(
+          emoji,
+          style: TextStyle(
+            fontSize: size,
+            fontFamilyFallback: const ['Apple Color Emoji', 'Segoe UI Emoji', 'Noto Color Emoji', 'Android Emoji'],
+          ),
         ),
       ),
     );

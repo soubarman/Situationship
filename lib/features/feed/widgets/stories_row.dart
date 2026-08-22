@@ -9,6 +9,7 @@ import '../../../core/theme/app_theme.dart';
 import '../../../core/providers/app_state_provider.dart';
 import '../../../core/models/user_model.dart';
 import '../screens/feed_screen.dart';
+import '../../verification/presentation/widgets/s_badge_widget.dart';
 import 'package:flutter/foundation.dart';
 import '../utils/ui_web_shim.dart' as ui_web;
 import '../../../core/utils/web_stub.dart' if (dart.library.html) 'package:web/web.dart' as web;
@@ -54,8 +55,7 @@ class StoriesRow extends ConsumerWidget {
                     final myStory = currentUserId != null
                         ? uniqueUsers[currentUserId]
                         : null;
-                        
-                    // If user has a story, show their own story instead of the "Drop a Take" button
+
                     if (myStory != null && currentUserId != null) {
                       return _StoryItem(
                         userId: currentUserId,
@@ -66,11 +66,10 @@ class StoriesRow extends ConsumerWidget {
                         isDark: isDark,
                       );
                     }
-                    
-                    // User has no story, show the Add Story button
+
                     return _buildAddStory(context, isDark, currentUser);
                   }
-                  
+
                   final story = otherUsersStories[index - 1];
                   return _StoryItem(
                     userId: story['userId'],
@@ -607,7 +606,15 @@ class _StoryItemState extends ConsumerState<_StoryItem> {
                       style: const TextStyle(fontSize: 10),
                     )
                   )
-                )
+                ),
+
+                // Verification Badge
+                if (liveAuthor.asData?.value?.isVerified ?? false)
+                  const Positioned(
+                    bottom: -4,
+                    right: -4,
+                    child: SBadgeWidget(size: 14, showTooltip: false),
+                  ),
               ],
             ),
           ),

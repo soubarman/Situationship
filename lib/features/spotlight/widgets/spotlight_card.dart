@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:situationship/core/theme/app_theme.dart';
 import '../models/spotlight_model.dart';
 import 'dart:math' as math;
+import '../../verification/presentation/widgets/s_badge_widget.dart';
 
 class SpotlightCard extends StatelessWidget {
   final SpotlightBid bid;
@@ -155,7 +156,7 @@ class SpotlightCard extends StatelessWidget {
               ),
               if (bid.isVerified && !isPlaceholder) ...[
                 const SizedBox(width: 4),
-                const Icon(Icons.verified, color: AppTheme.primaryBlue, size: 12),
+                const SBadgeWidget(size: 12, showTooltip: false),
               ]
             ],
           ),
@@ -224,7 +225,7 @@ class SpotlightCard extends StatelessWidget {
                     ),
                     if (bid.isVerified) ...[
                       const SizedBox(width: 4),
-                      const Icon(Icons.verified, color: AppTheme.primaryBlue, size: 14),
+                      const SBadgeWidget(size: 14, showTooltip: false),
                     ]
                   ],
                 ),

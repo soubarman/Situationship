@@ -9,6 +9,8 @@ class UserModel {
   final List<String> interests;
   final List<String> photos;
   final bool isVerified;
+  final String? verifiedBadge;        // 'S' when verified
+  final String? verificationStatus;   // 'pending' | 'approved' | 'rejected' | 'manual_review'
   final bool isOnline;
   final DateTime? lastSeen;
   final String? zodiacSign;
@@ -16,6 +18,7 @@ class UserModel {
   final List<String> following;
   final List<String> likedBy;
   final List<String> matches;
+  final List<String> dislikedUsers; // persisted unlikes — never re-shown
   final int postCount;
   final int coins;
   final List<String> joinedCommunities;
@@ -49,6 +52,11 @@ class UserModel {
   final int dailyLoginStreak;
   final int conversationRewardsToday;   // resets daily, max 3
 
+  // ── Moderation ────────────────────────────────────────────────────
+  final bool isSuspended;               // true = blocked from using app
+  final String? suspensionReason;       // shown to user on suspended screen
+  final DateTime? suspendedUntil;       // null = permanent suspension
+
   const UserModel({
     required this.id,
     required this.name,
@@ -60,6 +68,8 @@ class UserModel {
     this.interests = const [],
     this.photos = const [],
     this.isVerified = false,
+    this.verifiedBadge,
+    this.verificationStatus,
     this.isOnline = false,
     this.lastSeen,
     this.zodiacSign,
@@ -67,6 +77,7 @@ class UserModel {
     this.following = const [],
     this.likedBy = const [],
     this.matches = const [],
+    this.dislikedUsers = const [],
     this.postCount = 0,
     this.coins = 0,
     this.joinedCommunities = const [],
@@ -88,6 +99,9 @@ class UserModel {
     this.lastLoginDate,
     this.dailyLoginStreak = 0,
     this.conversationRewardsToday = 0,
+    this.isSuspended = false,
+    this.suspensionReason,
+    this.suspendedUntil,
   });
 
   bool get isMale => gender == 'male';
@@ -98,6 +112,10 @@ class UserModel {
       subscriptionExpiry!.isAfter(DateTime.now());
   int get phoneUnlocksRemaining =>
       (phoneUnlockQuota - phoneUnlocksUsed).clamp(0, 999);
+  /// True if account is currently suspended (permanent or within time window)
+  bool get isCurrentlySuspended =>
+      isSuspended &&
+      (suspendedUntil == null || suspendedUntil!.isAfter(DateTime.now()));
 
   factory UserModel.fromMap(Map<String, dynamic> map) {
     return UserModel(
@@ -111,6 +129,8 @@ class UserModel {
       interests: List<String>.from(map['interests'] ?? []),
       photos: List<String>.from(map['photos'] ?? []),
       isVerified: map['isVerified'] ?? false,
+      verifiedBadge: map['verifiedBadge'],
+      verificationStatus: map['verificationStatus'],
       isOnline: map['isOnline'] ?? false,
       lastSeen: map['lastSeen'] != null
           ? DateTime.fromMillisecondsSinceEpoch(map['lastSeen'])
@@ -120,6 +140,7 @@ class UserModel {
       following: List<String>.from(map['following'] ?? []),
       likedBy: List<String>.from(map['likedBy'] ?? []),
       matches: List<String>.from(map['matches'] ?? []),
+      dislikedUsers: List<String>.from(map['dislikedUsers'] ?? []),
       postCount: map['postCount'] ?? 0,
       coins: map['coins'] ?? 0,
       joinedCommunities: List<String>.from(map['joinedCommunities'] ?? []),
@@ -143,6 +164,11 @@ class UserModel {
       lastLoginDate: map['lastLoginDate'],
       dailyLoginStreak: map['dailyLoginStreak'] ?? 0,
       conversationRewardsToday: map['conversationRewardsToday'] ?? 0,
+      isSuspended: map['isSuspended'] ?? false,
+      suspensionReason: map['suspensionReason'],
+      suspendedUntil: map['suspendedUntil'] != null
+          ? DateTime.fromMillisecondsSinceEpoch(map['suspendedUntil'])
+          : null,
     );
   }
 
@@ -158,6 +184,8 @@ class UserModel {
       'interests': interests,
       'photos': photos,
       'isVerified': isVerified,
+      'verifiedBadge': verifiedBadge,
+      'verificationStatus': verificationStatus,
       'isOnline': isOnline,
       'lastSeen': lastSeen?.millisecondsSinceEpoch,
       'zodiacSign': zodiacSign,
@@ -165,6 +193,7 @@ class UserModel {
       'following': following,
       'likedBy': likedBy,
       'matches': matches,
+      'dislikedUsers': dislikedUsers,
       'postCount': postCount,
       'coins': coins,
       'joinedCommunities': joinedCommunities,
@@ -186,6 +215,9 @@ class UserModel {
       'lastLoginDate': lastLoginDate,
       'dailyLoginStreak': dailyLoginStreak,
       'conversationRewardsToday': conversationRewardsToday,
+      'isSuspended': isSuspended,
+      'suspensionReason': suspensionReason,
+      'suspendedUntil': suspendedUntil?.millisecondsSinceEpoch,
     };
   }
 
@@ -200,6 +232,8 @@ class UserModel {
     List<String>? interests,
     List<String>? photos,
     bool? isVerified,
+    String? verifiedBadge,
+    String? verificationStatus,
     bool? isOnline,
     DateTime? lastSeen,
     String? zodiacSign,
@@ -228,6 +262,9 @@ class UserModel {
     String? lastLoginDate,
     int? dailyLoginStreak,
     int? conversationRewardsToday,
+    bool? isSuspended,
+    String? suspensionReason,
+    DateTime? suspendedUntil,
   }) {
     return UserModel(
       id: id ?? this.id,
@@ -240,6 +277,8 @@ class UserModel {
       interests: interests ?? this.interests,
       photos: photos ?? this.photos,
       isVerified: isVerified ?? this.isVerified,
+      verifiedBadge: verifiedBadge ?? this.verifiedBadge,
+      verificationStatus: verificationStatus ?? this.verificationStatus,
       isOnline: isOnline ?? this.isOnline,
       lastSeen: lastSeen ?? this.lastSeen,
       zodiacSign: zodiacSign ?? this.zodiacSign,
@@ -268,6 +307,9 @@ class UserModel {
       lastLoginDate: lastLoginDate ?? this.lastLoginDate,
       dailyLoginStreak: dailyLoginStreak ?? this.dailyLoginStreak,
       conversationRewardsToday: conversationRewardsToday ?? this.conversationRewardsToday,
+      isSuspended: isSuspended ?? this.isSuspended,
+      suspensionReason: suspensionReason ?? this.suspensionReason,
+      suspendedUntil: suspendedUntil ?? this.suspendedUntil,
     );
   }
 

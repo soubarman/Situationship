@@ -187,237 +187,244 @@ class _SwipeDeckState extends ConsumerState<SwipeDeck> with SingleTickerProvider
     final double screenWidth = MediaQuery.of(context).size.width;
     final double rotationAngle = _rotationAngle;
 
-    return Center(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          // Cards Stack
-          SizedBox(
-            height: 520,
-            width: 350,
-            child: Stack(
-              clipBehavior: Clip.none,
-              children: [
-                // 1. Next card behind the active one (scaled & styled for 3D stack effect)
-                if (nextCardUser != null)
-                  Positioned.fill(
-                    child: Transform.scale(
-                      scale: 0.93,
-                      child: Transform.translate(
-                        offset: const Offset(0, 15),
-                        child: SwipeCard(
-                          user: nextCardUser,
-                          isBackground: true,
-                          deviceLat: widget.deviceLat,
-                          deviceLon: widget.deviceLon,
-                        ),
-                      ),
-                    ),
-                  ),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final double maxH = constraints.maxHeight;
+        // Dynamically compute card height based on available screen space
+        final double cardH = (maxH - 100).clamp(280.0, 520.0);
+        final double cardW = (cardH * 0.72).clamp(240.0, 370.0);
 
-                // 2. Active top card (draggable with rotation and direction overlays)
-                Positioned.fill(
-                  child: GestureDetector(
-                    onPanStart: (_) {
-                      _swipeController.stop();
-                      setState(() {
-                        _isDragging = true;
-                      });
-                    },
-                    onPanUpdate: (details) {
-                      setState(() {
-                        _dragOffset += details.delta;
-                        _rotationAngle = (_dragOffset.dx / screenWidth) * 0.45;
-                      });
-                    },
-                    onPanEnd: (details) {
-                      setState(() {
-                        _isDragging = false;
-                      });
-
-                      // Trigger swipe if drag threshold is met (120px)
-                      if (_dragOffset.dx.abs() > 120) {
-                        final double velocity = details.velocity.pixelsPerSecond.dx;
-                        final double targetX = _dragOffset.dx > 0 
-                            ? max(450.0, _dragOffset.dx + velocity * 0.2)
-                            : min(-450.0, _dragOffset.dx + velocity * 0.2);
-
-                        _swipeStartOffset = _dragOffset;
-                        _swipeEndOffset = Offset(targetX, _dragOffset.dy);
-                        _swipeStartAngle = _rotationAngle;
-                        _swipeEndAngle = _dragOffset.dx > 0 ? 0.35 : -0.35;
-
-                        _swipeController.reset();
-                        _swipeController.forward();
-                      } else {
-                        // Snap back
-                        _swipeStartOffset = _dragOffset;
-                        _swipeEndOffset = Offset.zero;
-                        _swipeStartAngle = _rotationAngle;
-                        _swipeEndAngle = 0.0;
-
-                        _swipeController.reset();
-                        _swipeController.forward();
-                      }
-                    },
-                    child: Transform.translate(
-                      offset: _dragOffset,
-                      child: Transform.rotate(
-                        angle: rotationAngle,
-                        child: Stack(
-                          fit: StackFit.expand,
-                          children: [
-                            SwipeCard(
-                              user: currentCardUser,
-                              isBackground: false,
-                              deviceLat: widget.deviceLat,
-                              deviceLon: widget.deviceLon,
+        return Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            // Cards Stack
+            Expanded(
+              child: Center(
+                child: SizedBox(
+                  height: cardH,
+                  width: cardW,
+                  child: Stack(
+                    clipBehavior: Clip.none,
+                    children: [
+                      // 1. Next card behind the active one (scaled & styled for 3D stack effect)
+                      if (nextCardUser != null)
+                        Positioned.fill(
+                          child: Transform.scale(
+                            scale: 0.93,
+                            child: Transform.translate(
+                              offset: const Offset(0, 14),
+                              child: SwipeCard(
+                                user: nextCardUser,
+                                isBackground: true,
+                                deviceLat: widget.deviceLat,
+                                deviceLon: widget.deviceLon,
+                              ),
                             ),
+                          ),
+                        ),
 
-                            // Dynamic translucent swipe overlays
-                            if (_dragOffset.dx > 20)
-                              Positioned(
-                                top: 40,
-                                left: 30,
-                                child: Transform.rotate(
-                                  angle: -0.15,
-                                  child: _buildSwipeDirectionTag(
-                                    label: 'LIKE 💖',
-                                    color: AppTheme.success,
+                      // 2. Active top card (draggable with rotation and direction overlays)
+                      Positioned.fill(
+                        child: GestureDetector(
+                          onPanStart: (_) {
+                            _swipeController.stop();
+                            setState(() {
+                              _isDragging = true;
+                            });
+                          },
+                          onPanUpdate: (details) {
+                            setState(() {
+                              _dragOffset += details.delta;
+                              _rotationAngle = (_dragOffset.dx / screenWidth) * 0.45;
+                            });
+                          },
+                          onPanEnd: (details) {
+                            setState(() {
+                              _isDragging = false;
+                            });
+
+                            // Trigger swipe if drag threshold is met (120px)
+                            if (_dragOffset.dx.abs() > 120) {
+                              final double velocity = details.velocity.pixelsPerSecond.dx;
+                              final double targetX = _dragOffset.dx > 0 
+                                  ? max(450.0, _dragOffset.dx + velocity * 0.2)
+                                  : min(-450.0, _dragOffset.dx + velocity * 0.2);
+
+                              _swipeStartOffset = _dragOffset;
+                              _swipeEndOffset = Offset(targetX, _dragOffset.dy);
+                              _swipeStartAngle = _rotationAngle;
+                              _swipeEndAngle = _dragOffset.dx > 0 ? 0.35 : -0.35;
+
+                              _swipeController.reset();
+                              _swipeController.forward();
+                            } else {
+                              // Snap back
+                              _swipeStartOffset = _dragOffset;
+                              _swipeEndOffset = Offset.zero;
+                              _swipeStartAngle = _rotationAngle;
+                              _swipeEndAngle = 0.0;
+
+                              _swipeController.reset();
+                              _swipeController.forward();
+                            }
+                          },
+                          child: Transform.translate(
+                            offset: _dragOffset,
+                            child: Transform.rotate(
+                              angle: rotationAngle,
+                              child: Stack(
+                                fit: StackFit.expand,
+                                children: [
+                                  SwipeCard(
+                                    user: currentCardUser,
+                                    isBackground: false,
+                                    deviceLat: widget.deviceLat,
+                                    deviceLon: widget.deviceLon,
                                   ),
-                                ),
+
+                                  // Dynamic translucent swipe overlays
+                                  if (_dragOffset.dx > 20)
+                                    Positioned(
+                                      top: 40,
+                                      left: 30,
+                                      child: Transform.rotate(
+                                        angle: -0.15,
+                                        child: _buildSwipeDirectionTag(
+                                          label: 'VIBE 💖',
+                                          color: AppTheme.success,
+                                        ),
+                                      ),
+                                    ),
+                                  if (_dragOffset.dx < -20)
+                                    Positioned(
+                                      top: 40,
+                                      right: 30,
+                                      child: Transform.rotate(
+                                        angle: 0.15,
+                                        child: _buildSwipeDirectionTag(
+                                          label: 'NOPE 💔',
+                                          color: AppTheme.error,
+                                        ),
+                                      ),
+                                    ),
+                                ],
                               ),
-                            if (_dragOffset.dx < -20)
-                              Positioned(
-                                top: 40,
-                                right: 30,
-                                child: Transform.rotate(
-                                  angle: 0.15,
-                                  child: _buildSwipeDirectionTag(
-                                    label: 'NOPE 💔',
-                                    color: AppTheme.error,
-                                  ),
-                                ),
-                              ),
-                          ],
+                            ),
+                          ),
                         ),
                       ),
-                    ),
+                    ],
                   ),
                 ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 20),
-
-          // Frosted glass swiper guide banner to occupy the layout gap!
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            decoration: BoxDecoration(
-              color: isDark ? Colors.white.withOpacity(0.06) : Colors.white.withOpacity(0.7),
-              borderRadius: BorderRadius.circular(50),
-              border: Border.all(
-                color: isDark ? Colors.white.withOpacity(0.1) : Colors.black.withOpacity(0.06),
-                width: 0.8,
               ),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withOpacity(isDark ? 0.05 : 0.02),
-                  blurRadius: 10,
-                  offset: const Offset(0, 4),
-                ),
-              ],
             ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                ShaderMask(
-                  shaderCallback: (b) => AppTheme.primaryGradient.createShader(b),
-                  child: const Icon(
-                    Icons.auto_awesome_rounded,
-                    size: 14,
-                    color: Colors.white,
+
+            const SizedBox(height: 10),
+
+            // Flower Action Buttons Row (Inspired by reference art direction!)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 6),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  // 1. Rewind Button (White Flower)
+                  _buildFlowerActionButton(
+                    icon: Icons.undo_rounded,
+                    backgroundColor: Colors.white.withValues(alpha: 0.9),
+                    iconColor: Colors.amber[800]!,
+                    size: 44,
+                    onTap: _triggerRewind,
+                    isEnabled: _history.isNotEmpty,
                   ),
-                ),
-                const SizedBox(width: 8),
-                Text(
-                  'Swipe Right to Vibe • Left to Skip',
-                  style: TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w800,
-                    color: isDark ? Colors.white70 : AppTheme.textSecondary,
-                    letterSpacing: -0.2,
+                  const SizedBox(width: 10),
+
+                  // 2. NOPE Button (White Flower)
+                  _buildFlowerActionButton(
+                    icon: Icons.close_rounded,
+                    backgroundColor: Colors.white,
+                    iconColor: const Color(0xFF0F172A),
+                    size: 54,
+                    onTap: () => _triggerSwipeButton(false),
+                    isEnabled: true,
                   ),
-                ),
-              ],
+                  const SizedBox(width: 10),
+
+                  // 3. SUPER LIKE Button (Cyan Flower)
+                  _buildFlowerActionButton(
+                    icon: Icons.star_rounded,
+                    backgroundColor: const Color(0xFF3B82F6),
+                    iconColor: Colors.white,
+                    size: 54,
+                    onTap: _triggerSuperLike,
+                    isEnabled: true,
+                  ),
+                  const SizedBox(width: 10),
+
+                  // 4. LIKE Button (Acid-Lime Flower - HERO BUTTON)
+                  _buildFlowerActionButton(
+                    icon: Icons.favorite_rounded,
+                    backgroundColor: const Color(0xFFE0FE10),
+                    iconColor: const Color(0xFF0F172A),
+                    size: 64,
+                    onTap: () => _triggerSwipeButton(true),
+                    isEnabled: true,
+                  ),
+                  const SizedBox(width: 10),
+
+                  // 5. CONFESSION / CHAT Button (White Flower)
+                  _buildFlowerActionButton(
+                    icon: Icons.chat_bubble_rounded,
+                    backgroundColor: Colors.white,
+                    iconColor: const Color(0xFF0F172A),
+                    size: 54,
+                    onTap: _showConfessionBottomSheet,
+                    isEnabled: true,
+                  ),
+                ],
+              ),
             ),
-          ),
+          ],
+        );
+      },
+    );
+  }
 
-          const SizedBox(height: 20),
-
-          // Glassmorphic Action Buttons Row
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
+  Widget _buildFlowerActionButton({
+    required IconData icon,
+    required Color backgroundColor,
+    required Color iconColor,
+    required double size,
+    required VoidCallback onTap,
+    required bool isEnabled,
+  }) {
+    return GestureDetector(
+      onTap: isEnabled
+          ? () {
+              HapticFeedback.mediumImpact();
+              onTap();
+            }
+          : null,
+      child: AnimatedOpacity(
+        duration: const Duration(milliseconds: 200),
+        opacity: isEnabled ? 1.0 : 0.35,
+        child: SizedBox(
+          width: size,
+          height: size,
+          child: Stack(
+            alignment: Alignment.center,
             children: [
-              // 1. Rewind Button
-              _buildRoundActionButton(
-                icon: Icons.undo_rounded,
-                iconColor: Colors.amber,
-                borderColor: Colors.amber.withOpacity(0.3),
-                glowColor: Colors.amber,
-                onTap: _triggerRewind,
-                isEnabled: _history.isNotEmpty,
-                isSmall: true,
+              CustomPaint(
+                size: Size(size, size),
+                painter: FlowerPainter(color: backgroundColor),
               ),
-              const SizedBox(width: 15),
-
-              // 2. NOPE Button
-              _buildRoundActionButton(
-                icon: Icons.close_rounded,
-                iconColor: AppTheme.error,
-                borderColor: AppTheme.error.withOpacity(0.3),
-                glowColor: AppTheme.error,
-                onTap: () => _triggerSwipeButton(false),
-                isEnabled: true,
-              ),
-              const SizedBox(width: 15),
-
-              // 3. SUPER LIKE Button (Instant Match!)
-              _buildRoundActionButton(
-                icon: Icons.star_rounded,
-                iconColor: AppTheme.primaryBlue,
-                borderColor: AppTheme.primaryBlue.withOpacity(0.3),
-                glowColor: AppTheme.primaryBlue,
-                onTap: _triggerSuperLike,
-                isEnabled: true,
-                isMedium: true,
-              ),
-              const SizedBox(width: 15),
-
-              // 4. ANONYMOUS CONFESSION Button
-              _buildRoundActionButton(
-                icon: Icons.lock_rounded,
-                iconColor: AppTheme.accentPurple,
-                borderColor: AppTheme.accentPurple.withOpacity(0.3),
-                glowColor: AppTheme.accentPurple,
-                onTap: _showConfessionBottomSheet,
-                isEnabled: true,
-                isMedium: true,
-              ),
-              const SizedBox(width: 15),
-
-              // 5. LIKE Button
-              _buildRoundActionButton(
-                icon: Icons.favorite_rounded,
-                iconColor: AppTheme.primaryGreen,
-                borderColor: AppTheme.primaryGreen.withOpacity(0.3),
-                glowColor: AppTheme.primaryGreen,
-                onTap: () => _triggerSwipeButton(true),
-                isEnabled: true,
+              Icon(
+                icon,
+                color: iconColor,
+                size: size * 0.42,
               ),
             ],
           ),
-        ],
+        ),
       ),
     );
   }
@@ -429,12 +436,12 @@ class _SwipeDeckState extends ConsumerState<SwipeDeck> with SingleTickerProvider
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 8),
       decoration: BoxDecoration(
-        color: Colors.black.withOpacity(0.75),
+        color: Colors.black.withValues(alpha: 0.75),
         borderRadius: BorderRadius.circular(12),
         border: Border.all(color: color, width: 2.5),
         boxShadow: [
           BoxShadow(
-            color: color.withOpacity(0.4),
+            color: color.withValues(alpha: 0.4),
             blurRadius: 16,
           ),
         ],
@@ -446,61 +453,6 @@ class _SwipeDeckState extends ConsumerState<SwipeDeck> with SingleTickerProvider
           fontSize: 22,
           fontWeight: FontWeight.w900,
           letterSpacing: 1,
-        ),
-      ),
-    );
-  }
-
-  Widget _buildRoundActionButton({
-    required IconData icon,
-    required Color iconColor,
-    required Color borderColor,
-    required Color glowColor,
-    required VoidCallback onTap,
-    required bool isEnabled,
-    bool isSmall = false,
-    bool isMedium = false,
-  }) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final double size = isSmall ? 46 : (isMedium ? 54 : 66);
-    return GestureDetector(
-      onTap: isEnabled ? onTap : null,
-      child: AnimatedOpacity(
-        duration: const Duration(milliseconds: 200),
-        opacity: isEnabled ? 1.0 : 0.3,
-        child: Container(
-          width: size,
-          height: size,
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            color: isDark ? Colors.white.withOpacity(0.08) : Colors.white.withOpacity(0.85),
-            border: Border.all(
-              color: isDark ? Colors.white.withOpacity(0.12) : Colors.black.withOpacity(0.07),
-              width: 1.5,
-            ),
-            boxShadow: [
-              if (isEnabled) ...[
-                BoxShadow(
-                  color: glowColor.withOpacity(isDark ? 0.15 : 0.22),
-                  blurRadius: 16,
-                  spreadRadius: 1,
-                  offset: const Offset(0, 4),
-                ),
-                BoxShadow(
-                  color: Colors.black.withOpacity(isDark ? 0.15 : 0.04),
-                  blurRadius: 8,
-                  offset: const Offset(0, 2),
-                ),
-              ],
-            ],
-          ),
-          child: Center(
-            child: Icon(
-              icon,
-              color: iconColor,
-              size: isSmall ? 20 : (isMedium ? 24 : 28),
-            ),
-          ),
         ),
       ),
     );
@@ -851,3 +803,35 @@ class _SwipeDeckState extends ConsumerState<SwipeDeck> with SingleTickerProvider
     );
   }
 }
+
+// ─── Custom Flower Painter for Reference-Style Petal Buttons ────────────────
+
+class FlowerPainter extends CustomPainter {
+  final Color color;
+
+  FlowerPainter({required this.color});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = color
+      ..style = PaintingStyle.fill;
+
+    final w = size.width;
+    final h = size.height;
+    final cx = w / 2;
+    final cy = h / 2;
+    final r = w * 0.36;
+
+    // Draw 4 overlapping rounded petals at top, bottom, left, right + center circle
+    canvas.drawCircle(Offset(cx, cy), r * 0.96, paint);
+    canvas.drawCircle(Offset(cx - r * 0.44, cy - r * 0.44), r * 0.65, paint);
+    canvas.drawCircle(Offset(cx + r * 0.44, cy - r * 0.44), r * 0.65, paint);
+    canvas.drawCircle(Offset(cx - r * 0.44, cy + r * 0.44), r * 0.65, paint);
+    canvas.drawCircle(Offset(cx + r * 0.44, cy + r * 0.44), r * 0.65, paint);
+  }
+
+  @override
+  bool shouldRepaint(covariant FlowerPainter oldDelegate) => oldDelegate.color != color;
+}
+

@@ -1,17 +1,22 @@
-import 'dart:ui';
+import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:geolocator/geolocator.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../../core/models/user_model.dart';
-import '../../../core/models/community_model.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/providers/app_state_provider.dart';
-import '../../../shared/widgets/image_with_fallback.dart';
+import '../../../core/providers/firestore_provider.dart';
+import '../../../core/providers/firebase_auth_provider.dart';
 import '../../../shared/widgets/background_orbs.dart';
 import '../../../core/utils/location_helper.dart';
-import '../widgets/swipe_deck.dart';
+import '../../../core/utils/heart_queue_engine.dart';
+import '../widgets/discover_tab.dart';
+import '../widgets/soul_mode_tab.dart';
+import '../widgets/nearly_souls_tab.dart';
+import '../widgets/match_overlay.dart';
 import 'liked_history_screen.dart';
 
 class MatchScreen extends ConsumerStatefulWidget {
@@ -22,51 +27,123 @@ class MatchScreen extends ConsumerStatefulWidget {
 }
 
 class _MatchScreenState extends ConsumerState<MatchScreen>
-    with SingleTickerProviderStateMixin {
+    with TickerProviderStateMixin {
   late TabController _tabController;
+  final GlobalKey<SoulModeTabState> _soulModeKey = GlobalKey<SoulModeTabState>();
 
   double? _deviceLat;
   double? _deviceLon;
-  bool _isLocating = false;
-  final Set<String> _localSkippedIds = {};
+
+  // ── HeartQueue™ Engine ──────────────────────────────────────────────────────────
+  final HeartQueueEngine _engine = HeartQueueEngine();
+
+  // ── HeartQueue™ Algorithm State ────────────────────────────────────────────
+  // Tier 1: Explicitly skipped ("Show me others") — permanent, not undoable
+  final Set<String> _permanentSkippedIds = {};
+  // Tier 2: Likes confirmed (undo window closed) — permanent
+  final Set<String> _confirmedLikedIds = {};
+  // Tier 3: Pending like transaction — undoable within 3s window
+  _LikeTx? _pendingTx;
+  // Tier 4: Paired profiles waiting to be shuffled back into queue
+  // Maps userId → how many more "swipe events" to wait before re-showing
+  final Map<String, int> _shuffleBackPool = {};
+  // Counts every like/skip action so we can decrement shuffle counters
+  int _swipeCount = 0;
+  // Session exclusion set: persists liked+skipped IDs across widget rebuilds
+  // so the engine can never re-rank a processed profile back to the top.
+  final Set<String> _sessionExcludedIds = {};
+
+  // Derived: all IDs currently hidden from the queue
+  Set<String> get _effectiveExcludedIds {
+    final ids = <String>{
+      ..._permanentSkippedIds,
+      ..._confirmedLikedIds,
+      ..._sessionExcludedIds,
+    };
+    if (_pendingTx != null) {
+      ids.add(_pendingTx!.liked.id);
+      if (_pendingTx!.pairedWith != null) ids.add(_pendingTx!.pairedWith!.id);
+    }
+    // Also hide profiles still waiting in the shuffle-back pool
+    ids.addAll(_shuffleBackPool.keys);
+    return ids;
+  }
+
+  /// Increments swipe counter and releases any shuffle-back profiles whose
+  /// countdown has reached zero, making them visible in the queue again.
+  void _tickSwipeCounter() {
+    _swipeCount++;
+    final toRelease = <String>[];
+    _shuffleBackPool.forEach((id, remaining) {
+      if (_swipeCount >= remaining) toRelease.add(id);
+    });
+    if (toRelease.isNotEmpty && mounted) {
+      setState(() {
+        for (final id in toRelease) _shuffleBackPool.remove(id);
+      });
+    }
+  }
+
+  // Match overlay state
+  bool _showMatchOverlay = false;
+  UserModel? _matchedUser;
+
+  // ── Undo animation state ────────────────────────────────────────────────────
+  UserModel? _undoUser;
+  bool _showUndo = false;
+  late AnimationController _undoSlideController;
+  late Animation<Offset> _undoSlideAnim;
+  late AnimationController _undoCountdownController;
+  late Animation<double> _undoCountdownAnim;
 
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 2, vsync: this);
+    _tabController = TabController(length: 4, vsync: this);
+    _tabController.addListener(() => setState(() {}));
     _fetchDeviceLocation();
+
+    _undoSlideController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 380),
+    );
+    _undoSlideAnim = Tween<Offset>(
+      begin: const Offset(0, 1.6),
+      end: Offset.zero,
+    ).animate(CurvedAnimation(
+      parent: _undoSlideController,
+      curve: Curves.easeOutBack,
+    ));
+
+    _undoCountdownController = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 3),
+    );
+    _undoCountdownAnim = Tween<double>(begin: 1.0, end: 0.0).animate(
+      CurvedAnimation(parent: _undoCountdownController, curve: Curves.linear),
+    );
   }
 
   @override
   void dispose() {
     _tabController.dispose();
+    _undoSlideController.dispose();
+    _undoCountdownController.dispose();
     super.dispose();
   }
 
   Future<void> _fetchDeviceLocation() async {
     if (!mounted) return;
-    setState(() => _isLocating = true);
-
     try {
       bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
-      if (!serviceEnabled) {
-        if (mounted) setState(() => _isLocating = false);
-        return;
-      }
+      if (!serviceEnabled) return;
 
       LocationPermission permission = await Geolocator.checkPermission();
       if (permission == LocationPermission.denied) {
         permission = await Geolocator.requestPermission();
-        if (permission == LocationPermission.denied) {
-          if (mounted) setState(() => _isLocating = false);
-          return;
-        }
+        if (permission == LocationPermission.denied) return;
       }
-
-      if (permission == LocationPermission.deniedForever) {
-        if (mounted) setState(() => _isLocating = false);
-        return;
-      }
+      if (permission == LocationPermission.deniedForever) return;
 
       final position = await Geolocator.getCurrentPosition(
         desiredAccuracy: LocationAccuracy.low,
@@ -77,38 +154,39 @@ class _MatchScreenState extends ConsumerState<MatchScreen>
         setState(() {
           _deviceLat = position.latitude;
           _deviceLon = position.longitude;
-          _isLocating = false;
         });
       }
     } catch (e) {
       debugPrint('Failed to get location: $e');
-      if (mounted) setState(() => _isLocating = false);
     }
   }
 
-  @override
-  Widget build(BuildContext context) {
-    final users = ref.watch(matchQueueProvider);
-    final currentUser = ref.watch(currentUserProvider);
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-
-    final minAge = ref.watch(filterMinAgeProvider);
-    final maxAge = ref.watch(filterMaxAgeProvider);
-    final maxDistance = ref.watch(filterMaxDistanceProvider);
-    final matchIrrespective = ref.watch(filterMatchIrrespectiveProvider);
-
-    // Dynamic real-time filter based on age and geographical distance in kilometers
-    final filteredUsers = users.where((user) {
-      // Don't show users the current user already follows (already liked/followed)
+  List<UserModel> _filteredUsers(
+    List<UserModel> all,
+    UserModel currentUser,
+    double minAge,
+    double maxAge,
+    double maxDistance,
+    bool matchIrrespective,
+  ) {
+    final excluded = _effectiveExcludedIds;
+    // Also pull session-unliked IDs from provider so undoes are respected
+    final unlikedIds = ref.read(unlikedUserIdsProvider);
+    // dislikedUsers is persisted in Firestore — permanent across sessions
+    final dislikedUsers = currentUser.dislikedUsers.toSet();
+    return all.where((user) {
+      // Already followed / liked — never show again
       if (currentUser.following.contains(user.id)) return false;
-
-      // Don't show users already skipped in this session
-      if (_localSkippedIds.contains(user.id)) return false;
-
-      // Age check
+      // Excluded by algorithm state (skipped, liked, pending, shuffle-pool)
+      if (excluded.contains(user.id)) return false;
+      // Excluded by session exclusion set (persists across builds)
+      if (_sessionExcludedIds.contains(user.id)) return false;
+      // Explicitly unliked this session
+      if (unlikedIds.contains(user.id)) return false;
+      // Permanently disliked (persisted in Firestore)
+      if (dislikedUsers.contains(user.id)) return false;
       if (user.age < minAge || user.age > maxAge) return false;
 
-      // Real distance check using LocationHelper in kilometers (with real GPS support)
       final distance = LocationHelper.getDistanceKm(
         lat1: _deviceLat,
         lon1: _deviceLon,
@@ -121,470 +199,615 @@ class _MatchScreenState extends ConsumerState<MatchScreen>
       if (matchIrrespective) return true;
       return distance <= maxDistance;
     }).toList();
+  }
 
-    // Split users
-    final nearbyUsers = filteredUsers.take(10).toList();
+  // ──────────────────────────────────────────────────────────────────────────
+  // HeartQueue™ Core: Like / Undo / Confirm / Skip
+  // ──────────────────────────────────────────────────────────────────────────
+
+  /// Called when user taps a profile card.
+  /// [pairedWith] is the OTHER card shown in the same pair — it will be
+  /// temporarily hidden during the 3-second undo window, then permanently
+  /// skipped when the window closes. On undo, BOTH are restored.
+  Future<void> _onLike(UserModel targetUser, {UserModel? pairedWith}) async {
+    final currentUser = ref.read(currentUserProvider);
+    final authUid = ref.read(authStateChangesProvider).asData?.value?.uid;
+    final currentUserId =
+        currentUser.id.isNotEmpty ? currentUser.id : (authUid ?? '');
+    if (currentUserId.isEmpty) return;
+
+    final alreadyConfirmed = _confirmedLikedIds.contains(targetUser.id) ||
+        currentUser.following.contains(targetUser.id) ||
+        currentUser.dislikedUsers.contains(targetUser.id); // permanently disliked
+    if (alreadyConfirmed) return;
+
+    // ── Step 1: Commit any prior pending tx (its undo window just closed) ──
+    _commitPendingTransaction(animated: false);
+
+    // Tick swipe counter (releases shuffle-back profiles as needed)
+    _tickSwipeCounter();
+
+    // ── Step 2: Register new pending transaction ────────────────────────────
+    final tx = _LikeTx(
+      liked: targetUser,
+      pairedWith: pairedWith,
+      at: DateTime.now(),
+    );
+
+    // ── Step 3: Show undo bar instantly (optimistic UI) ────────────────────
+    // Cache profile for Likes history screen immediately
+    ref.read(likedUsersCacheProvider.notifier).update((map) => {...map, targetUser.id: targetUser});
+    ref.read(sessionLikedUserIdsProvider.notifier).update(
+          (list) => [targetUser.id, ...list.where((id) => id != targetUser.id)],
+        );
+
+    _undoSlideController.reset();
+    _undoCountdownController.reset();
+    if (mounted) {
+      setState(() {
+        _pendingTx = tx;
+        _undoUser = targetUser;
+        _showUndo = true;
+      });
+    }
+    _undoSlideController.forward();
+    _undoCountdownController.forward().then((_) {
+      // Timer expired → commit the transaction
+      if (mounted && _pendingTx?.liked.id == targetUser.id) {
+        _commitPendingTransaction();
+      }
+    });
+
+    // ── Step 4: Write to Firestore in background ───────────────────────────
+    _writeLikeToFirestore(targetUser, currentUserId, currentUser);
+  }
+
+  /// Finalises a pending transaction after the undo window closes:
+  /// • moves liked user → _confirmedLikedIds (permanent)
+  /// • moves paired user → _shuffleBackPool (re-shown after 3–8 swipes)
+  void _commitPendingTransaction({bool animated = true}) {
+    if (_pendingTx == null) return;
+    final tx = _pendingTx!;
+    if (mounted) {
+      setState(() {
+        _confirmedLikedIds.add(tx.liked.id);
+        _sessionExcludedIds.add(tx.liked.id); // persist across rebuilds
+        if (tx.pairedWith != null) {
+          // Schedule the paired profile to reappear after 3–8 more swipes
+          final int delay = 3 + Random().nextInt(6);
+          _shuffleBackPool[tx.pairedWith!.id] = _swipeCount + delay;
+        }
+        _pendingTx = null;
+        if (!animated) _showUndo = false;
+      });
+    }
+    if (animated) _dismissUndo();
+  }
+
+  /// Undo the pending like:
+  /// • clears the pending tx → both liked AND paired users return to queue
+  /// • reverses Firestore writes
+  Future<void> _onUndo() async {
+    if (_pendingTx == null) return;
+    final tx = _pendingTx!;
+
+    _undoCountdownController.stop();
+
+    // Revert from optimistic session likes
+    ref.read(sessionLikedUserIdsProvider.notifier).update(
+          (list) => list.where((id) => id != tx.liked.id).toList(),
+        );
+    ref.read(unlikedUserIdsProvider.notifier).update(
+          (set) => {...set, tx.liked.id},
+        );
+
+    // If on Soul Mode tab, step card back to the undone profile
+    _soulModeKey.currentState?.stepBack();
+
+    // Clear pending → queue filter recalculates, both cards reappear
+    if (mounted) setState(() => _pendingTx = null);
+    _dismissUndo();
+
+    // Reverse Firestore write
+    final currentUser = ref.read(currentUserProvider);
+    final authUid = ref.read(authStateChangesProvider).asData?.value?.uid;
+    final currentUserId =
+        currentUser.id.isNotEmpty ? currentUser.id : (authUid ?? '');
+    if (currentUserId.isEmpty) return;
+
+    try {
+      final db = firestoreProvider;
+      final batch = db.batch();
+      batch.update(db.collection('users').doc(currentUserId), {
+        'following': FieldValue.arrayRemove([tx.liked.id]),
+      });
+      batch.update(db.collection('users').doc(tx.liked.id), {
+        'followers': FieldValue.arrayRemove([currentUserId]),
+        'likedBy': FieldValue.arrayRemove([currentUserId]),
+      });
+      await batch.commit();
+      debugPrint('[HeartQueue] Undo: restored ${tx.liked.name}'
+          '${tx.pairedWith != null ? ' + ${tx.pairedWith!.name}' : ''}');
+    } catch (e) {
+      debugPrint('[HeartQueue] Undo error: $e');
+    }
+  }
+
+  /// Permanent skip — used by "Show me others" (not undoable).
+  void _onSkip(UserModel user) {
+    // Commit pending if user skips either card in the active pair
+    if (_pendingTx?.pairedWith?.id == user.id ||
+        _pendingTx?.liked.id == user.id) {
+      _commitPendingTransaction(animated: false);
+    }
+    // Notify engine (enables quick-skip velocity detection)
+    _engine.onSkip(user);
+    // Tick swipe counter (releases shuffle-back profiles as needed)
+    _tickSwipeCounter();
+    setState(() {
+      _permanentSkippedIds.add(user.id);
+      _sessionExcludedIds.add(user.id); // persist across rebuilds
+    });
+  }
+
+  /// Async Firestore write (separated for clarity).
+  Future<void> _writeLikeToFirestore(
+    UserModel targetUser,
+    String currentUserId,
+    UserModel currentUser,
+  ) async {
+    // Notify engine about the like (behavioral learning)
+    _engine.onLike(targetUser);
+    try {
+      final db = firestoreProvider;
+      final batch = db.batch();
+      batch.set(
+        db.collection('users').doc(currentUserId),
+        {'following': FieldValue.arrayUnion([targetUser.id])},
+        SetOptions(merge: true),
+      );
+      batch.set(
+        db.collection('users').doc(targetUser.id),
+        {
+          'followers': FieldValue.arrayUnion([currentUserId]),
+          'likedBy': FieldValue.arrayUnion([currentUserId]),
+        },
+        SetOptions(merge: true),
+      );
+      await batch.commit();
+
+      await sendNotification(
+        userId: targetUser.id,
+        senderId: currentUser.id,
+        senderName: currentUser.name,
+        senderAvatar: currentUser.avatarUrl,
+        type: 'like',
+        title: '${currentUser.name} liked you! 💖',
+        body: 'Check them out before someone else does!',
+      );
+
+      final isMutual = targetUser.following.contains(currentUser.id) ||
+          targetUser.likedBy.contains(currentUser.id) ||
+          currentUser.likedBy.contains(targetUser.id);
+
+      if (isMutual && mounted) {
+        await sendNotification(
+          userId: targetUser.id,
+          senderId: currentUser.id,
+          senderName: currentUser.name,
+          senderAvatar: currentUser.avatarUrl,
+          type: 'match',
+          title: "It's a match! 🎉",
+          body: 'You and ${currentUser.name} have matched! Say hello!',
+        );
+        if (mounted) {
+          setState(() {
+            _showMatchOverlay = true;
+            _matchedUser = targetUser;
+          });
+        }
+      }
+    } catch (e) {
+      debugPrint('[HeartQueue] Firestore write error: $e');
+    }
+  }
+
+  void _dismissUndo() {
+    _undoSlideController.reverse().then((_) {
+      if (mounted) setState(() => _showUndo = false);
+    });
+  }
+
+  void _dismissMatchOverlay() {
+    setState(() {
+      _showMatchOverlay = false;
+      _matchedUser = null;
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final users = ref.watch(matchQueueProvider);
+    final currentUser = ref.watch(currentUserProvider);
+
+    final minAge           = ref.watch(filterMinAgeProvider);
+    final maxAge           = ref.watch(filterMaxAgeProvider);
+    final maxDistance      = ref.watch(filterMaxDistanceProvider);
+    final matchIrrespective = ref.watch(filterMatchIrrespectiveProvider);
+
+    // ── Step 1: Basic eligibility filter ───────────────────────────────────────
+    final filtered = _filteredUsers(
+        users, currentUser, minAge, maxAge, maxDistance, matchIrrespective);
+
+    // ── Step 2: HeartQueue™ smart ranking ────────────────────────────────────
+    // Engine scores by: mutual attraction, interests, proximity, age,
+    // profile completeness, vibe affinity (learned), online/verified bonuses.
+    final ranked = _engine.rankedUsers(
+      currentUser: currentUser,
+      candidates: filtered,
+      deviceLat: _deviceLat,
+      deviceLon: _deviceLon,
+    );
+
+    // ── Step 3: Curate Discover pair (top-scored + contrasting vibe) ───────
+    final curatedPair = _engine.curateDiscoverPair(ranked);
+    final discoverList = [
+      ...curatedPair,
+      ...ranked.where((u) => !curatedPair.any((c) => c.id == u.id)),
+    ];
+
+    final likesCount = currentUser.likedBy.length;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Scaffold(
-      backgroundColor: isDark ? AppTheme.darkBg : const Color(0xFFF8FAFC),
+      backgroundColor: isDark ? AppTheme.darkBg : AppTheme.lightBg,
       body: Stack(
         children: [
           const BackgroundOrbs(),
           SafeArea(
             bottom: false,
-            child: Column(
-              children: [
-                // ── Header ──────────────────────────────────────────────
-                _buildHeader(),
-
-                // ── Glassmorphic Tab Bar ─────────────────────────────────
-                _buildGlassTabBar(isDark),
-
-                // ── Tab Content ──────────────────────────────────────────
+            child: Align(
+              alignment: Alignment.topCenter,
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 440),
+                child: Padding(
+                  padding: const EdgeInsets.only(bottom: 74),
+                  child: Column(
+                    children: [
+                      _buildHeader(currentUser, isDark),
+                      _buildTabBar(likesCount, isDark),
+                      const SizedBox(height: 6),
                 Expanded(
                   child: TabBarView(
                     controller: _tabController,
                     physics: const NeverScrollableScrollPhysics(),
                     children: [
-                      // ── Tab 0: Discover ──────────────────────────────
-                      RefreshIndicator(
-                        onRefresh: () async {
-                          ref.read(matchQueueProvider.notifier).reset();
-                          await _fetchDeviceLocation();
-                        },
-                        color: AppTheme.primaryBlue,
-                        child: SingleChildScrollView(
-                          physics: const BouncingScrollPhysics(),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              // Location Alert Banner if unset and no GPS active
-                              if ((currentUser.location == null ||
-                                      currentUser.location!.trim().isEmpty) &&
-                                  _deviceLat == null)
-                                _buildLocationAlertBanner(),
-
-                              // Swipe to Match Section
-                              _buildSectionHeaderWithIcon(
-                                icon: Icons.explore_rounded,
-                                iconColor: const Color(0xFF6B4EE6),
-                                title: 'Swipe to Match ✨',
-                                titleColor: const Color(0xFF6B4EE6),
-                                trailing: _buildMatchModeDropdown(isDark),
-                              ),
-                              SwipeDeck(
-                                users: filteredUsers,
-                                deviceLat: _deviceLat,
-                                deviceLon: _deviceLon,
-                                onSwipeLeft: (user) {
-                                  setState(() {
-                                    _localSkippedIds.add(user.id);
-                                  });
-                                },
-                                onSwipeRight: (user) {
-                                  final currentUser =
-                                      ref.read(currentUserProvider);
-                                  if (currentUser.id.isNotEmpty &&
-                                      !currentUser.following
-                                          .contains(user.id)) {
-                                    ref
-                                        .read(socialProvider.notifier)
-                                        .toggleFollow(
-                                          currentUserId: currentUser.id,
-                                          targetUserId: user.id,
-                                          isCurrentlyFollowing: false,
-                                        )
-                                        .catchError((e) {
-                                      debugPrint(
-                                          'Failed to auto-follow user: $e');
-                                    });
-                                  }
-                                },
-                              ),
-
-                              const SizedBox(height: 24),
-
-                              // Nearby Souls Section
-                              _buildSectionHeaderWithIcon(
-                                icon: Icons.location_on,
-                                iconColor: const Color(0xFFFF7A59),
-                                title: 'Nearby Souls',
-                                titleColor: const Color(0xFF6B4EE6),
-                              ),
-                              _buildNearbyList(nearbyUsers),
-                              SizedBox(height: MediaQuery.of(context).padding.bottom + 120),
-                            ],
-                          ),
-                        ),
+                      DiscoverTab(
+                        users: discoverList,  // curated pair at top
+                        deviceLat: _deviceLat,
+                        deviceLon: _deviceLon,
+                        onLike: _onLike,
+                        onSkip: _onSkip,
                       ),
-
-                      // ── Tab 1: Liked History ──────────────────────────
+                      SoulModeTab(
+                        key: _soulModeKey,
+                        users: ranked,        // engine-ranked
+                        onLike: _onLike,
+                        onSkip: _onSkip,
+                      ),
                       const LikedHistoryScreen(),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildGlassTabBar(bool isDark) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 0, 20, 12),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(20),
-        child: BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: 16, sigmaY: 16),
-          child: Container(
-            decoration: BoxDecoration(
-              color: isDark
-                  ? Colors.white.withOpacity(0.08)
-                  : Colors.white.withOpacity(0.45),
-              borderRadius: BorderRadius.circular(20),
-              border: Border.all(
-                color: isDark
-                    ? Colors.white.withOpacity(0.12)
-                    : Colors.white.withOpacity(0.75),
-                width: 1.0,
-              ),
-            ),
-            child: TabBar(
-              controller: _tabController,
-              indicatorSize: TabBarIndicatorSize.tab,
-              dividerColor: Colors.transparent,
-              indicator: BoxDecoration(
-                borderRadius: BorderRadius.circular(16),
-                gradient: const LinearGradient(
-                  colors: [AppTheme.primaryBlue, Color(0xFF6B4EE6)],
-                ),
-                boxShadow: [
-                  BoxShadow(
-                    color: AppTheme.primaryBlue.withOpacity(0.35),
-                    blurRadius: 10,
-                    offset: const Offset(0, 3),
-                  ),
-                ],
-              ),
-              labelColor: Colors.white,
-              unselectedLabelColor:
-                  isDark ? Colors.white60 : Colors.black54,
-              labelStyle: const TextStyle(
-                fontSize: 13.5,
-                fontWeight: FontWeight.w800,
-                letterSpacing: -0.2,
-              ),
-              unselectedLabelStyle: const TextStyle(
-                fontSize: 13.5,
-                fontWeight: FontWeight.w600,
-              ),
-              tabs: const [
-                Tab(
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(Icons.explore_rounded, size: 16),
-                      SizedBox(width: 6),
-                      Text('Discover'),
-                    ],
-                  ),
-                ),
-                Tab(
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(Icons.favorite_rounded, size: 16),
-                      SizedBox(width: 6),
-                      Text('Liked'),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildLocationAlertBanner() {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: isDark 
-              ? [AppTheme.primaryBlue.withOpacity(0.15), const Color(0xFF6B4EE6).withOpacity(0.15)]
-              : [AppTheme.primaryBlue.withOpacity(0.08), const Color(0xFF6B4EE6).withOpacity(0.08)],
-        ),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(
-          color: AppTheme.primaryBlue.withOpacity(0.3),
-          width: 1.0,
-        ),
-      ),
-      child: Row(
-        children: [
-          Container(
-            padding: const EdgeInsets.all(10),
-            decoration: BoxDecoration(
-              color: AppTheme.primaryBlue.withOpacity(0.15),
-              shape: BoxShape.circle,
-            ),
-            child: const Icon(Icons.location_off_rounded, color: AppTheme.primaryBlue, size: 22),
-          ),
-          const SizedBox(width: 14),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Unlock Exact Distance 📍',
-                  style: TextStyle(
-                    fontWeight: FontWeight.bold,
-                    fontSize: 15,
-                    color: isDark ? Colors.white : AppTheme.textPrimary,
-                  ),
-                ),
-                const SizedBox(height: 3),
-                Text(
-                  'Set your city in profile to see precise distance to other souls.',
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: isDark ? Colors.white70 : AppTheme.textSecondary,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          IconButton(
-            onPressed: () => context.push('/profile/edit'),
-            icon: const Icon(Icons.arrow_forward_ios_rounded, size: 16, color: AppTheme.primaryBlue),
-          ),
-        ],
-      ),
-    );
-  }
-
-
-  Widget _buildHeader() {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final currentUser = ref.watch(currentUserProvider);
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 20, 16, 8),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.center,
-        children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                ShaderMask(
-                  shaderCallback: (b) => AppTheme.primaryGradient.createShader(b),
-                  child: const Text(
-                    'Discover 💫',
-                    style: TextStyle(
-                      fontSize: 30,
-                      fontWeight: FontWeight.w900,
-                      color: Colors.white,
-                      letterSpacing: -1,
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  _isLocating ? 'Determining your GPS... 📍' : 'Find your perfect vibe today',
-                  style: TextStyle(
-                     fontSize: 14,
-                     color: isDark ? Colors.white60 : AppTheme.textSecondary,
-                     fontWeight: FontWeight.w500,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(width: 4),
-          GestureDetector(
-            onTap: () => context.push('/profile'),
-            child: Stack(
-              children: [
-                Container(
-                  width: 40,
-                  height: 40,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    gradient: AppTheme.primaryGradient,
-                    border: Border.all(
-                      color: isDark ? Colors.white24 : Colors.white,
-                      width: 2,
-                    ),
-                    boxShadow: [
-                      BoxShadow(
-                        color: AppTheme.primaryBlue.withOpacity(0.3),
-                        blurRadius: 10,
-                        offset: const Offset(0, 3),
+                      NearlySoulsTab(
+                        users: ranked,        // engine-ranked
+                        onLike: _onLike,
                       ),
                     ],
                   ),
-                  child: ClipOval(
-                    child: currentUser.avatarUrl != null
-                        ? Image.network(currentUser.avatarUrl!, fit: BoxFit.cover)
-                        : const Center(child: Text('😎', style: TextStyle(fontSize: 20))),
-                  ),
-                ),
-                Positioned(
-                  right: 0,
-                  bottom: 0,
-                  child: Container(
-                    width: 12,
-                    height: 12,
-                    decoration: BoxDecoration(
-                      color: AppTheme.success,
-                      shape: BoxShape.circle,
-                      border: Border.all(color: Colors.white, width: 2),
-                    ),
-                  ),
                 ),
               ],
             ),
           ),
+        ),
+      ),
+    ),
+
+          // ── Match celebration overlay ─────────────────────────────────
+          if (_showMatchOverlay && _matchedUser != null)
+            MatchOverlay(
+              currentUser: currentUser,
+              matchedUser: _matchedUser!,
+              onSendMessage: () {
+                _dismissMatchOverlay();
+                final chatId =
+                    'chat_${currentUser.id}_${_matchedUser!.id}';
+                context.push('/chats/$chatId', extra: {
+                  'name': _matchedUser!.name,
+                  'avatarUrl': _matchedUser!.avatarUrl,
+                  'isOnline': _matchedUser!.isOnline,
+                });
+              },
+              onDismiss: _dismissMatchOverlay,
+            ),
+
+          // ── Undo Like button (3-second animated toast) ────────────────
+          if (_showUndo && _undoUser != null)
+            Positioned(
+              bottom: 90,
+              left: 20,
+              right: 20,
+              child: SlideTransition(
+                position: _undoSlideAnim,
+                child: _UndoLikeBar(
+                  userName: _undoUser!.name,
+                  countdownAnim: _undoCountdownAnim,
+                  isDark: isDark,
+                  onUndo: _onUndo,
+                  onDismiss: _dismissUndo,
+                ),
+              ),
+            ),
         ],
       ),
     );
   }
 
-  Widget _buildSectionHeaderWithIcon({
-    required IconData icon,
-    required Color iconColor,
-    required String title,
-    required Color titleColor,
-    Widget? trailing,
-  }) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
+  // ── Header ─────────────────────────────────────────────────────────────────
+
+  Widget _buildHeader(UserModel currentUser, bool isDark) {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 20, 20, 10),
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
       child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Container(
-            padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(
-              color: iconColor.withOpacity(0.12),
-              borderRadius: BorderRadius.circular(12),
+          Text(
+            'Hearts',
+            style: TextStyle(
+              fontSize: 24,
+              fontWeight: FontWeight.w900,
+              color: isDark ? Colors.white : AppTheme.textPrimary,
+              letterSpacing: -0.4,
             ),
-            child: Icon(icon, color: iconColor, size: 20),
           ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Text(
-              title,
-              style: TextStyle(
-                fontSize: 20,
-                fontWeight: FontWeight.w900,
-                color: isDark ? Colors.white : AppTheme.textPrimary,
-                letterSpacing: -0.5,
+          GestureDetector(
+            onTap: _showFilters,
+            child: Container(
+              width: 36,
+              height: 36,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: isDark
+                    ? Colors.white.withValues(alpha: 0.08)
+                    : Colors.black.withValues(alpha: 0.05),
+                border: Border.all(
+                  color: isDark
+                      ? Colors.white.withValues(alpha: 0.12)
+                      : Colors.black.withValues(alpha: 0.08),
+                  width: 0.8,
+                ),
+              ),
+              child: Icon(
+                Icons.more_horiz_rounded,
+                size: 20,
+                color: isDark ? Colors.white70 : AppTheme.textPrimary,
               ),
             ),
           ),
-          if (trailing != null) trailing,
         ],
       ),
     );
   }
 
-  Widget _buildNearbyList(List<UserModel> users) {
-    if (users.isEmpty) return const SizedBox(height: 140, child: Center(child: Text('No users nearby')));
-    
-    return SizedBox(
-      height: 160,
-      child: ListView.builder(
-        padding: const EdgeInsets.symmetric(horizontal: 14),
+  // ── 4-Tab Pill Bar ─────────────────────────────────────────────────────────
+
+  Widget _buildTabBar(int likesCount, bool isDark) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(14, 0, 14, 0),
+      child: SingleChildScrollView(
         scrollDirection: Axis.horizontal,
-        physics: const BouncingScrollPhysics(),
-        itemCount: users.length,
-        itemBuilder: (context, index) {
-          return _NearbyCard(
-            user: users[index],
-            deviceLat: _deviceLat,
-            deviceLon: _deviceLon,
-          );
-        },
+        child: Row(
+          children: [
+            _buildTabPill(0, 'Discover', isDark),
+            const SizedBox(width: 6),
+            _buildTabPill(1, 'Soul Mode', isDark),
+            const SizedBox(width: 6),
+            _buildLikesPill(likesCount, isDark),
+            const SizedBox(width: 6),
+            _buildTabPill(3, 'Nearly Souls', isDark),
+          ],
+        ),
       ),
     );
   }
 
-  Widget _buildMatchModeDropdown(bool isDark) {
-    final matchIrrespective = ref.watch(filterMatchIrrespectiveProvider);
-    return Container(
-      padding: const EdgeInsets.only(left: 10, right: 6),
-      height: 36, // Compact height for perfect vertical centering in the row
-      decoration: BoxDecoration(
-        color: isDark ? Colors.white.withOpacity(0.08) : Colors.white.withOpacity(0.85),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: isDark ? Colors.white.withOpacity(0.12) : Colors.black.withOpacity(0.07),
-          width: 1.0,
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: AppTheme.primaryBlue.withOpacity(0.05),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
+  Widget _buildTabPill(int index, String label, bool isDark) {
+    final active = _tabController.index == index;
+    return GestureDetector(
+      onTap: () {
+        HapticFeedback.selectionClick();
+        _tabController.index = index;
+      },
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 220),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+        decoration: BoxDecoration(
+          gradient: active
+              ? const LinearGradient(
+                  colors: [Color(0xFF4F75FF), Color(0xFF8B5CF6)],
+                )
+              : null,
+          color: active
+              ? null
+              : (isDark ? const Color(0xFF161228) : Colors.white),
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(
+            color: active
+                ? Colors.transparent
+                : (isDark
+                    ? Colors.white.withValues(alpha: 0.09)
+                    : Colors.black.withValues(alpha: 0.08)),
+            width: 0.8,
           ),
-        ],
-      ),
-      child: DropdownButtonHideUnderline(
-        child: DropdownButton<bool>(
-          value: matchIrrespective,
-          isDense: true, // Extremely compact layout to avoid text squishing
-          icon: const Icon(Icons.keyboard_arrow_down_rounded, color: AppTheme.primaryBlue, size: 18),
-          dropdownColor: isDark ? AppTheme.darkSurface : Colors.white,
-          borderRadius: BorderRadius.circular(16),
+          boxShadow: active
+              ? [
+                  BoxShadow(
+                    color: const Color(0xFF4F75FF).withValues(alpha: 0.35),
+                    blurRadius: 12,
+                    offset: const Offset(0, 3),
+                  )
+                ]
+              : [
+                  if (!isDark)
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.04),
+                      blurRadius: 6,
+                      offset: const Offset(0, 2),
+                    ),
+                ],
+        ),
+        child: Text(
+          label,
           style: TextStyle(
             fontSize: 12.5,
-            fontWeight: FontWeight.w800,
-            color: isDark ? Colors.white : AppTheme.textPrimary,
+            fontWeight: active ? FontWeight.w800 : FontWeight.w600,
+            color: active
+                ? Colors.white
+                : (isDark
+                    ? Colors.white.withValues(alpha: 0.65)
+                    : AppTheme.textSecondary),
           ),
-          onChanged: (bool? newValue) {
-            if (newValue != null) {
-              ref.read(filterMatchIrrespectiveProvider.notifier).state = newValue;
-            }
-          },
-          items: [
-            DropdownMenuItem<bool>(
-              value: false,
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const Icon(Icons.location_on_rounded, size: 14, color: AppTheme.primaryBlue),
-                  const SizedBox(width: 6),
-                  Text(
-                    'Nearby',
-                    style: TextStyle(
-                      color: isDark ? Colors.white : AppTheme.textPrimary,
-                      fontWeight: FontWeight.w800,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildLikesPill(int count, bool isDark) {
+    final active = _tabController.index == 2;
+    return GestureDetector(
+      onTap: () {
+        HapticFeedback.selectionClick();
+        _tabController.index = 2;
+      },
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 220),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+        decoration: BoxDecoration(
+          gradient: active
+              ? const LinearGradient(
+                  colors: [Color(0xFF4F75FF), Color(0xFF8B5CF6)],
+                )
+              : null,
+          color: active
+              ? null
+              : (isDark ? const Color(0xFF161228) : Colors.white),
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(
+            color: active
+                ? Colors.transparent
+                : (isDark
+                    ? Colors.white.withValues(alpha: 0.09)
+                    : Colors.black.withValues(alpha: 0.08)),
+            width: 0.8,
+          ),
+          boxShadow: active
+              ? [
+                  BoxShadow(
+                    color: const Color(0xFF4F75FF).withValues(alpha: 0.35),
+                    blurRadius: 12,
+                    offset: const Offset(0, 3),
+                  )
+                ]
+              : [
+                  if (!isDark)
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.04),
+                      blurRadius: 6,
+                      offset: const Offset(0, 2),
                     ),
-                  ),
                 ],
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              'Likes',
+              style: TextStyle(
+                fontSize: 12.5,
+                fontWeight: active ? FontWeight.w800 : FontWeight.w600,
+                color: active
+                    ? Colors.white
+                    : (isDark
+                        ? Colors.white.withValues(alpha: 0.65)
+                        : AppTheme.textSecondary),
               ),
             ),
-            DropdownMenuItem<bool>(
-              value: true,
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const Icon(Icons.public_rounded, size: 14, color: AppTheme.primaryGreen),
-                  const SizedBox(width: 6),
-                  Text(
-                    'Global',
-                    style: TextStyle(
-                      color: isDark ? Colors.white : AppTheme.textPrimary,
-                      fontWeight: FontWeight.w800,
-                    ),
+            if (count > 0) ...[
+              const SizedBox(width: 5),
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                decoration: BoxDecoration(
+                  color: active
+                      ? Colors.white.withValues(alpha: 0.25)
+                      : (isDark
+                          ? const Color(0xFF8B5CF6).withValues(alpha: 0.30)
+                          : const Color(0xFF8B5CF6).withValues(alpha: 0.15)),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Text(
+                  count > 99 ? '99+' : '$count',
+                  style: TextStyle(
+                    fontSize: 10,
+                    fontWeight: FontWeight.w900,
+                    color: active
+                        ? Colors.white
+                        : (isDark ? const Color(0xFFB8A9FF) : const Color(0xFF6D28D9)),
                   ),
-                ],
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildMatchModeToggle() {
+    final matchIrrespective = ref.watch(filterMatchIrrespectiveProvider);
+    return GestureDetector(
+      onTap: () {
+        HapticFeedback.selectionClick();
+        ref.read(filterMatchIrrespectiveProvider.notifier).state =
+            !matchIrrespective;
+      },
+      child: Container(
+        height: 34,
+        padding: const EdgeInsets.symmetric(horizontal: 10),
+        decoration: BoxDecoration(
+          color: Colors.white.withValues(alpha: 0.08),
+          borderRadius: BorderRadius.circular(17),
+          border: Border.all(
+            color: Colors.white.withValues(alpha: 0.18),
+            width: 0.8,
+          ),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              matchIrrespective
+                  ? Icons.public_rounded
+                  : Icons.location_on_rounded,
+              size: 13,
+              color: matchIrrespective
+                  ? AppTheme.primaryGreen
+                  : AppTheme.primaryBlue,
+            ),
+            const SizedBox(width: 4),
+            Text(
+              matchIrrespective ? 'Global' : 'Nearby',
+              style: const TextStyle(
+                fontSize: 11.5,
+                fontWeight: FontWeight.w800,
+                color: Colors.white,
               ),
             ),
           ],
@@ -593,8 +816,10 @@ class _MatchScreenState extends ConsumerState<MatchScreen>
     );
   }
 
+  // ── Filters Sheet ──────────────────────────────────────────────────────────
+
   void _showFilters() {
-    // Read current filter values from providers
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     final currentMinAge = ref.read(filterMinAgeProvider);
     final currentMaxAge = ref.read(filterMaxAgeProvider);
     final currentMaxDistance = ref.read(filterMaxDistanceProvider);
@@ -605,8 +830,6 @@ class _MatchScreenState extends ConsumerState<MatchScreen>
       backgroundColor: Colors.transparent,
       isScrollControlled: true,
       builder: (context) {
-        // Declare state variables here outside the StatefulBuilder's builder callback 
-        // to ensure they survive modal dialog internal redraw/setModalState triggers!
         double minAge = currentMinAge;
         double maxAge = currentMaxAge;
         double maxDistance = currentMaxDistance;
@@ -616,22 +839,43 @@ class _MatchScreenState extends ConsumerState<MatchScreen>
             return Container(
               padding: const EdgeInsets.all(24),
               decoration: BoxDecoration(
-                color: Theme.of(context).scaffoldBackgroundColor,
-                borderRadius: const BorderRadius.vertical(top: Radius.circular(32)),
+                color: isDark ? AppTheme.darkSurface : AppTheme.lightSurface,
+                borderRadius: const BorderRadius.vertical(
+                  top: Radius.circular(32),
+                ),
               ),
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Container(width: 40, height: 4, decoration: BoxDecoration(color: Colors.grey[300], borderRadius: BorderRadius.circular(2))),
-                  const SizedBox(height: 24),
-                  const Text('Filters', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w900)),
-                  const SizedBox(height: 24),
-                  // Age Range
+                  Container(
+                    width: 40,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: isDark ? Colors.white24 : Colors.black12,
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+                  Text(
+                    'Match Filters 🎛️',
+                    style: TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.w900,
+                      color: isDark ? Colors.white : AppTheme.textPrimary,
+                    ),
+                  ),
+                  const SizedBox(height: 20),
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      const Text('Age Range', style: TextStyle(fontWeight: FontWeight.w600)),
-                      Text('${minAge.toInt()} - ${maxAge.toInt()}', style: const TextStyle(color: AppTheme.primaryBlue, fontWeight: FontWeight.w700)),
+                      Text('Age Range',
+                          style: TextStyle(
+                              fontWeight: FontWeight.w600,
+                              color: isDark ? Colors.white70 : AppTheme.textSecondary)),
+                      Text('${minAge.toInt()} - ${maxAge.toInt()}',
+                          style: const TextStyle(
+                              color: AppTheme.primaryBlue,
+                              fontWeight: FontWeight.w700)),
                     ],
                   ),
                   RangeSlider(
@@ -640,7 +884,8 @@ class _MatchScreenState extends ConsumerState<MatchScreen>
                     max: 65,
                     divisions: 47,
                     activeColor: AppTheme.primaryBlue,
-                    inactiveColor: AppTheme.primaryBlue.withOpacity(0.2),
+                    inactiveColor:
+                        AppTheme.primaryBlue.withValues(alpha: 0.2),
                     onChanged: (values) {
                       setModalState(() {
                         minAge = values.start;
@@ -648,13 +893,18 @@ class _MatchScreenState extends ConsumerState<MatchScreen>
                       });
                     },
                   ),
-                  const SizedBox(height: 16),
-                  // Distance
+                  const SizedBox(height: 12),
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      const Text('Max Distance', style: TextStyle(fontWeight: FontWeight.w600)),
-                      Text('${maxDistance.toInt()} km', style: const TextStyle(color: AppTheme.primaryBlue, fontWeight: FontWeight.w700)),
+                      Text('Max Distance',
+                          style: TextStyle(
+                              fontWeight: FontWeight.w600,
+                              color: isDark ? Colors.white70 : AppTheme.textSecondary)),
+                      Text('${maxDistance.toInt()} km',
+                          style: const TextStyle(
+                              color: AppTheme.primaryBlue,
+                              fontWeight: FontWeight.w700)),
                     ],
                   ),
                   Slider(
@@ -663,32 +913,42 @@ class _MatchScreenState extends ConsumerState<MatchScreen>
                     max: 100,
                     divisions: 19,
                     activeColor: AppTheme.primaryGreen,
-                    inactiveColor: AppTheme.primaryGreen.withOpacity(0.2),
+                    inactiveColor:
+                        AppTheme.primaryGreen.withValues(alpha: 0.2),
                     onChanged: (value) {
-                      setModalState(() {
-                        maxDistance = value;
-                      });
+                      setModalState(() => maxDistance = value);
                     },
                   ),
-                  const SizedBox(height: 24),
+                  const SizedBox(height: 20),
                   Row(
                     children: [
                       Expanded(
                         child: OutlinedButton(
                           onPressed: () {
-                            ref.read(filterMinAgeProvider.notifier).state = 18;
-                            ref.read(filterMaxAgeProvider.notifier).state = 35;
-                            ref.read(filterMaxDistanceProvider.notifier).state = 50;
-                            ref.read(matchQueueProvider.notifier).applyFilters(
-                              maxDistance: 50,
-                              minAge: 18,
-                              maxAge: 35,
-                            );
+                            ref.read(filterMinAgeProvider.notifier).state =
+                                18;
+                            ref.read(filterMaxAgeProvider.notifier).state =
+                                35;
+                            ref
+                                .read(filterMaxDistanceProvider.notifier)
+                                .state = 50;
+                            ref
+                                .read(matchQueueProvider.notifier)
+                                .applyFilters(
+                                  maxDistance: 50,
+                                  minAge: 18,
+                                  maxAge: 35,
+                                );
                             context.pop();
                           },
                           style: OutlinedButton.styleFrom(
-                            padding: const EdgeInsets.symmetric(vertical: 16),
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                            foregroundColor: isDark ? Colors.white70 : AppTheme.textSecondary,
+                            side: BorderSide(
+                                color: isDark ? Colors.white24 : Colors.black12, width: 1),
+                            padding:
+                                const EdgeInsets.symmetric(vertical: 14),
+                            shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(16)),
                           ),
                           child: const Text('Reset'),
                         ),
@@ -698,28 +958,41 @@ class _MatchScreenState extends ConsumerState<MatchScreen>
                         flex: 2,
                         child: ElevatedButton(
                           onPressed: () {
-                            // Save filter state to providers
-                            ref.read(filterMinAgeProvider.notifier).state = minAge;
-                            ref.read(filterMaxAgeProvider.notifier).state = maxAge;
-                            ref.read(filterMaxDistanceProvider.notifier).state = maxDistance;
-                            ref.read(matchQueueProvider.notifier).applyFilters(
-                              maxDistance: maxDistance,
-                              minAge: minAge,
-                              maxAge: maxAge,
-                            );
+                            ref.read(filterMinAgeProvider.notifier).state =
+                                minAge;
+                            ref.read(filterMaxAgeProvider.notifier).state =
+                                maxAge;
+                            ref
+                                .read(filterMaxDistanceProvider.notifier)
+                                .state = maxDistance;
+                            ref
+                                .read(matchQueueProvider.notifier)
+                                .applyFilters(
+                                  maxDistance: maxDistance,
+                                  minAge: minAge,
+                                  maxAge: maxAge,
+                                );
                             context.pop();
                           },
                           style: ElevatedButton.styleFrom(
                             backgroundColor: AppTheme.primaryBlue,
-                            padding: const EdgeInsets.symmetric(vertical: 16),
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                            padding:
+                                const EdgeInsets.symmetric(vertical: 14),
+                            shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(16)),
                           ),
-                          child: const Text('Apply Filters', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700)),
+                          child: const Text('Apply Filters',
+                              style: TextStyle(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.w700)),
                         ),
                       ),
                     ],
                   ),
-                  SizedBox(height: MediaQuery.of(context).viewInsets.bottom > 0 ? 16 : 0),
+                  SizedBox(
+                      height: MediaQuery.of(context).viewInsets.bottom > 0
+                          ? 16
+                          : 0),
                 ],
               ),
             );
@@ -730,114 +1003,199 @@ class _MatchScreenState extends ConsumerState<MatchScreen>
   }
 }
 
-class _NearbyCard extends ConsumerWidget {
-  final UserModel user;
-  final double? deviceLat;
-  final double? deviceLon;
+// ─── Animated Undo Like Bar ───────────────────────────────────────────────────
 
-  const _NearbyCard({
-    required this.user,
-    this.deviceLat,
-    this.deviceLon,
+class _UndoLikeBar extends StatelessWidget {
+  final String userName;
+  final Animation<double> countdownAnim;
+  final bool isDark;
+  final VoidCallback onUndo;
+  final VoidCallback onDismiss;
+
+  const _UndoLikeBar({
+    required this.userName,
+    required this.countdownAnim,
+    required this.isDark,
+    required this.onUndo,
+    required this.onDismiss,
   });
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final currentUser = ref.watch(currentUserProvider);
-    final distance = LocationHelper.getDistanceKm(
-      lat1: deviceLat,
-      lon1: deviceLon,
-      loc1: currentUser.location,
-      loc2: user.location,
-      id1: currentUser.id,
-      id2: user.id,
-    );
-
-    return GestureDetector(
-      onTap: () => context.push('/profile/view/${user.id}'),
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
       child: Container(
-        width: 110,
-        margin: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
         decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(28),
+          color: isDark ? const Color(0xFF181528) : Colors.white,
+          borderRadius: BorderRadius.circular(22),
+          border: Border.all(
+            color: isDark
+                ? const Color(0xFF332B52)
+                : const Color(0xFFE2E8F0),
+            width: 1,
+          ),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.12),
-              blurRadius: 20,
-              offset: const Offset(0, 8),
-            ),
-            BoxShadow(
-              color: AppTheme.primaryBlue.withOpacity(0.08),
-              blurRadius: 30,
-              offset: const Offset(0, 12),
+              color: const Color(0xFF8B5CF6).withValues(alpha: 0.25),
+              blurRadius: 22,
+              offset: const Offset(0, 6),
             ),
           ],
         ),
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(28),
-          child: Stack(
-            fit: StackFit.expand,
-            children: [
-              Image.network(
-                user.avatarUrl ?? 'https://i.pravatar.cc/400?u=${user.id}',
-                fit: BoxFit.cover,
-              ),
-              Container(
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topCenter,
-                    end: Alignment.bottomCenter,
-                    colors: [
-                      Colors.transparent,
-                      Colors.black.withOpacity(0.06),
-                      Colors.black.withOpacity(0.82),
-                    ],
-                    stops: const [0.35, 0.65, 1.0],
+        child: Row(
+          children: [
+            // Pulsing heart icon
+            _PulsingHeart(),
+
+            const SizedBox(width: 10),
+
+            // Label
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Text(
+                    'Liked!',
+                    style: TextStyle(
+                      color: Color(0xFF8B5CF6),
+                      fontWeight: FontWeight.w900,
+                      fontSize: 12,
+                      letterSpacing: 0.3,
+                    ),
                   ),
-                ),
-              ),
-              Positioned(
-                bottom: 16,
-                left: 14,
-                right: 14,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      '${user.name}, ${user.age}',
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 14,
-                        fontWeight: FontWeight.w900,
-                        letterSpacing: -0.5,
-                      ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
+                  Text(
+                    userName,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w700,
+                      fontSize: 14,
                     ),
-                    const SizedBox(height: 5),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                      decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(0.15),
-                        borderRadius: BorderRadius.circular(8),
-                        border: Border.all(color: Colors.white.withOpacity(0.25), width: 0.8),
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          const Icon(Icons.location_on, color: Colors.white, size: 12),
-                          const SizedBox(width: 3),
-                          Text(
-                            '$distance km',
-                            style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.w700),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ],
+              ),
+            ),
+
+            const SizedBox(width: 10),
+
+            // Undo button with countdown arc
+            GestureDetector(
+              onTap: onUndo,
+              child: Stack(
+                alignment: Alignment.center,
+                children: [
+                  // Countdown arc
+                  SizedBox(
+                    width: 44,
+                    height: 44,
+                    child: AnimatedBuilder(
+                      animation: countdownAnim,
+                      builder: (context, _) {
+                        return CustomPaint(
+                          painter: _CountdownArcPainter(
+                            progress: countdownAnim.value,
                           ),
-                        ],
+                        );
+                      },
+                    ),
+                  ),
+                  // Undo label inside arc
+                  Container(
+                    width: 32,
+                    height: 32,
+                    decoration: BoxDecoration(
+                      gradient: const LinearGradient(
+                        colors: [Color(0xFF4F75FF), Color(0xFF8B5CF6)],
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                      ),
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                    child: const Center(
+                      child: Text(
+                        'Undo',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.w900,
+                          fontSize: 9.5,
+                        ),
                       ),
                     ),
-                  ],
+                  ),
+                ],
+              ),
+            ),
+
+            const SizedBox(width: 6),
+
+            // Dismiss X button
+            GestureDetector(
+              onTap: onDismiss,
+              child: Padding(
+                padding: const EdgeInsets.all(4),
+                child: Icon(
+                  Icons.close_rounded,
+                  size: 18,
+                  color: Colors.white.withValues(alpha: 0.4),
                 ),
               ),
-            ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ─── Pulsing Heart ────────────────────────────────────────────────────────────
+
+class _PulsingHeart extends StatefulWidget {
+  @override
+  State<_PulsingHeart> createState() => _PulsingHeartState();
+}
+
+class _PulsingHeartState extends State<_PulsingHeart>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _ctrl;
+  late Animation<double> _scale;
+
+  @override
+  void initState() {
+    super.initState();
+    _ctrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 700),
+    )..repeat(reverse: true);
+    _scale = Tween<double>(begin: 0.92, end: 1.12).animate(
+      CurvedAnimation(parent: _ctrl, curve: Curves.easeInOut),
+    );
+  }
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return ScaleTransition(
+      scale: _scale,
+      child: Container(
+        width: 36,
+        height: 36,
+        decoration: BoxDecoration(
+          color: const Color(0xFFFF6B9D).withValues(alpha: 0.15),
+          shape: BoxShape.circle,
+        ),
+        child: const Center(
+          child: Icon(
+            Icons.favorite_rounded,
+            color: Color(0xFFFF6B9D),
+            size: 18,
           ),
         ),
       ),
@@ -845,4 +1203,70 @@ class _NearbyCard extends ConsumerWidget {
   }
 }
 
+// ─── Countdown Arc Painter ────────────────────────────────────────────────────
 
+class _CountdownArcPainter extends CustomPainter {
+  final double progress; // 1.0 → full, 0.0 → empty
+
+  _CountdownArcPainter({required this.progress});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final center = Offset(size.width / 2, size.height / 2);
+    final radius = size.width / 2 - 2;
+
+    // Background track
+    final trackPaint = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 2.5
+      ..color = Colors.white.withValues(alpha: 0.1);
+    canvas.drawCircle(center, radius, trackPaint);
+
+    // Countdown arc
+    final arcPaint = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 2.5
+      ..strokeCap = StrokeCap.round
+      ..shader = const LinearGradient(
+        colors: [Color(0xFF4F75FF), Color(0xFF8B5CF6)],
+      ).createShader(Rect.fromCircle(center: center, radius: radius));
+
+    final sweepAngle = 2 * 3.14159265 * progress;
+    canvas.drawArc(
+      Rect.fromCircle(center: center, radius: radius),
+      -3.14159265 / 2, // start from top
+      sweepAngle,
+      false,
+      arcPaint,
+    );
+  }
+
+  @override
+  bool shouldRepaint(_CountdownArcPainter old) => old.progress != progress;
+}
+
+// ─── HeartQueue™ Transaction Model ───────────────────────────────────────────
+//
+// Represents a single "like" action that is currently in the 3-second undo
+// window. Stores:
+//   • [liked]      — the profile that was tapped / liked
+//   • [pairedWith] — the other profile shown in the same pair card
+//                    (temporarily hidden; permanently skipped on commit,
+//                     restored to queue on undo)
+//   • [at]         — timestamp, useful for debugging or future expiry logic
+
+class _LikeTx {
+  final UserModel liked;
+  final UserModel? pairedWith;
+  final DateTime at;
+
+  const _LikeTx({
+    required this.liked,
+    this.pairedWith,
+    required this.at,
+  });
+
+  @override
+  String toString() =>
+      '_LikeTx(liked: ${liked.name}, paired: ${pairedWith?.name}, at: $at)';
+}

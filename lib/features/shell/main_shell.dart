@@ -16,9 +16,9 @@ class MainShell extends ConsumerWidget {
 
   static const List<_NavItem> _items = [
     _NavItem(icon: Icons.home_rounded,        activeIcon: Icons.home_rounded,         label: 'Home',        path: '/feed'),
-    _NavItem(icon: Icons.favorite_border,     activeIcon: Icons.favorite_rounded,     label: 'Match',       path: '/match'),
-    _NavItem(icon: Icons.chat_bubble_outline, activeIcon: Icons.chat_bubble_rounded,  label: 'Chats',       path: '/chats'),
-    _NavItem(icon: Icons.people_outline,      activeIcon: Icons.people_rounded,       label: 'Clubs',       path: '/communities'),
+    _NavItem(icon: Icons.favorite_border,     activeIcon: Icons.favorite_rounded,     label: 'Hearts',      path: '/match'),
+    _NavItem(icon: Icons.chat_bubble_outline, activeIcon: Icons.chat_bubble_rounded,  label: 'Chat',        path: '/chats'),
+    _NavItem(icon: Icons.people_outline,      activeIcon: Icons.people_rounded,       label: 'People',      path: '/communities'),
   ];
 
   @override

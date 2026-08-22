@@ -67,8 +67,8 @@ class _LikedHistoryScreenState extends ConsumerState<LikedHistoryScreen>
             controller: _subTabController,
             physics: const NeverScrollableScrollPhysics(),
             children: const [
-              _MyLikesTab(),
               _LikedMeTab(),
+              _MyLikesTab(),
             ],
           ),
         ),
@@ -129,9 +129,9 @@ class _LikedHistoryScreenState extends ConsumerState<LikedHistoryScreen>
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      Icon(Icons.favorite_rounded, size: 15),
+                      Icon(Icons.favorite_border_rounded, size: 15),
                       SizedBox(width: 5),
-                      Text('My Likes'),
+                      Text('Likes Me'),
                     ],
                   ),
                 ),
@@ -139,9 +139,9 @@ class _LikedHistoryScreenState extends ConsumerState<LikedHistoryScreen>
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      Icon(Icons.favorite_border_rounded, size: 15),
+                      Icon(Icons.favorite_rounded, size: 15),
                       SizedBox(width: 5),
-                      Text('Liked Me'),
+                      Text('My Likes'),
                     ],
                   ),
                 ),
@@ -162,10 +162,28 @@ class _MyLikesTab extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final currentUser = ref.watch(currentUserProvider);
+    final sessionLikedIds = ref.watch(sessionLikedUserIdsProvider);
+    final unlikedIds = ref.watch(unlikedUserIdsProvider);
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final followingIds = currentUser.following;
 
-    if (followingIds.isEmpty) {
+    // Combine session likes (newest first) + Firestore following list (newest first),
+    // then subtract any IDs the user has unliked this session or permanently.
+    final combinedIds = <String>[];
+    final seen = <String>{};
+    final disliked = currentUser.dislikedUsers.toSet();
+
+    for (final id in sessionLikedIds) {
+      if (id.isNotEmpty && !unlikedIds.contains(id) && !disliked.contains(id) && seen.add(id)) {
+        combinedIds.add(id);
+      }
+    }
+    for (final id in currentUser.following.reversed) {
+      if (id.isNotEmpty && !unlikedIds.contains(id) && !disliked.contains(id) && seen.add(id)) {
+        combinedIds.add(id);
+      }
+    }
+
+    if (combinedIds.isEmpty) {
       return _buildEmptyState(
         isDark,
         icon: Icons.favorite_border_rounded,
@@ -177,10 +195,10 @@ class _MyLikesTab extends ConsumerWidget {
     return ListView.builder(
       padding: const EdgeInsets.fromLTRB(16, 4, 16, 100),
       physics: const BouncingScrollPhysics(),
-      itemCount: followingIds.length,
+      itemCount: combinedIds.length,
       itemBuilder: (context, index) {
         return _LikedUserCard(
-          userId: followingIds[index],
+          userId: combinedIds[index],
           currentUserId: currentUser.id,
         );
       },
@@ -397,17 +415,18 @@ class _LikedMeCardState extends ConsumerState<_LikedMeCard> {
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final userAsync = ref.watch(otherUserProvider(widget.userId));
+    final queueUsers = ref.watch(matchQueueProvider);
+    final fallbackUser = queueUsers.where((u) => u.id == widget.userId).firstOrNull;
 
-    return userAsync.when(
-      loading: () => _buildShimmer(isDark),
-      error: (_, __) => const SizedBox.shrink(),
-      data: (user) {
-        if (user == null) return const SizedBox.shrink();
-        return _isRevealed
-            ? _buildRevealedCard(context, user, isDark)
-            : _buildBlurredCard(context, user, isDark);
-      },
-    );
+    final user = userAsync.value ?? fallbackUser;
+    if (user == null) {
+      if (userAsync.isLoading) return _buildShimmer(isDark);
+      return const SizedBox.shrink();
+    }
+
+    return _isRevealed
+        ? _buildRevealedCard(context, user, isDark)
+        : _buildBlurredCard(context, user, isDark);
   }
 
   Widget _buildBlurredCard(
@@ -628,6 +647,7 @@ class _LikedMeCardState extends ConsumerState<_LikedMeCard> {
   Widget _buildRevealedCard(
       BuildContext context, UserModel user, bool isDark) {
     return GestureDetector(
+      behavior: HitTestBehavior.opaque,
       onTap: () => context.push('/profile/view/${user.id}'),
       child: Container(
         margin: const EdgeInsets.symmetric(vertical: 7),
@@ -910,23 +930,25 @@ class _LikedUserCard extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final cachedMap = ref.watch(likedUsersCacheProvider);
     final userAsync = ref.watch(otherUserProvider(userId));
+    final queueUsers = ref.watch(matchQueueProvider);
+    final fallbackUser = queueUsers.where((u) => u.id == userId).firstOrNull;
 
-    return userAsync.when(
-      loading: () => Container(
-        margin: const EdgeInsets.symmetric(vertical: 7),
-        height: 90,
-        decoration: BoxDecoration(
-          color: isDark ? Colors.white10 : Colors.black.withOpacity(0.05),
-          borderRadius: BorderRadius.circular(23),
-        ),
-      ),
-      error: (_, __) => const SizedBox.shrink(),
-      data: (user) {
-        if (user == null) return const SizedBox.shrink();
-        final isMatch = user.following.contains(currentUserId);
+    final user = cachedMap[userId] ?? userAsync.value ?? fallbackUser ?? UserModel(
+      id: userId,
+      name: 'User',
+      email: '',
+      age: 23,
+      avatarUrl: 'https://i.pravatar.cc/300?u=$userId',
+      interests: const ['Music', 'Vibes'],
+      location: 'Nearby',
+    );
+
+    final isMatch = user.following.contains(currentUserId);
 
         return GestureDetector(
+          behavior: HitTestBehavior.opaque,
           onTap: () => context.push('/profile/view/${user.id}'),
           child: Container(
             margin: const EdgeInsets.symmetric(vertical: 7),
@@ -1207,6 +1229,14 @@ class _LikedUserCard extends ConsumerWidget {
                               ),
                             );
                             if (confirm == true) {
+                              // Optimistic: remove immediately from UI
+                              ref.read(unlikedUserIdsProvider.notifier).update(
+                                    (s) => {...s, user.id},
+                                  );
+                              ref.read(sessionLikedUserIdsProvider.notifier).update(
+                                    (list) => list.where((id) => id != user.id).toList(),
+                                  );
+                              // Persist to Firestore in background
                               await ref
                                   .read(socialProvider.notifier)
                                   .toggleFollow(
@@ -1242,8 +1272,6 @@ class _LikedUserCard extends ConsumerWidget {
             ),
           ),
         );
-      },
-    );
   }
 
   Widget _avatarFallback(UserModel user, bool isDark) {

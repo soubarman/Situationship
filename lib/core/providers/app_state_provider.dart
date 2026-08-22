@@ -2,7 +2,6 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_core/firebase_core.dart';
 import '../models/user_model.dart';
 import '../models/post_model.dart';
 import '../models/chat_model.dart';
@@ -57,11 +56,24 @@ final userDataStreamProvider = StreamProvider<UserModel?>((ref) {
           );
         }
         return UserModel.fromMap(doc.data()!);
+      }).handleError((err) {
+        debugPrint('[UserDataStream] Stream error: $err');
+        return UserModel(
+          id: user.uid,
+          name: user.displayName ?? user.email?.split('@').first ?? 'User',
+          email: user.email ?? '',
+          bio: 'User',
+          age: 18,
+          avatarUrl: user.photoURL ?? 'https://i.pravatar.cc/150?u=${user.uid}',
+          interests: [],
+          isVerified: false,
+          isOnline: true,
+        );
       });
     },
     loading: () => const Stream.empty(),
     error: (err, stack) {
-      return Stream.value(null);
+      return const Stream.empty();
     },
   );
 });
@@ -96,6 +108,17 @@ final currentUserProvider = Provider<UserModel>((ref) {
     orElse: () => UserModel.currentUser.copyWith(id: uid ?? ''),
   );
 });
+
+// ─── Liked Profiles & Session Cache Providers ────────────────────────────────
+/// Keeps an in-memory cache of full UserModel profiles that were liked in this session.
+final likedUsersCacheProvider = StateProvider<Map<String, UserModel>>((ref) => {});
+
+/// Tracks IDs of users liked during the current session (ordered newest-first)
+/// for instant optimistic UI updates in LikedHistoryScreen before Firestore syncs.
+final sessionLikedUserIdsProvider = StateProvider<List<String>>((ref) => []);
+
+/// Tracks IDs of users unliked during the current session for instant zero-latency removal.
+final unlikedUserIdsProvider = StateProvider<Set<String>>((ref) => {});
 
 // ─── Real-Time Firestore Posts ───────────────────────────────────────────────
 
@@ -381,6 +404,28 @@ final postsProvider = StateNotifierProvider<PostsNotifier, List<PostModel>>(
   (ref) => PostsNotifier(),
 );
 
+/// Streams live likes + reactions for a single post from Firestore.
+/// PostCard watches this so reactions update in real-time without a full feed reload.
+final livePostReactionsProvider = StreamProvider.family<
+    ({List<String> likes, Map<String, String> reactions}), String>((ref, postId) {
+  final authState = ref.watch(authStateChangesProvider);
+  if (authState.value == null) {
+    return Stream.value((likes: <String>[], reactions: <String, String>{}));
+  }
+  return firestoreProvider
+      .collection('posts')
+      .doc(postId)
+      .snapshots()
+      .map((doc) {
+    if (!doc.exists) return (likes: <String>[], reactions: <String, String>{});
+    final data = doc.data()!;
+    return (
+      likes: List<String>.from(data['likes'] ?? []),
+      reactions: Map<String, String>.from(data['reactions'] ?? {}),
+    );
+  });
+});
+
 // ─── Real-Time Firestore Stories ─────────────────────────────────────────────
 
 const int _storiesPageSize = 20;
@@ -402,6 +447,30 @@ final storiesStreamProvider = StreamProvider<List<Map<String, dynamic>>>((ref) {
       })
       .handleError((err) {
         throw err;
+      });
+});
+
+final userTakesProvider = StreamProvider.family<List<Map<String, dynamic>>, String>((ref, userId) {
+  final authState = ref.watch(authStateChangesProvider);
+  if (authState.value == null || userId.isEmpty) {
+    return Stream.value([]);
+  }
+
+  return firestoreProvider
+      .collection('stories')
+      .where('userId', isEqualTo: userId)
+      .snapshots()
+      .map((snapshot) {
+        final now = DateTime.now().millisecondsSinceEpoch;
+        final valid = snapshot.docs
+            .map((doc) => doc.data())
+            .where((data) => (data['expiresAt'] as int? ?? 0) > now)
+            .toList();
+        valid.sort((a, b) => (b['createdAt'] as int? ?? 0).compareTo(a['createdAt'] as int? ?? 0));
+        return valid;
+      })
+      .handleError((err) {
+        return <Map<String, dynamic>>[];
       });
 });
 
@@ -1024,25 +1093,29 @@ class SocialNotifier extends StateNotifier<bool> {
       final targetUserRef = firestoreProvider.collection('users').doc(targetUserId);
 
       if (isCurrentlyFollowing) {
-        // Unfollow
-        batch.update(currentUserRef, {
-          'following': FieldValue.arrayRemove([targetUserId])
-        });
-        batch.update(targetUserRef, {
-          'followers': FieldValue.arrayRemove([currentUserId])
-        });
+        // Unfollow / Unlike — also persist to dislikedUsers so they never reappear
+        batch.set(currentUserRef, {
+          'following': FieldValue.arrayRemove([targetUserId]),
+          'dislikedUsers': FieldValue.arrayUnion([targetUserId]),
+        }, SetOptions(merge: true));
+        batch.set(targetUserRef, {
+          'followers': FieldValue.arrayRemove([currentUserId]),
+          'likedBy': FieldValue.arrayRemove([currentUserId]),
+        }, SetOptions(merge: true));
       } else {
-        // Follow
-        batch.update(currentUserRef, {
+        // Follow / Like
+        batch.set(currentUserRef, {
           'following': FieldValue.arrayUnion([targetUserId])
-        });
-        batch.update(targetUserRef, {
-          'followers': FieldValue.arrayUnion([currentUserId])
-        });
+        }, SetOptions(merge: true));
+        batch.set(targetUserRef, {
+          'followers': FieldValue.arrayUnion([currentUserId]),
+          'likedBy': FieldValue.arrayUnion([currentUserId]),
+        }, SetOptions(merge: true));
       }
 
       await batch.commit();
     } catch (e) {
+      debugPrint('[SocialNotifier] toggleFollow error: $e');
       rethrow;
     }
   }

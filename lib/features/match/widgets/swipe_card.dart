@@ -1,10 +1,9 @@
-import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../../../core/models/user_model.dart';
-import '../../../core/theme/app_theme.dart';
-import '../../../core/providers/app_state_provider.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:cached_network_image/cached_network_image.dart';
+import '../../../core/models/user_model.dart';
+import '../../../core/providers/app_state_provider.dart';
 import '../../../core/utils/location_helper.dart';
 
 class SwipeCard extends ConsumerWidget {
@@ -21,10 +20,32 @@ class SwipeCard extends ConsumerWidget {
     this.deviceLon,
   });
 
+  // Dynamic Theme Gradients & Accent Colors based on user ID
+  static const List<List<Color>> _themeGradients = [
+    // Theme 1: Electric Violet
+    [Color(0xFF6D28D9), Color(0xFF7C3AED), Color(0xFF5B21B6)],
+    // Theme 2: Acid Lime to Coral Sunset
+    [Color(0xFFBEF264), Color(0xFFEAB308), Color(0xFFEA580C)],
+    // Theme 3: Neon Magenta Violet
+    [Color(0xFFEC4899), Color(0xFF8B5CF6), Color(0xFF4C1D95)],
+    // Theme 4: Electric Cyan Cobalt
+    [Color(0xFF06B6D4), Color(0xFF2563EB), Color(0xFF1E3A8A)],
+  ];
+
+  static const List<Color> _accentColors = [
+    Color(0xFFE0FE10), // Acid Lime/Yellow
+    Color(0xFF0F172A), // Dark Navy
+    Color(0xFFFACC15), // Golden Yellow
+    Color(0xFFE0FE10), // Neon Lime
+  ];
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final currentUser = ref.watch(currentUserProvider);
-    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final themeIndex = user.id.hashCode.abs() % _themeGradients.length;
+    final gradientColors = _themeGradients[themeIndex];
+    final accentColor = _accentColors[themeIndex];
+    final isDarkThemeText = themeIndex == 1; // Theme 2 uses dark text for contrast
 
     final distance = LocationHelper.getDistanceKm(
       lat1: deviceLat,
@@ -35,304 +56,228 @@ class SwipeCard extends ConsumerWidget {
       id2: user.id,
     );
 
+    final primaryTextColor = isDarkThemeText ? const Color(0xFF0F172A) : Colors.white;
+
     return Container(
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(28),
+        gradient: LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: gradientColors,
+        ),
+        borderRadius: BorderRadius.circular(32),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(isBackground ? 0.08 : 0.18),
+            color: Colors.black.withValues(alpha: isBackground ? 0.08 : 0.25),
             blurRadius: 30,
             offset: const Offset(0, 16),
           ),
         ],
       ),
       child: ClipRRect(
-        borderRadius: BorderRadius.circular(28),
-        child: Stack(
-          fit: StackFit.expand,
-          children: [
-            // Profile image
-            CachedNetworkImage(
-              imageUrl: user.avatarUrl ?? 'https://i.pravatar.cc/400?u=${user.id}',
-              fit: BoxFit.cover,
-              memCacheWidth: 900,
-              progressIndicatorBuilder: (context, url, progress) {
-                return Container(
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                      colors: [
-                        AppTheme.primaryBlue.withOpacity(0.3),
-                        AppTheme.primaryGreen.withOpacity(0.3),
-                      ],
-                    ),
+        borderRadius: BorderRadius.circular(32),
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final cardH = constraints.maxHeight;
+            final avatarSize = (cardH * 0.42).clamp(180.0, 260.0);
+
+            return Stack(
+              fit: StackFit.expand,
+              children: [
+                // Background tint layer for stack depth
+                if (isBackground)
+                  Container(
+                    color: Colors.black.withValues(alpha: 0.35),
                   ),
-                  child: Center(
-                    child: CircularProgressIndicator(
-                      value: progress.progress,
-                      color: Colors.white,
-                      strokeWidth: 2,
-                    ),
-                  ),
-                );
-              },
-            ),
-            // Gradient overlay
-            const DecoratedBox(
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                  stops: [0.0, 0.45, 1.0],
-                  colors: [
-                    Colors.transparent,
-                    Colors.transparent,
-                    Color(0xDD000000),
-                  ],
-                ),
-              ),
-            ),
-            if (!isBackground) ...[
-              // Top indicators
-              Positioned(
-                top: 16,
-                left: 16,
-                right: 16,
-                child: Row(
-                  children: [
-                    _buildTag('📍 $distance km', isDark),
-                    const Spacer(),
-                    if (user.isVerified) _buildVerifiedBadge(),
-                    if (user.isOnline)
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 10, vertical: 5),
-                        decoration: BoxDecoration(
-                          color: AppTheme.primaryGreen.withOpacity(0.85),
-                          borderRadius: BorderRadius.circular(50),
-                          boxShadow: [
-                            BoxShadow(
-                              color: AppTheme.primaryGreen.withOpacity(0.3),
-                              blurRadius: 8,
-                            ),
-                          ],
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Container(
-                              width: 6,
-                              height: 6,
-                              decoration: const BoxDecoration(
-                                color: Colors.white,
-                                shape: BoxShape.circle,
-                              ),
-                            ),
-                            const SizedBox(width: 4),
-                            const Text(
-                              'Active',
-                              style: TextStyle(
-                                color: Colors.white,
-                                fontSize: 11,
-                                fontWeight: FontWeight.w700,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                  ],
-                ),
-              ),
-              // Photo dots
-              Positioned(
-                top: 56,
-                left: 0,
-                right: 0,
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: List.generate(
-                    user.photos.length.clamp(1, 5),
-                    (index) => Container(
-                      width: index == 0 ? 20 : 6,
-                      height: 4,
-                      margin: const EdgeInsets.symmetric(horizontal: 2),
-                      decoration: BoxDecoration(
-                        color: index == 0
-                            ? Colors.white
-                            : Colors.white.withOpacity(0.4),
-                        borderRadius: BorderRadius.circular(2),
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            ],
-            // Bottom info area with Glassmorphism (always visible)
-            Positioned(
-              bottom: 0,
-              left: 0,
-              right: 0,
-              child: Container(
-                padding: const EdgeInsets.fromLTRB(20, 40, 20, 24),
-                decoration: const BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topCenter,
-                    end: Alignment.bottomCenter,
-                    colors: [
-                      Colors.transparent,
-                      Color(0xBB000000),
-                      Color(0xFF000000),
-                    ],
-                  ),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Row(
-                      crossAxisAlignment: CrossAxisAlignment.end,
+
+                if (!isBackground)
+                  Padding(
+                    padding: const EdgeInsets.all(20),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
+                        // ── Top Bar Header ────────────────────────────────
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'New Matches',
+                                  style: GoogleFonts.syne(
+                                    fontSize: 24,
+                                    fontWeight: FontWeight.w900,
+                                    color: primaryTextColor,
+                                    letterSpacing: -0.5,
+                                  ),
+                                ),
+                                Text(
+                                  'Nearby',
+                                  style: GoogleFonts.playfairDisplay(
+                                    fontSize: 26,
+                                    fontStyle: FontStyle.italic,
+                                    fontWeight: FontWeight.w600,
+                                    color: accentColor,
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const Spacer(),
+                            // Distance Badge
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 10,
+                                vertical: 5,
+                              ),
+                              decoration: BoxDecoration(
+                                color: primaryTextColor.withValues(alpha: 0.15),
+                                borderRadius: BorderRadius.circular(20),
+                              ),
+                              child: Text(
+                                '📍 $distance km',
+                                style: GoogleFonts.syne(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w800,
+                                  color: primaryTextColor,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+
+                        const SizedBox(height: 4),
+
+                        // Subtitle Location & Age
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text(
+                              user.location?.isNotEmpty == true
+                                  ? user.location!
+                                  : 'Nearby Soul',
+                              style: GoogleFonts.syne(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w800,
+                                color: primaryTextColor.withValues(alpha: 0.8),
+                              ),
+                            ),
+                            Text(
+                              '${user.age} years',
+                              style: GoogleFonts.syne(
+                                fontSize: 18,
+                                fontWeight: FontWeight.w900,
+                                color: accentColor,
+                              ),
+                            ),
+                          ],
+                        ),
+
+                        // ── Center Hero Circular Photo ────────────────────
                         Expanded(
-                          child: Text(
-                            user.name,
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 30,
-                              fontWeight: FontWeight.w900,
-                              letterSpacing: -1,
+                          child: Center(
+                            child: Stack(
+                              alignment: Alignment.center,
+                              children: [
+                                // Outer glow ring
+                                Container(
+                                  width: avatarSize + 12,
+                                  height: avatarSize + 12,
+                                  decoration: BoxDecoration(
+                                    shape: BoxShape.circle,
+                                    color: accentColor.withValues(alpha: 0.3),
+                                  ),
+                                ),
+                                // Main circular photo
+                                Container(
+                                  width: avatarSize,
+                                  height: avatarSize,
+                                  decoration: const BoxDecoration(
+                                    shape: BoxShape.circle,
+                                  ),
+                                  child: ClipOval(
+                                    child: CachedNetworkImage(
+                                      imageUrl: user.avatarUrl ??
+                                          'https://i.pravatar.cc/400?u=${user.id}',
+                                      fit: BoxFit.cover,
+                                      memCacheWidth: 800,
+                                      progressIndicatorBuilder: (context, url, progress) =>
+                                          Container(
+                                        color: accentColor.withValues(alpha: 0.2),
+                                        child: const Center(
+                                          child: CircularProgressIndicator(
+                                            color: Colors.white,
+                                            strokeWidth: 2,
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ],
                             ),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
                           ),
                         ),
-                        const SizedBox(width: 8),
-                        Padding(
-                          padding: const EdgeInsets.only(bottom: 4),
-                          child: Text(
-                            '${user.age}',
-                            style: TextStyle(
-                              color: Colors.white.withOpacity(0.9),
-                              fontSize: 20,
-                              fontWeight: FontWeight.w300,
-                            ),
+
+                        // ── Giant Serif Name & Details ────────────────────
+                        Center(
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(
+                                user.name,
+                                style: GoogleFonts.playfairDisplay(
+                                  fontSize: 32,
+                                  fontWeight: FontWeight.w700,
+                                  color: accentColor,
+                                  letterSpacing: -0.5,
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                textAlign: TextAlign.center,
+                              ),
+                              const SizedBox(height: 2),
+                              if (user.interests.isNotEmpty)
+                                Text(
+                                  user.interests.take(3).join(' / '),
+                                  style: GoogleFonts.playfairDisplay(
+                                    fontSize: 15,
+                                    fontStyle: FontStyle.italic,
+                                    fontWeight: FontWeight.w500,
+                                    color: primaryTextColor.withValues(alpha: 0.9),
+                                  ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  textAlign: TextAlign.center,
+                                ),
+                              if (user.bio != null && user.bio!.trim().isNotEmpty) ...[
+                                const SizedBox(height: 6),
+                                Padding(
+                                  padding: const EdgeInsets.symmetric(horizontal: 10),
+                                  child: Text(
+                                    user.bio!.toUpperCase(),
+                                    style: GoogleFonts.syne(
+                                      fontSize: 10.5,
+                                      fontWeight: FontWeight.w800,
+                                      color: primaryTextColor.withValues(alpha: 0.75),
+                                      letterSpacing: 0.5,
+                                    ),
+                                    maxLines: 2,
+                                    overflow: TextOverflow.ellipsis,
+                                    textAlign: TextAlign.center,
+                                  ),
+                                ),
+                              ],
+                            ],
                           ),
                         ),
+                        const SizedBox(height: 8),
                       ],
                     ),
-                    const SizedBox(height: 6),
-                    if (user.bio != null && user.bio!.trim().isNotEmpty)
-                      Padding(
-                        padding: const EdgeInsets.only(bottom: 16),
-                        child: Text(
-                          user.bio!,
-                          style: TextStyle(
-                            color: Colors.white.withOpacity(0.85),
-                            fontSize: 13.5,
-                            height: 1.4,
-                            fontWeight: FontWeight.w400,
-                          ),
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                    // Glassmorphic interest wrap
-                    Wrap(
-                      spacing: 8,
-                      runSpacing: 8,
-                      children: user.interests
-                          .take(3)
-                          .map((interest) =>
-                              _InterestChip(label: interest))
-                          .toList(),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildTag(String text, bool isDark) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-      decoration: BoxDecoration(
-        color: (isDark ? Colors.black : Colors.white).withOpacity(0.25),
-        borderRadius: BorderRadius.circular(50),
-        border: Border.all(
-          color: (isDark ? Colors.white : Colors.black).withOpacity(0.15),
-          width: 0.8,
-        ),
-      ),
-      child: Text(
-        text,
-        style: TextStyle(
-          color: isDark ? Colors.white : Colors.black87,
-          fontSize: 12,
-          fontWeight: FontWeight.w800,
-        ),
-      ),
-    );
-  }
-
-  Widget _buildVerifiedBadge() {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-      margin: const EdgeInsets.only(right: 6),
-      decoration: BoxDecoration(
-        gradient: AppTheme.primaryGradient,
-        borderRadius: BorderRadius.circular(50),
-        boxShadow: [
-          BoxShadow(
-            color: AppTheme.primaryBlue.withOpacity(0.3),
-            blurRadius: 8,
-          ),
-        ],
-      ),
-      child: const Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(Icons.verified_rounded, size: 12, color: Colors.white),
-          SizedBox(width: 4),
-          Text(
-            'Verified',
-            style: TextStyle(
-              color: Colors.white,
-              fontSize: 11,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _InterestChip extends StatelessWidget {
-  final String label;
-  const _InterestChip({required this.label});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-      decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.16),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: Colors.white.withOpacity(0.22),
-          width: 0.8,
-        ),
-      ),
-      child: Text(
-        label,
-        style: const TextStyle(
-          color: Colors.white,
-          fontSize: 12,
-          fontWeight: FontWeight.w800,
+                  ),
+              ],
+            );
+          },
         ),
       ),
     );

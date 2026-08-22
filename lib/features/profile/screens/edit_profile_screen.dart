@@ -108,9 +108,15 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
         
         if (kIsWeb) {
           final bytes = await _avatarFile!.readAsBytes();
-          await ref.putData(bytes);
+          await ref.putData(
+            bytes,
+            SettableMetadata(contentType: 'image/jpeg'),
+          );
         } else {
-          await ref.putFile(File(_avatarFile!.path));
+          await ref.putFile(
+            File(_avatarFile!.path),
+            SettableMetadata(contentType: 'image/jpeg'),
+          );
         }
         
         photoUrl = await ref.getDownloadURL();
