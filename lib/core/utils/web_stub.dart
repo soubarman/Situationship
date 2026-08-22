@@ -24,9 +24,10 @@ class HTMLVideoElement {
   set autoplay(bool value) {}
   set muted(bool value) {}
   set loop(bool value) {}
+  bool controls = false;
   void setAttribute(String name, String value) {}
-  void pause() {}
-  void play() {}
+  dynamic pause() => null;
+  dynamic play() => null;
   void removeAttribute(String name) {}
   void load() {}
   dynamic get onPlaying => _EventStream();
@@ -49,8 +50,12 @@ class _Style {
   set transform(String value) {}
 }
 
+class MediaStreamTrack {
+  void stop() {}
+}
+
 class MediaStream {
-  dynamic getTracks() => [];
+  dynamic getTracks() => <MediaStreamTrack>[];
 }
 
 class MediaRecorderOptions {
