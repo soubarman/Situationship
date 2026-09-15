@@ -16,7 +16,7 @@ class MainShell extends ConsumerWidget {
 
   static const List<_NavItem> _items = [
     _NavItem(icon: Icons.home_rounded,        activeIcon: Icons.home_rounded,         label: 'Home',        path: '/feed'),
-    _NavItem(icon: Icons.favorite_border,     activeIcon: Icons.favorite_rounded,     label: 'Hearts',      path: '/match'),
+    _NavItem(icon: Icons.favorite_border,     activeIcon: Icons.favorite_rounded,     label: 'matches',     path: '/match'),
     _NavItem(icon: Icons.chat_bubble_outline, activeIcon: Icons.chat_bubble_rounded,  label: 'Chat',        path: '/chats'),
     _NavItem(icon: Icons.people_outline,      activeIcon: Icons.people_rounded,       label: 'People',      path: '/communities'),
   ];
@@ -47,36 +47,40 @@ class MainShell extends ConsumerWidget {
         extendBody: true,
         body: child,
       bottomNavigationBar: Padding(
-        padding: EdgeInsets.fromLTRB(24, 0, 24, 12 + safeBottom),
+        padding: EdgeInsets.fromLTRB(20, 0, 20, 10 + safeBottom),
         child: ClipRRect(
-          borderRadius: BorderRadius.circular(28),
+          borderRadius: BorderRadius.circular(32),
           child: BackdropFilter(
-            filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
+            filter: ImageFilter.blur(sigmaX: 24, sigmaY: 24),
             child: Container(
-              height: 56,
+              height: 60,
               decoration: BoxDecoration(
                 color: isDark
-                    ? Colors.white.withOpacity(0.09)
-                    : Colors.white.withOpacity(0.80),
-                borderRadius: BorderRadius.circular(28),
+                    ? const Color(0xFF140D24).withValues(alpha: 0.88)
+                    : Colors.white.withValues(alpha: 0.88),
+                borderRadius: BorderRadius.circular(32),
                 border: Border.all(
                   color: isDark
-                      ? Colors.white.withOpacity(0.12)
-                      : Colors.white.withOpacity(0.95),
-                  width: 1.0,
+                      ? Colors.white.withValues(alpha: 0.14)
+                      : Colors.black.withValues(alpha: 0.08),
+                  width: 1.2,
                 ),
                 boxShadow: [
                   BoxShadow(
-                    color: isDark
-                        ? Colors.black.withOpacity(0.35)
-                        : Colors.black.withOpacity(0.10),
-                    blurRadius: 24,
-                    offset: const Offset(0, 6),
+                    color: Colors.black.withValues(alpha: isDark ? 0.45 : 0.12),
+                    blurRadius: 28,
+                    offset: const Offset(0, 8),
                   ),
+                  if (isDark)
+                    BoxShadow(
+                      color: const Color(0xFFEC4899).withValues(alpha: 0.12),
+                      blurRadius: 20,
+                      offset: const Offset(0, 4),
+                    ),
                 ],
               ),
               child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 6),
+                padding: const EdgeInsets.symmetric(horizontal: 8),
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceAround,
                   children: List.generate(_items.length, (i) {
@@ -84,6 +88,7 @@ class MainShell extends ConsumerWidget {
                       item: _items[i],
                       isSelected: currentIndex == i,
                       isDark: isDark,
+                      hasDot: i == 2, // chat alert dot
                       onTap: () {
                         HapticFeedback.selectionClick();
                         context.go(_items[i].path);
@@ -113,12 +118,14 @@ class _NavBarItem extends StatefulWidget {
   final _NavItem item;
   final bool isSelected;
   final bool isDark;
+  final bool hasDot;
   final VoidCallback onTap;
 
   const _NavBarItem({
     required this.item,
     required this.isSelected,
     required this.isDark,
+    this.hasDot = false,
     required this.onTap,
   });
 
@@ -130,13 +137,14 @@ class _NavBarItemState extends State<_NavBarItem>
     with SingleTickerProviderStateMixin {
   late AnimationController _ctrl;
   late Animation<double> _scale;
+  bool _isHovered = false;
 
   @override
   void initState() {
     super.initState();
     _ctrl = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 160),
+      duration: const Duration(milliseconds: 140),
     );
     _scale = Tween<double>(begin: 1.0, end: 0.88)
         .animate(CurvedAnimation(parent: _ctrl, curve: Curves.easeInOut));
@@ -151,55 +159,92 @@ class _NavBarItemState extends State<_NavBarItem>
   @override
   Widget build(BuildContext context) {
     final sel = widget.isSelected;
-    return GestureDetector(
-      onTapDown: (_) => _ctrl.forward(),
-      onTapUp: (_) {
-        _ctrl.reverse();
-        widget.onTap();
-      },
-      onTapCancel: () => _ctrl.reverse(),
-      child: AnimatedBuilder(
-        animation: _scale,
-        builder: (_, child) => Transform.scale(scale: _scale.value, child: child),
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 280),
-          curve: Curves.easeOutCubic,
-          padding: EdgeInsets.symmetric(horizontal: sel ? 14 : 10, vertical: 7),
-          decoration: BoxDecoration(
-            gradient: sel ? AppTheme.primaryGradient : null,
-            color: sel ? null : Colors.transparent,
-            borderRadius: BorderRadius.circular(22),
-            boxShadow: sel ? [
-              BoxShadow(
-                color: AppTheme.primaryBlue.withOpacity(0.35),
-                blurRadius: 14,
-                offset: const Offset(0, 4),
-              ),
-            ] : [],
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(
-                sel ? widget.item.activeIcon : widget.item.icon,
-                size: 20,
-                color: sel
-                    ? Colors.white
-                    : (widget.isDark ? Colors.white.withOpacity(0.38) : AppTheme.textTertiary),
-              ),
-              if (sel) ...[
-                const SizedBox(width: 7),
-                Text(
-                  widget.item.label,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 12,
-                    fontWeight: FontWeight.w700,
-                    letterSpacing: 0.1,
-                  ),
+    return MouseRegion(
+      cursor: SystemMouseCursors.click,
+      onEnter: (_) => setState(() => _isHovered = true),
+      onExit: (_) => setState(() => _isHovered = false),
+      child: GestureDetector(
+        onTapDown: (_) => _ctrl.forward(),
+        onTapUp: (_) {
+          _ctrl.reverse();
+          widget.onTap();
+        },
+        onTapCancel: () => _ctrl.reverse(),
+        child: AnimatedBuilder(
+          animation: _scale,
+          builder: (_, child) => Transform.scale(scale: _scale.value, child: child),
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 260),
+            curve: Curves.easeOutBack,
+            padding: EdgeInsets.symmetric(horizontal: sel ? 15 : 10, vertical: 8),
+            decoration: BoxDecoration(
+              color: sel
+                  ? (widget.isDark ? Colors.white : const Color(0xFF1E0A30))
+                  : (_isHovered ? Colors.white.withValues(alpha: 0.08) : Colors.transparent),
+              borderRadius: BorderRadius.circular(24),
+              boxShadow: sel ? [
+                BoxShadow(
+                  color: Colors.white.withValues(alpha: widget.isDark ? 0.45 : 0.15),
+                  blurRadius: 16,
+                  offset: const Offset(0, 2),
                 ),
+                BoxShadow(
+                  color: const Color(0xFFEC4899).withValues(alpha: 0.35),
+                  blurRadius: 20,
+                  offset: const Offset(0, 4),
+                ),
+              ] : [],
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Stack(
+                  clipBehavior: Clip.none,
+                  children: [
+                    Icon(
+                      sel ? widget.item.activeIcon : widget.item.icon,
+                      size: 20,
+                      color: sel
+                          ? const Color(0xFFEC4899)
+                          : (widget.isDark
+                              ? (_isHovered ? Colors.white : Colors.white.withValues(alpha: 0.45))
+                              : AppTheme.textTertiary),
+                    ),
+                    if (widget.hasDot && !sel)
+                      Positioned(
+                        top: -2,
+                        right: -3,
+                        child: Container(
+                          width: 6.5,
+                          height: 6.5,
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFC084FC),
+                            shape: BoxShape.circle,
+                            boxShadow: [
+                              BoxShadow(
+                                color: const Color(0xFFC084FC).withValues(alpha: 0.9),
+                                blurRadius: 6,
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+                if (sel) ...[
+                  const SizedBox(width: 7),
+                  Text(
+                    widget.item.label.toLowerCase(),
+                    style: TextStyle(
+                      color: widget.isDark ? const Color(0xFF140D24) : Colors.white,
+                      fontSize: 13,
+                      fontWeight: FontWeight.w900,
+                      letterSpacing: -0.2,
+                    ),
+                  ),
+                ],
               ],
-            ],
+            ),
           ),
         ),
       ),

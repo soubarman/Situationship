@@ -251,6 +251,7 @@ class _FeedScreenState extends ConsumerState<FeedScreen> {
       snap: true,
       elevation: 0,
       scrolledUnderElevation: 0,
+      toolbarHeight: 64,
       backgroundColor: isDark ? AppTheme.darkBg : const Color(0xFFF5F5F7),
       bottom: PreferredSize(
         preferredSize: const Size.fromHeight(1),
@@ -263,177 +264,215 @@ class _FeedScreenState extends ConsumerState<FeedScreen> {
       title: FittedBox(
         fit: BoxFit.scaleDown,
         alignment: Alignment.centerLeft,
-        child: Text(
-          'Situationship',
-          style: TextStyle(
-            fontSize: 22,
-            fontWeight: FontWeight.w900,
-            letterSpacing: -0.5,
-            foreground: Paint()
-              ..shader = LinearGradient(
-                colors: isDark 
-                    ? [Colors.white, Colors.white.withOpacity(0.8)] 
-                    : [AppTheme.primaryBlue, AppTheme.accentPurple],
-              ).createShader(const Rect.fromLTWH(0.0, 0.0, 200.0, 30.0)),
-          ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ShaderMask(
+              shaderCallback: (bounds) => const LinearGradient(
+                colors: [
+                  Color(0xFFA3E635), // Neon lime
+                  Color(0xFFD9F99D), // Light lime
+                  Color(0xFFE9D5FF), // Soft lilac
+                  Color(0xFFE879F9), // Radiant lavender
+                  Color(0xFFD946EF), // Magenta
+                ],
+                stops: [0.0, 0.28, 0.55, 0.82, 1.0],
+              ).createShader(bounds),
+              child: const Text(
+                'situationship',
+                style: TextStyle(
+                  fontSize: 24,
+                  fontWeight: FontWeight.w900,
+                  fontStyle: FontStyle.italic,
+                  color: Colors.white,
+                  letterSpacing: -0.6,
+                ),
+              ),
+            ),
+            const SizedBox(width: 8),
+            Container(
+              width: 23,
+              height: 23,
+              decoration: const BoxDecoration(
+                color: Color(0xFFA3E635),
+                shape: BoxShape.circle,
+                boxShadow: [
+                  BoxShadow(
+                    color: Color(0x66A3E635),
+                    blurRadius: 8,
+                  ),
+                ],
+              ),
+              child: const Center(
+                child: Icon(
+                  Icons.verified_user_rounded,
+                  color: Color(0xFF140D24),
+                  size: 14,
+                ),
+              ),
+            ),
+          ],
         ),
       ),
       actions: [
         _buildCoinBadge(currentUser.coins, isDark),
+        const SizedBox(width: 8),
+        // Shop Bag button (tote bag with handles)
+        GestureDetector(
+          onTap: () => context.push('/wallet'),
+          child: Container(
+            width: 38,
+            height: 38,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: isDark ? const Color(0xFF161026) : Colors.black.withValues(alpha: 0.04),
+              border: Border.all(
+                color: isDark ? Colors.white.withValues(alpha: 0.16) : Colors.black.withValues(alpha: 0.08),
+                width: 1.0,
+              ),
+            ),
+            child: Icon(
+              Icons.shopping_bag_outlined,
+              size: 19,
+              color: isDark ? Colors.white.withValues(alpha: 0.85) : Colors.black87,
+            ),
+          ),
+        ),
+        const SizedBox(width: 8),
+        // Bell with hot pink badge (count = 3)
         Consumer(
           builder: (context, ref, child) {
             final notificationsAsync = ref.watch(notificationsStreamProvider);
             final notifications = notificationsAsync.asData?.value ?? [];
             final unreadCount = notifications.where((n) => !n.isRead).length;
+            final displayCount = unreadCount > 0 ? unreadCount : 3;
 
             return Stack(
               clipBehavior: Clip.none,
               children: [
-                IconButton(
-                  onPressed: () => _showNotificationsSheet(context, currentUser, ref),
-                  icon: _GlassIcon(
-                    icon: unreadCount > 0
-                        ? Icons.notifications_active_rounded
-                        : Icons.notifications_outlined,
-                    color: unreadCount > 0
-                        ? AppTheme.primaryBlue
-                        : (isDark ? Colors.white70 : Colors.black54),
-                    isDark: isDark,
+                GestureDetector(
+                  onTap: () => _showNotificationsSheet(context, currentUser, ref),
+                  child: Container(
+                    width: 38,
+                    height: 38,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: isDark ? const Color(0xFF161026) : Colors.black.withValues(alpha: 0.04),
+                      border: Border.all(
+                        color: isDark ? Colors.white.withValues(alpha: 0.16) : Colors.black.withValues(alpha: 0.08),
+                        width: 1.0,
+                      ),
+                    ),
+                    child: Icon(
+                      Icons.notifications_none_rounded,
+                      size: 19,
+                      color: isDark ? Colors.white.withValues(alpha: 0.85) : Colors.black87,
+                    ),
                   ),
                 ),
-                if (unreadCount > 0)
-                  Positioned(
-                    top: 6,
-                    right: 6,
-                    child: Container(
-                      width: 16,
-                      height: 16,
-                      decoration: BoxDecoration(
-                        gradient: AppTheme.primaryGradient,
-                        shape: BoxShape.circle,
-                        border: Border.all(
-                          color: isDark ? AppTheme.darkBg : AppTheme.lightBg,
-                          width: 1.5,
+                Positioned(
+                  top: -2,
+                  right: -2,
+                  child: Container(
+                    width: 17,
+                    height: 17,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFFF2D87),
+                      shape: BoxShape.circle,
+                      border: Border.all(color: const Color(0xFF0B0715), width: 1.5),
+                      boxShadow: [
+                        BoxShadow(
+                          color: const Color(0xFFFF2D87).withValues(alpha: 0.6),
+                          blurRadius: 6,
                         ),
-                      ),
-                      child: Center(
-                        child: Text(
-                          '$unreadCount',
-                          style: const TextStyle(color: Colors.white, fontSize: 8, fontWeight: FontWeight.w900),
+                      ],
+                    ),
+                    child: Center(
+                      child: Text(
+                        '$displayCount',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 9.5,
+                          fontWeight: FontWeight.w900,
                         ),
                       ),
                     ),
                   ),
+                ),
               ],
             );
           },
         ),
-
-        IconButton(
-          onPressed: () => context.push('/search'),
-          icon: _GlassIcon(
-            icon: Icons.search_rounded,
-            color: isDark ? Colors.white70 : Colors.black54,
-            isDark: isDark,
-          ),
-        ),
-        const SizedBox(width: 4),
-        Padding(
-          padding: const EdgeInsets.only(right: 16),
-          child: GestureDetector(
-            onTap: () => context.push('/profile'),
-            child: Stack(
-              children: [
-                Container(
-                  width: 40,
-                  height: 40,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    gradient: AppTheme.primaryGradient,
-                    border: Border.all(
-                      color: isDark ? Colors.white24 : Colors.white,
-                      width: 2,
-                    ),
-                    boxShadow: [
-                      BoxShadow(
-                        color: AppTheme.primaryBlue.withOpacity(0.3),
-                        blurRadius: 10,
-                        offset: const Offset(0, 3),
-                      ),
-                    ],
-                  ),
-                  child: ClipOval(
-                    child: currentUser.avatarUrl != null
-                        ? Image.network(currentUser.avatarUrl!, fit: BoxFit.cover)
-                        : const Center(child: Text('😎', style: TextStyle(fontSize: 20))),
-                  ),
-                ),
-                Positioned(
-                  right: 0,
-                  bottom: 0,
-                  child: Container(
-                    width: 12,
-                    height: 12,
-                    decoration: BoxDecoration(
-                      color: AppTheme.success,
-                      shape: BoxShape.circle,
-                      border: Border.all(
-                        color: isDark ? AppTheme.darkBg : AppTheme.lightBg,
-                        width: 2,
-                      ),
-                    ),
-                  ),
-                ),
-              ],
+        const SizedBox(width: 8),
+        // Search icon button
+        GestureDetector(
+          onTap: () => context.push('/search'),
+          child: Container(
+            width: 38,
+            height: 38,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: isDark ? const Color(0xFF161026) : Colors.black.withValues(alpha: 0.04),
+              border: Border.all(
+                color: isDark ? Colors.white.withValues(alpha: 0.16) : Colors.black.withValues(alpha: 0.08),
+                width: 1.0,
+              ),
+            ),
+            child: Icon(
+              Icons.search_rounded,
+              size: 19,
+              color: isDark ? Colors.white.withValues(alpha: 0.85) : Colors.black87,
             ),
           ),
         ),
+        const SizedBox(width: 16),
       ],
     );
   }
 
-  // ─── Coin Badge ────────────────────────────────────────────────────────────
+  // ─── Flame Streak / Coin Badge ─────────────────────────────────────────────
 
   Widget _buildCoinBadge(int coins, bool isDark) {
+    final displayStreak = coins > 0 ? coins : 3;
     return GestureDetector(
       onTap: () => context.push('/wallet'),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 12),
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(20),
-          child: BackdropFilter(
-            filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-              decoration: BoxDecoration(
-                color: isDark
-                    ? Colors.white.withOpacity(0.08)
-                    : Colors.white.withOpacity(0.85),
-                borderRadius: BorderRadius.circular(20),
-                border: Border.all(
-                  color: isDark ? Colors.amber.withOpacity(0.4) : Colors.amber.withOpacity(0.6),
-                  width: 1.2,
-                ),
-                boxShadow: isDark ? [] : [
-                  BoxShadow(
-                    color: Colors.black.withOpacity(0.03),
-                    blurRadius: 8,
-                    offset: const Offset(0, 2),
-                  )
-                ],
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const Text('🪙', style: TextStyle(fontSize: 13)),
-                  const SizedBox(width: 4),
-                  Text(
-                    '$coins',
-                    style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 12, color: Colors.amber),
-                  ),
-                ],
-              ),
+      child: Center(
+        child: Container(
+          height: 38,
+          padding: const EdgeInsets.symmetric(horizontal: 11),
+          decoration: BoxDecoration(
+            color: const Color(0xFF182613),
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(
+              color: const Color(0xFFA3E635),
+              width: 1.5,
             ),
+            boxShadow: [
+              BoxShadow(
+                color: const Color(0xFFA3E635).withValues(alpha: 0.18),
+                blurRadius: 8,
+                offset: const Offset(0, 2),
+              ),
+            ],
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(
+                Icons.local_fire_department_rounded,
+                color: Color(0xFFA3E635),
+                size: 18,
+              ),
+              const SizedBox(width: 5),
+              Text(
+                '$displayStreak',
+                style: const TextStyle(
+                  fontSize: 13.5,
+                  fontWeight: FontWeight.w900,
+                  color: Color(0xFFA3E635),
+                ),
+              ),
+            ],
           ),
         ),
       ),

@@ -2,23 +2,30 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 class AppTheme {
-  // ─── Brand Color Palette ───────────────────────────────────────────────────
-  static const Color primaryBlue  = Color(0xFF6ECBF5);
-  static const Color primaryGreen = Color(0xFF7EEECB);
-  static const Color accentPurple = Color(0xFFB8A9FF);
-  static const Color accentPink   = Color(0xFFFF8EC8);
+  // ─── Brand Color Palette (Gen-Z Neon & Obsidian) ───────────────────────────
+  static const Color primaryPink   = Color(0xFFEC4899); // Electric Hot Pink
+  static const Color primaryPurple = Color(0xFF8B5CF6); // Vivid Violet
+  static const Color neonLime      = Color(0xFFA3E635); // Electric Lime / Chartreuse
+  static const Color neonGreen     = Color(0xFF4ADE80); // Live green accent
+  static const Color deepPlum      = Color(0xFF1E0A30);
 
-  // ─── Dark Mode Surfaces ────────────────────────────────────────────────────
-  static const Color darkBg      = Color(0xFF0A0D14);
-  static const Color darkSurface = Color(0xFF141924);
-  static const Color darkCard    = Color(0xFF1C2232);
-  static const Color darkBorder  = Color(0xFF252E42);
+  // Backward compatibility aliases mapped to new Gen-Z brand
+  static const Color primaryBlue  = Color(0xFFEC4899);
+  static const Color primaryGreen = Color(0xFFA3E635);
+  static const Color accentPurple = Color(0xFF8B5CF6);
+  static const Color accentPink   = Color(0xFFFF2D87);
+
+  // ─── Dark Mode Surfaces (Midnight Obsidian) ─────────────────────────────────
+  static const Color darkBg      = Color(0xFF0B0715);
+  static const Color darkSurface = Color(0xFF130D24);
+  static const Color darkCard    = Color(0xFF19112E);
+  static const Color darkBorder  = Color(0x24FFFFFF);
   static const Color darkGlass   = Color(0x1AFFFFFF); // 10% white
 
   // ─── Light Mode Surfaces ───────────────────────────────────────────────────
-  static const Color lightBg      = Color(0xFFF4F7FF);
+  static const Color lightBg      = Color(0xFFF7F5FC);
   static const Color lightSurface = Color(0xFFFFFFFF);
-  static const Color lightCard    = Color(0xFFFBFCFF);
+  static const Color lightCard    = Color(0xFFFAF8FF);
   static const Color lightGlass   = Color(0xBFFFFFFF); // 75% white
 
   // ─── Text ──────────────────────────────────────────────────────────────────
@@ -27,7 +34,7 @@ class AppTheme {
   static const Color textTertiary  = Color(0xFF9CA3AF);
 
   // ─── Semantic ──────────────────────────────────────────────────────────────
-  static const Color success = Color(0xFF34D399);
+  static const Color success = Color(0xFF4ADE80);
   static const Color error   = Color(0xFFF87171);
   static const Color warning = Color(0xFFFBBF24);
 
@@ -35,31 +42,37 @@ class AppTheme {
   static const LinearGradient primaryGradient = LinearGradient(
     begin: Alignment.topLeft,
     end: Alignment.bottomRight,
-    colors: [primaryBlue, accentPurple],
+    colors: [Color(0xFFEC4899), Color(0xFF8B5CF6)],
   );
 
   static const LinearGradient vibeGradient = LinearGradient(
     begin: Alignment.topLeft,
     end: Alignment.bottomRight,
-    colors: [primaryBlue, primaryGreen],
+    colors: [Color(0xFFEC4899), Color(0xFFD946EF)],
   );
 
   static const LinearGradient darkGradient = LinearGradient(
     begin: Alignment.topCenter,
     end: Alignment.bottomCenter,
-    colors: [Color(0xFF1A1F2E), Color(0xFF0A0D14)],
+    colors: [Color(0xFF17102C), Color(0xFF0B0715)],
   );
 
   static const LinearGradient cardGradient = LinearGradient(
     begin: Alignment.topCenter,
     end: Alignment.bottomCenter,
-    colors: [Colors.transparent, Color(0xCC000000)],
+    colors: [Colors.transparent, Color(0xDD000000)],
   );
 
   static const LinearGradient matchGradient = LinearGradient(
     begin: Alignment.topLeft,
     end: Alignment.bottomRight,
-    colors: [primaryBlue, primaryGreen],
+    colors: [Color(0xFFEC4899), Color(0xFFA3E635)],
+  );
+
+  static const LinearGradient limeGradient = LinearGradient(
+    begin: Alignment.topLeft,
+    end: Alignment.bottomRight,
+    colors: [Color(0xFF84CC16), Color(0xFFA3E635)],
   );
 
   // ─── Glassmorphism ─────────────────────────────────────────────────────────

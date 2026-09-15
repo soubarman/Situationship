@@ -1,73 +1,86 @@
+import 'dart:async';
 import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import '../../../core/models/user_model.dart';
 import '../../../core/providers/app_state_provider.dart';
+import '../../../core/providers/firestore_provider.dart';
 import '../../../core/utils/location_helper.dart';
 import '../../spotlight/widgets/spotlight_feed_section.dart';
 
-// ─── Prompts and Vibes ────────────────────────────────────────────────────────
+// ─── Data & Constants ────────────────────────────────────────────────────────
 
 const _vibeLabels = [
-  'Warm Current',
-  'Soft Rebel',
-  'Golden Hour',
-  'Quiet Storm',
-  'Soft Chaos',
-  'Night Owl',
-];
-
-const _promptHeaders = [
-  'PERFECT SUNDAY LOOKS LIKE...',
-  "I'M ACTUALLY LOOKING FOR...",
-  "I'LL FALL FOR YOU IF...",
-  'THE WAY TO MY HEART IS...',
-  'MY SIMPLE PLEASURES ARE...',
+  'chronically online',
+  'delulu optimist',
+  'golden hour type',
+  'quiet storm energy',
+  'soft chaos era',
+  'night owl mood',
+  'main character vibes',
+  'romanticizes everything',
+  'feral but cute',
+  'soft launch era',
 ];
 
 const _sampleQuotes = [
-  '"Slow breakfast, no plans, someone who stays"',
-  '"Someone who gets the quiet version of me"',
-  '"Late night drives and unhinged playlists"',
-  '"Deep talks at 2 AM over cold coffee"',
-  '"Someone who laughs at all my bad jokes"',
+  '"jazz or lo-fi at 2am?"',
+  '"bookshop wanderer"',
+  '"slow breakfast, no plans"',
+  '"deep talks at 2am"',
+  '"laughs at my own jokes"',
+  '"emotionally available (mostly)"',
+  '"chaotic but make it cute"',
+  '"feral but cute"',
+];
+
+const _reactionPhrases = [
+  'ok we see you',
+  'taste 🤌',
+  'good pick ✨',
+  'locked in 🔒',
+  'vibe match ⚡',
+  'sheesh 🔥',
+  'valid fr fr 🤝',
+  'we love to see it',
+  'no debate 💅',
+  'certified banger 🎯',
+  'immaculate vibe 💫',
+  'they\'re the one fr',
+  'chemistry check 💖',
+  '10/10 no notes 📝',
+  'main character energy 🌟',
+  'rizz certified 🏆',
+  'instant click 🔗',
+];
+
+const _grayscaleMatrix = <double>[
+  0.2126, 0.7152, 0.0722, 0, 0,
+  0.2126, 0.7152, 0.0722, 0, 0,
+  0.2126, 0.7152, 0.0722, 0, 0,
+  0,      0,      0,      1, 0,
 ];
 
 String _vibeFor(UserModel u) =>
     _vibeLabels[u.id.hashCode.abs() % _vibeLabels.length];
 
-String _promptHeaderFor(UserModel u) =>
-    _promptHeaders[u.id.hashCode.abs() % _promptHeaders.length];
-
 String _quoteFor(UserModel u) {
   final bio = u.bio?.trim();
-  if (bio != null &&
-      bio.isNotEmpty &&
-      bio != 'Loading...' &&
-      bio != 'User' &&
-      bio.length > 5) {
-    return '"$bio"';
+  if (bio != null && bio.isNotEmpty && bio != 'Loading...' && bio != 'User' && bio.length > 5) {
+    final short = bio.length > 28 ? '${bio.substring(0, 26)}...' : bio;
+    return '"$short"';
   }
   if (u.interests.isNotEmpty) {
-    return '"Loves ${u.interests.take(2).join(' & ')}"';
+    return '"into ${u.interests.take(2).join(' & ')}"';
   }
   return _sampleQuotes[u.id.hashCode.abs() % _sampleQuotes.length];
 }
 
-int _matchPct(UserModel me, UserModel other) {
-  final mySet = me.interests.toSet();
-  final theirSet = other.interests.toSet();
-  final shared = mySet.intersection(theirSet).length;
-  final total = max(mySet.union(theirSet).length, 1);
-  final base = 82 + (other.id.hashCode.abs() % 14);
-  final bonus = ((shared / total) * 10).round();
-  return (base + bonus).clamp(80, 98);
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
+// ─── Main Widget ──────────────────────────────────────────────────────────────
 
 class DiscoverTab extends ConsumerStatefulWidget {
   final List<UserModel> users;
@@ -91,36 +104,99 @@ class DiscoverTab extends ConsumerStatefulWidget {
 
 class _DiscoverTabState extends ConsumerState<DiscoverTab>
     with TickerProviderStateMixin {
+  int _round = 1;
+  static const int _totalRounds = 5;
   String? _chosenId;
-  String _selectedFilter = 'Soft';
+  String? _currentReaction;
+  bool _isAnimating = false;
 
-  late AnimationController _likeController;
+  // Spotlight countdown
+  late Timer _spotlightTimer;
+  int _spotlightSecondsLeft = 7 * 60 + 39;
+
+  // Entry animation (new pair slides up)
   late AnimationController _entryController;
   late Animation<double> _entryFade;
+  late Animation<Offset> _leftSlide;
+  late Animation<Offset> _rightSlide;
+
+  // Exit animation (nah / after pick: cards fly out)
+  late AnimationController _exitController;
+  late Animation<Offset> _leftExit;
+  late Animation<Offset> _rightExit;
+  late Animation<double> _exitFade;
+  bool _isExiting = false;
+
+  // Pick glow animation
+  late AnimationController _glowController;
+  late Animation<double> _glowAnim;
+
+  // Reaction badge animation
+  late AnimationController _reactionController;
+  late Animation<double> _reactionScale;
 
   @override
   void initState() {
     super.initState();
 
-    _likeController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 350),
-    );
-
+    // Entry: left card from bottom-left, right from bottom-right, staggered
     _entryController = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 300),
+      duration: const Duration(milliseconds: 420),
     );
-    _entryFade =
-        CurvedAnimation(parent: _entryController, curve: Curves.easeOut);
+    _entryFade = CurvedAnimation(
+      parent: _entryController,
+      curve: const Interval(0.0, 0.7, curve: Curves.easeOut),
+    );
+    _leftSlide = Tween<Offset>(begin: const Offset(-0.08, 0.12), end: Offset.zero)
+        .animate(CurvedAnimation(parent: _entryController, curve: Curves.easeOutCubic));
+    _rightSlide = Tween<Offset>(begin: const Offset(0.08, 0.12), end: Offset.zero)
+        .animate(CurvedAnimation(parent: _entryController, curve: const Interval(0.12, 1.0, curve: Curves.easeOutCubic)));
+
+    // Exit: left flies left, right flies right
+    _exitController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 320),
+    );
+    _leftExit = Tween<Offset>(begin: Offset.zero, end: const Offset(-1.2, 0))
+        .animate(CurvedAnimation(parent: _exitController, curve: Curves.easeInCubic));
+    _rightExit = Tween<Offset>(begin: Offset.zero, end: const Offset(1.2, 0))
+        .animate(CurvedAnimation(parent: _exitController, curve: Curves.easeInCubic));
+    _exitFade = Tween<double>(begin: 1.0, end: 0.0)
+        .animate(CurvedAnimation(parent: _exitController, curve: const Interval(0.5, 1.0)));
+
+    // Glow pulse on pick
+    _glowController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 450),
+    );
+    _glowAnim = Tween<double>(begin: 0.0, end: 1.0)
+        .animate(CurvedAnimation(parent: _glowController, curve: Curves.easeOutBack));
+
+    // Reaction badge pop
+    _reactionController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 480),
+    );
+    _reactionScale = Tween<double>(begin: 0.0, end: 1.0)
+        .animate(CurvedAnimation(parent: _reactionController, curve: Curves.elasticOut));
 
     _entryController.forward();
+
+    _spotlightTimer = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (mounted && _spotlightSecondsLeft > 0) {
+        setState(() => _spotlightSecondsLeft--);
+      }
+    });
   }
 
   @override
   void dispose() {
-    _likeController.dispose();
     _entryController.dispose();
+    _exitController.dispose();
+    _glowController.dispose();
+    _reactionController.dispose();
+    _spotlightTimer.cancel();
     super.dispose();
   }
 
@@ -130,611 +206,821 @@ class _DiscoverTabState extends ConsumerState<DiscoverTab>
     return [widget.users[0], widget.users[1]];
   }
 
+  String get _spotlightTime {
+    final m = (_spotlightSecondsLeft ~/ 60).toString().padLeft(2, '0');
+    final s = (_spotlightSecondsLeft % 60).toString().padLeft(2, '0');
+    return '$m:$s';
+  }
+
   Future<void> _choose(UserModel chosen) async {
-    if (_chosenId != null) return;
+    if (_chosenId != null || _isAnimating) return;
     HapticFeedback.mediumImpact();
-    setState(() => _chosenId = chosen.id);
 
-    await _likeController.forward();
+    final phrase = _reactionPhrases[Random().nextInt(_reactionPhrases.length)];
 
-    // Find the other card in the pair (if any) — passed to onLike so
-    // HeartQueue™ can track and restore it correctly on undo.
+    _glowController.reset();
+    _reactionController.reset();
+    setState(() {
+      _chosenId = chosen.id;
+      _currentReaction = phrase;
+      _isAnimating = true;
+    });
+
+    _glowController.forward();
+    _reactionController.forward();
+
+    // Give user time to see the celebration, abbreviation bubble, and glowing lime border
+    await Future.delayed(const Duration(milliseconds: 700));
     final other = _pair.where((u) => u.id != chosen.id).firstOrNull;
-
-    // Like chosen — HeartQueue™ handles pair tracking internally
     await widget.onLike(chosen, pairedWith: other);
 
-    await Future.delayed(const Duration(milliseconds: 180));
+    setState(() => _isExiting = true);
+    await _exitController.forward();
     if (mounted) {
-      _likeController.reset();
+      _exitController.reset();
       _entryController.reset();
-      setState(() => _chosenId = null);
+      _reactionController.reset();
+      setState(() {
+        _chosenId = null;
+        _currentReaction = null;
+        _isAnimating = false;
+        _isExiting = false;
+        _round = min(_round + 1, _totalRounds);
+      });
       _entryController.forward();
     }
   }
 
-  void _showOthers() {
-    HapticFeedback.selectionClick();
-    for (final u in _pair) {
+  Future<void> _nah() async {
+    if (_isAnimating) return;
+    HapticFeedback.mediumImpact();
+    setState(() {
+      _isAnimating = true;
+      _isExiting = true;
+    });
+
+    final currentPair = List<UserModel>.from(_pair);
+    for (final u in currentPair) {
       widget.onSkip(u);
     }
-    _entryController.reset();
-    setState(() => _chosenId = null);
-    _entryController.forward();
+
+    await _exitController.forward();
+    if (mounted) {
+      _exitController.reset();
+      _entryController.reset();
+      setState(() {
+        _chosenId = null;
+        _currentReaction = null;
+        _isAnimating = false;
+        _isExiting = false;
+        _round = min(_round + 1, _totalRounds);
+      });
+      _entryController.forward();
+    }
+  }
+
+  Future<void> _takeBoth() async {
+    if (_isAnimating) return;
+    final currentUser = ref.read(currentUserProvider);
+    if (!currentUser.hasActiveSubscription) {
+      HapticFeedback.lightImpact();
+      showModalBottomSheet(
+        context: context,
+        useRootNavigator: true,
+        backgroundColor: Colors.transparent,
+        barrierColor: Colors.black.withValues(alpha: 0.75),
+        isScrollControlled: true,
+        builder: (_) => const _PremiumModal(),
+      );
+      return;
+    }
+
+    // User is subscribed: Take Both!
+    HapticFeedback.heavyImpact();
+    setState(() {
+      _isAnimating = true;
+      _currentReaction = 'took both 👑';
+    });
+
+    _reactionController.reset();
+    _reactionController.forward();
+
+    final pairToLike = List<UserModel>.from(_pair);
+    for (final u in pairToLike) {
+      await widget.onLike(u);
+    }
+
+    await Future.delayed(const Duration(milliseconds: 700));
+    if (mounted) {
+      setState(() {
+        _isExiting = true;
+      });
+      await _exitController.forward();
+      if (mounted) {
+        _exitController.reset();
+        _entryController.reset();
+        setState(() {
+          _chosenId = null;
+          _currentReaction = null;
+          _isAnimating = false;
+          _isExiting = false;
+          _round = min(_round + 1, _totalRounds);
+        });
+        _entryController.forward();
+      }
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     final currentUser = ref.watch(currentUserProvider);
-    final isDark = Theme.of(context).brightness == Brightness.dark;
     final pair = _pair;
-
-    if (pair.isEmpty) return _buildEmptyState(isDark);
+    if (pair.isEmpty) return _buildEmptyState();
 
     return SingleChildScrollView(
       physics: const BouncingScrollPhysics(),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          const SizedBox(height: 4),
-
-          // ── Subheader row: "Who are you feeling?" + "🌸 Soft ⌄" ───────────
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              crossAxisAlignment: CrossAxisAlignment.center,
-              children: [
-                Text(
-                  'Who are you feeling?',
-                  style: TextStyle(
-                    fontSize: 19,
-                    fontWeight: FontWeight.w900,
-                    color: isDark ? Colors.white : const Color(0xFF111827),
-                    letterSpacing: -0.3,
-                  ),
-                ),
-                _buildFilterDropdown(isDark),
-              ],
-            ),
-          ),
-
-          const SizedBox(height: 4),
-
-          // ── Center prompt text ─────────────────────────────────────────
-          Center(
-            child: Text(
-              'Tap the one that hits different',
-              style: TextStyle(
-                fontSize: 12.5,
-                color: isDark ? const Color(0xFF6C7390) : const Color(0xFF64748B),
-                fontWeight: FontWeight.w500,
-              ),
-            ),
-          ),
-
-          const SizedBox(height: 12),
-
-          // ── 2 Side-by-Side Cards (Photo + Quote) ─────────────────────────
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 14),
-            child: FadeTransition(
-              opacity: _entryFade,
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // Left Card
-                  Expanded(
-                    child: _ProfileMatchCard(
-                      user: pair[0],
-                      currentUser: currentUser,
-                      isChosen: _chosenId == pair[0].id,
-                      isOther: _chosenId != null && _chosenId != pair[0].id,
-                      deviceLat: widget.deviceLat,
-                      deviceLon: widget.deviceLon,
-                      onTap: () => _choose(pair[0]),
-                      onViewProfile: () =>
-                          context.push('/profile/view/${pair[0].id}'),
-                    ),
-                  ),
-
-                  const SizedBox(width: 10),
-
-                  // Right Card
-                  Expanded(
-                    child: pair.length > 1
-                        ? _ProfileMatchCard(
-                            user: pair[1],
-                            currentUser: currentUser,
-                            isChosen: _chosenId == pair[1].id,
-                            isOther:
-                                _chosenId != null && _chosenId != pair[1].id,
-                            deviceLat: widget.deviceLat,
-                            deviceLon: widget.deviceLon,
-                            onTap: () => _choose(pair[1]),
-                            onViewProfile: () =>
-                                context.push('/profile/view/${pair[1].id}'),
-                          )
-                        : const SizedBox.shrink(),
-                  ),
-                ],
-              ),
-            ),
-          ),
-
-          const SizedBox(height: 14),
-
-          // ── Bottom "Show me others ➔" Button ────────────────────────────
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 14),
-            child: GestureDetector(
-              behavior: HitTestBehavior.opaque,
-              onTap: _showOthers,
-              child: Container(
-                height: 50,
-                decoration: BoxDecoration(
-                  gradient: const LinearGradient(
-                    colors: [Color(0xFF4F75FF), Color(0xFF8B5CF6)],
-                    begin: Alignment.centerLeft,
-                    end: Alignment.centerRight,
-                  ),
-                  borderRadius: BorderRadius.circular(24),
-                  boxShadow: [
-                    BoxShadow(
-                      color: const Color(0xFF4F75FF).withValues(alpha: 0.35),
-                      blurRadius: 16,
-                      offset: const Offset(0, 4),
-                    ),
-                  ],
-                ),
-                child: const Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Text(
-                      'Show me others',
-                      style: TextStyle(
-                        fontSize: 15.5,
-                        fontWeight: FontWeight.w800,
-                        color: Colors.white,
-                        letterSpacing: -0.2,
-                      ),
-                    ),
-                    SizedBox(width: 8),
-                    Icon(
-                      Icons.arrow_forward_rounded,
-                      size: 19,
-                      color: Colors.white,
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-
-          const SizedBox(height: 18),
-
-          // ── Spotlight Section (Synced with Feed page) ──────────────────
-          const Padding(
-            padding: EdgeInsets.symmetric(horizontal: 14),
-            child: SpotlightFeedSection(),
-          ),
-
-          const SizedBox(height: 32),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildFilterDropdown(bool isDark) {
-    return PopupMenuButton<String>(
-      onSelected: (val) {
-        HapticFeedback.selectionClick();
-        setState(() => _selectedFilter = val);
-      },
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      color: isDark ? const Color(0xFF1E1738) : Colors.white,
-      offset: const Offset(0, 36),
-      itemBuilder: (ctx) => [
-        _buildPopupItem('Soft', '🌸', isDark),
-        _buildPopupItem('Rebel', '⚡', isDark),
-        _buildPopupItem('Chaos', '🔥', isDark),
-        _buildPopupItem('Chill', '✨', isDark),
-      ],
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 5.5),
-        decoration: BoxDecoration(
-          color: isDark ? const Color(0xFF1D1730) : const Color(0xFFEDE9FE),
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(
-            color: isDark
-                ? Colors.white.withValues(alpha: 0.12)
-                : const Color(0xFFDDD6FE),
-            width: 0.8,
-          ),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 12, 16, 32),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            const Text('🌸', style: TextStyle(fontSize: 12.5)),
-            const SizedBox(width: 5),
-            Text(
-              _selectedFilter,
-              style: TextStyle(
-                fontSize: 12.5,
-                fontWeight: FontWeight.w700,
-                color: isDark ? Colors.white : const Color(0xFF6D28D9),
-              ),
-            ),
-            const SizedBox(width: 3),
-            Icon(
-              Icons.keyboard_arrow_down_rounded,
-              size: 16,
-              color: isDark ? Colors.white70 : const Color(0xFF6D28D9),
-            ),
+            _buildHeader(),
+            const SizedBox(height: 6),
+            _buildSubline(),
+            const SizedBox(height: 16),
+            _buildFaceOffCards(currentUser, pair),
+            const SizedBox(height: 16),
+            _buildActionButtons(),
+            const SizedBox(height: 14),
+            _buildProgressBar(),
+            const SizedBox(height: 18),
+            _buildWeeklySpotlightHeader(),
+            const SizedBox(height: 8),
+            const SpotlightFeedSection(),
+            const SizedBox(height: 28),
           ],
         ),
       ),
     );
   }
 
-  PopupMenuItem<String> _buildPopupItem(String label, String emoji, bool isDark) {
-    return PopupMenuItem<String>(
-      value: label,
-      child: Row(
-        children: [
-          Text(emoji, style: const TextStyle(fontSize: 15)),
-          const SizedBox(width: 8),
-          Text(
-            label,
-            style: TextStyle(
-              color: isDark ? Colors.white : const Color(0xFF111827),
-              fontWeight: FontWeight.w600,
-              fontSize: 13,
+  // ─── Header ──────────────────────────────────────────────────────────────────
+
+  Widget _buildHeader() {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        RichText(
+          text: const TextSpan(children: [
+            TextSpan(
+              text: 'the ',
+              style: TextStyle(
+                fontSize: 24,
+                fontWeight: FontWeight.w900,
+                fontStyle: FontStyle.italic,
+                color: Colors.white,
+                letterSpacing: -0.5,
+              ),
             ),
-          ),
-        ],
-      ),
+            TextSpan(
+              text: 'faceof!',
+              style: TextStyle(
+                fontSize: 24,
+                fontWeight: FontWeight.w900,
+                fontStyle: FontStyle.italic,
+                color: Color(0xFFFF2D87),
+                letterSpacing: -0.5,
+              ),
+            ),
+          ]),
+        ),
+        const Spacer(),
+        _RoundBadge(round: _round),
+      ],
     );
   }
 
-  Widget _buildEmptyState(bool isDark) {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Container(
-            padding: const EdgeInsets.all(22),
-            decoration: BoxDecoration(
-              color: const Color(0xFF4F75FF).withValues(alpha: 0.12),
-              shape: BoxShape.circle,
+  Widget _buildSubline() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        RichText(
+          text: const TextSpan(children: [
+            TextSpan(
+              text: 'two pulled up. ',
+              style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w700, color: Colors.white),
             ),
-            child: const Icon(
-              Icons.favorite_border_rounded,
-              color: Color(0xFF4F75FF),
-              size: 48,
+            TextSpan(
+              text: "who's the vibe?",
+              style: TextStyle(
+                fontSize: 13.5,
+                fontWeight: FontWeight.w800,
+                color: Color(0xFFA3E635),
+                fontStyle: FontStyle.italic,
+              ),
+            ),
+          ]),
+        ),
+        const SizedBox(height: 3),
+        Row(children: [
+          const Text('✌️', style: TextStyle(fontSize: 11)),
+          const SizedBox(width: 4),
+          Text(
+            'two fingers on both pics = take both',
+            style: TextStyle(
+              fontSize: 11,
+              color: Colors.white.withValues(alpha: 0.45),
+              fontWeight: FontWeight.w500,
             ),
           ),
-          const SizedBox(height: 20),
-          Text(
-            'All caught up! 💫',
-            style: TextStyle(
-              fontSize: 22,
-              fontWeight: FontWeight.w900,
-              color: isDark ? Colors.white : const Color(0xFF111827),
+        ]),
+      ],
+    );
+  }
+
+  // ─── FaceOff Cards ────────────────────────────────────────────────────────────
+
+  Widget _buildFaceOffCards(UserModel currentUser, List<UserModel> pair) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final availableW = constraints.maxWidth;
+        // 10px spacing between cards
+        final halfW = (availableW - 10) / 2;
+        // Responsive portrait ratio (1 : 1.48) so cards maintain ideal proportions
+        final cardHeight = (halfW * 1.48).clamp(240.0, 315.0);
+
+        Widget buildLeft() => SlideTransition(
+          position: _isExiting ? _leftExit : _leftSlide,
+          child: FadeTransition(
+            opacity: _isExiting ? _exitFade : _entryFade,
+            child: _FaceOffCard(
+              user: pair[0],
+              currentUser: currentUser,
+              deviceLat: widget.deviceLat,
+              deviceLon: widget.deviceLon,
+              isChosen: _chosenId == pair[0].id,
+              isOther: _chosenId != null && _chosenId != pair[0].id,
+              glowAnim: _glowAnim,
+              onTap: () => _choose(pair[0]),
+              onLongPress: () => context.push('/profile/view/${pair[0].id}'),
             ),
+          ),
+        );
+
+        Widget buildRight() => pair.length > 1
+            ? SlideTransition(
+                position: _isExiting ? _rightExit : _rightSlide,
+                child: FadeTransition(
+                  opacity: _isExiting ? _exitFade : _entryFade,
+                  child: _FaceOffCard(
+                    user: pair[1],
+                    currentUser: currentUser,
+                    deviceLat: widget.deviceLat,
+                    deviceLon: widget.deviceLon,
+                    isChosen: _chosenId == pair[1].id,
+                    isOther: _chosenId != null && _chosenId != pair[1].id,
+                    glowAnim: _glowAnim,
+                    onTap: () => _choose(pair[1]),
+                    onLongPress: () => context.push('/profile/view/${pair[1].id}'),
+                  ),
+                ),
+              )
+            : const SizedBox.shrink();
+
+        return SizedBox(
+          height: cardHeight,
+          child: Stack(
+            clipBehavior: Clip.none,
+            children: [
+              Positioned(
+                left: 0, top: 0, bottom: 0, width: halfW,
+                child: buildLeft(),
+              ),
+              if (pair.length > 1)
+                Positioned(
+                  right: 0, top: 0, bottom: 0, width: halfW,
+                  child: buildRight(),
+                ),
+              if (pair.length > 1)
+                Center(
+                  child: AnimatedOpacity(
+                    duration: const Duration(milliseconds: 200),
+                    opacity: _chosenId != null ? 0.0 : 1.0,
+                    child: _VsBadge(anim: _entryFade),
+                  ),
+                ),
+              // Reaction Abbreviation Popup ("ok we see you", etc.)
+              if (_currentReaction != null)
+                Center(
+                  child: ScaleTransition(
+                    scale: _reactionScale,
+                    child: _ReactionBubble(text: _currentReaction!),
+                  ),
+                ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  // ─── Action Buttons ───────────────────────────────────────────────────────────
+
+  Widget _buildActionButtons() {
+    return Row(
+      children: [
+        // Compact Nah button
+        _NahButton(onTap: _nah),
+        const SizedBox(width: 10),
+        // Expanded glowing Take Both button with lime dot indicator
+        Expanded(
+          child: _TakeBothButton(onTap: _takeBoth),
+        ),
+      ],
+    );
+  }
+
+  // ─── Progress Bar ─────────────────────────────────────────────────────────────
+
+  Widget _buildProgressBar() {
+    final progress = (_round - 1) / _totalRounds;
+    return Column(
+      children: [
+        ClipRRect(
+          borderRadius: BorderRadius.circular(4),
+          child: Stack(
+            children: [
+              Container(height: 3, color: Colors.white.withValues(alpha: 0.1)),
+              AnimatedFractionallySizedBox(
+                duration: const Duration(milliseconds: 450),
+                curve: Curves.easeOutCubic,
+                widthFactor: progress.clamp(0.0, 1.0),
+                child: Container(
+                  height: 3,
+                  decoration: const BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: [Color(0xFFFF2D87), Color(0xFF8B5CF6)],
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 8),
+        Row(
+          children: [
+            Expanded(
+              child: Text(
+                'streak check — don\'t fumble it now',
+                style: TextStyle(
+                  fontSize: 11.5,
+                  fontWeight: FontWeight.w600,
+                  color: Colors.white.withValues(alpha: 0.42),
+                ),
+              ),
+            ),
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  '${_round - 1}/$_totalRounds',
+                  style: const TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w900,
+                    color: Color(0xFFD8B4FE),
+                  ),
+                ),
+                const SizedBox(width: 4),
+                const Text('🔥', style: TextStyle(fontSize: 12)),
+              ],
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  // ─── Weekly Spotlight Header ──────────────────────────────────────────────────
+
+  Widget _buildWeeklySpotlightHeader() {
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: () {
+        HapticFeedback.lightImpact();
+        context.push('/spotlight');
+      },
+      child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+          decoration: BoxDecoration(
+            color: const Color(0xFF166534),
+            borderRadius: BorderRadius.circular(24),
+            border: Border.all(color: const Color(0xFF22C55E).withValues(alpha: 0.5), width: 1.2),
+            boxShadow: [
+              BoxShadow(color: const Color(0xFF22C55E).withValues(alpha: 0.25), blurRadius: 12),
+            ],
+          ),
+          child: Row(mainAxisSize: MainAxisSize.min, children: [
+            _PulsingDot(),
+            const SizedBox(width: 7),
+            const Text(
+              'WEEKLY SPOTLIGHT',
+              style: TextStyle(fontSize: 11, fontWeight: FontWeight.w900, color: Color(0xFF4ADE80), letterSpacing: 0.7),
+            ),
+          ]),
+        ),
+        Row(mainAxisSize: MainAxisSize.min, children: [
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+            decoration: BoxDecoration(
+              color: Colors.white.withValues(alpha: 0.06),
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: Colors.white.withValues(alpha: 0.1), width: 1),
+            ),
+            child: Text(
+              'resets $_spotlightTime',
+              style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: Colors.white.withValues(alpha: 0.55)),
+            ),
+          ),
+          const SizedBox(width: 4),
+          Icon(Icons.chevron_right_rounded, size: 16, color: Colors.white.withValues(alpha: 0.35)),
+        ]),
+      ]),
+    );
+  }
+
+  // ─── Empty State ──────────────────────────────────────────────────────────────
+
+  Widget _buildEmptyState() {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(40),
+        child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+          Container(
+            width: 80, height: 80,
+            decoration: BoxDecoration(
+              gradient: const LinearGradient(colors: [Color(0xFFEC4899), Color(0xFF8B5CF6)]),
+              shape: BoxShape.circle,
+              boxShadow: [BoxShadow(color: const Color(0xFFEC4899).withValues(alpha: 0.4), blurRadius: 20)],
+            ),
+            child: const Center(child: Text('🏆', style: TextStyle(fontSize: 34))),
+          ),
+          const SizedBox(height: 22),
+          const Text(
+            "you've seen them all!",
+            style: TextStyle(fontSize: 22, fontWeight: FontWeight.w900, color: Colors.white, letterSpacing: -0.3),
           ),
           const SizedBox(height: 8),
           Text(
-            'No more souls in your radius.\nCheck back soon or expand filters!',
+            "Round complete. More faces drop soon.\nDon't fumble the streak.",
             textAlign: TextAlign.center,
-            style: TextStyle(
-              fontSize: 14,
-              color: Colors.white.withValues(alpha: 0.5),
-              height: 1.5,
-            ),
+            style: TextStyle(fontSize: 13.5, color: Colors.white.withValues(alpha: 0.45), height: 1.5),
           ),
-        ],
+        ]),
       ),
     );
   }
 }
 
-// ─── Individual Side-by-Side Match Card (Photo + Prompt Card) ────────────────
+// ─── Reaction Bubble (e.g. "ok we see you") ───────────────────────────────────
 
-class _ProfileMatchCard extends StatelessWidget {
-  final UserModel user;
-  final UserModel currentUser;
-  final bool isChosen;
-  final bool isOther;
-  final double? deviceLat;
-  final double? deviceLon;
-  final VoidCallback onTap;
-  final VoidCallback onViewProfile;
-
-  const _ProfileMatchCard({
-    required this.user,
-    required this.currentUser,
-    required this.isChosen,
-    required this.isOther,
-    this.deviceLat,
-    this.deviceLon,
-    required this.onTap,
-    required this.onViewProfile,
-  });
+class _ReactionBubble extends StatelessWidget {
+  final String text;
+  const _ReactionBubble({required this.text});
 
   @override
   Widget build(BuildContext context) {
-    final vibe = _vibeFor(user);
-    final promptHeader = _promptHeaderFor(user);
-    final quoteText = _quoteFor(user);
-    final matchPct = _matchPct(currentUser, user);
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-
-    final distance = LocationHelper.getDistanceKm(
-      lat1: deviceLat,
-      lon1: deviceLon,
-      loc1: currentUser.location,
-      loc2: user.location,
-      id1: currentUser.id,
-      id2: user.id,
+    return Transform.rotate(
+      angle: -0.065, // ~-3.7 degrees tilt, exactly like image 2
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 10),
+        decoration: BoxDecoration(
+          gradient: const LinearGradient(
+            colors: [Color(0xFFFF2E93), Color(0xFFC084FC)],
+            begin: Alignment.centerLeft,
+            end: Alignment.centerRight,
+          ),
+          borderRadius: BorderRadius.circular(26),
+          border: Border.all(color: Colors.white, width: 1.8),
+          boxShadow: [
+            BoxShadow(
+              color: const Color(0xFFFF2E93).withValues(alpha: 0.55),
+              blurRadius: 20,
+              spreadRadius: 2,
+              offset: const Offset(0, 4),
+            ),
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.35),
+              blurRadius: 10,
+              offset: const Offset(0, 4),
+            ),
+          ],
+        ),
+        child: Text(
+          text,
+          style: const TextStyle(
+            color: Color(0xFF160826), // Deep dark plum/black text matching Image 2
+            fontSize: 15,
+            fontWeight: FontWeight.w900,
+            letterSpacing: -0.2,
+          ),
+        ),
+      ),
     );
+  }
+}
 
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onTap: isOther ? null : onTap,
-      onLongPress: onViewProfile,
-      child: AnimatedOpacity(
-        duration: const Duration(milliseconds: 220),
-        opacity: isOther ? 0.35 : 1.0,
-        child: AnimatedScale(
-          duration: const Duration(milliseconds: 220),
-          scale: isChosen ? 1.02 : (isOther ? 0.97 : 1.0),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              // ── Upper Photo Card ────────────────────────────────────────
-              AspectRatio(
-                aspectRatio: 0.82,
-                child: Container(
-                  clipBehavior: Clip.hardEdge,
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(22),
-                    color: isDark ? const Color(0xFF141026) : Colors.white,
-                    border: isChosen
-                        ? Border.all(color: const Color(0xFF8B5CF6), width: 2.5)
-                        : Border.all(
-                            color: isDark
-                                ? Colors.white.withValues(alpha: 0.10)
-                                : Colors.black.withValues(alpha: 0.08),
-                            width: 1,
-                          ),
-                    boxShadow: [
-                      BoxShadow(
-                        color: isChosen
-                            ? const Color(0xFF8B5CF6).withValues(alpha: 0.45)
-                            : (isDark
-                                ? Colors.black.withValues(alpha: 0.35)
-                                : Colors.black.withValues(alpha: 0.06)),
-                        blurRadius: isChosen ? 20 : 12,
-                        offset: const Offset(0, 6),
-                      ),
-                    ],
-                  ),
-                  child: Stack(
-                    fit: StackFit.expand,
-                    children: [
-                      // Photo
-                      CachedNetworkImage(
-                        imageUrl: user.avatarUrl ??
-                            'https://i.pravatar.cc/600?u=${user.id}',
-                        fit: BoxFit.cover,
-                        memCacheWidth: 600,
-                        placeholder: (_, __) => _placeholder(),
-                        errorWidget: (_, __, ___) => _placeholder(),
-                      ),
+// ─── Round Badge ─────────────────────────────────────────────────────────────────
 
-                      // Gradient at bottom of photo
-                      Positioned.fill(
-                        child: DecoratedBox(
-                          decoration: BoxDecoration(
-                            gradient: LinearGradient(
-                              begin: Alignment.topCenter,
-                              end: Alignment.bottomCenter,
-                              colors: [
-                                Colors.transparent,
-                                Colors.black.withValues(alpha: 0.05),
-                                Colors.black.withValues(alpha: 0.88),
-                              ],
-                              stops: const [0.45, 0.65, 1.0],
-                            ),
-                          ),
-                        ),
-                      ),
+class _RoundBadge extends StatefulWidget {
+  final int round;
+  const _RoundBadge({required this.round});
 
-                      // Match % Badge Top Right
-                      Positioned(
-                        top: 8,
-                        right: 8,
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 7, vertical: 3),
-                          decoration: BoxDecoration(
-                            color: Colors.black.withValues(alpha: 0.60),
-                            borderRadius: BorderRadius.circular(14),
-                            border: Border.all(
-                              color: Colors.white.withValues(alpha: 0.18),
-                              width: 0.8,
-                            ),
-                          ),
-                          child: Text(
-                            '$matchPct%',
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontWeight: FontWeight.w900,
-                              fontSize: 11,
-                            ),
-                          ),
-                        ),
-                      ),
+  @override
+  State<_RoundBadge> createState() => _RoundBadgeState();
+}
 
-                      // Bottom details on photo
-                      Positioned(
-                        left: 10,
-                        right: 10,
-                        bottom: 10,
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            // Name
-                            Text(
-                              user.name,
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontWeight: FontWeight.w900,
-                                fontSize: 16.5,
-                                letterSpacing: -0.3,
-                              ),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
+class _RoundBadgeState extends State<_RoundBadge> with SingleTickerProviderStateMixin {
+  late AnimationController _ctrl;
+  late Animation<double> _scale;
+  int _displayed = 0;
 
-                            const SizedBox(height: 1),
+  @override
+  void initState() {
+    super.initState();
+    _displayed = widget.round;
+    _ctrl = AnimationController(vsync: this, duration: const Duration(milliseconds: 350));
+    _scale = Tween<double>(begin: 1.0, end: 1.3)
+        .animate(CurvedAnimation(parent: _ctrl, curve: Curves.easeOutBack));
+  }
 
-                            // Age · Distance
-                            Text(
-                              '${user.age} · $distance km',
-                              style: TextStyle(
-                                fontSize: 11.5,
-                                fontWeight: FontWeight.w600,
-                                color: Colors.white.withValues(alpha: 0.75),
-                              ),
-                            ),
+  @override
+  void didUpdateWidget(_RoundBadge old) {
+    super.didUpdateWidget(old);
+    if (widget.round != old.round) {
+      _ctrl.forward(from: 0).then((_) {
+        if (mounted) setState(() => _displayed = widget.round);
+        _ctrl.reverse();
+      });
+    }
+  }
 
-                            const SizedBox(height: 5),
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
 
-                            // Vibe Pill
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                  horizontal: 8.5, vertical: 3),
-                              decoration: BoxDecoration(
-                                color: const Color(0xFF2C204D)
-                                    .withValues(alpha: 0.90),
-                                borderRadius: BorderRadius.circular(16),
-                                border: Border.all(
-                                  color: const Color(0xFF7E60CD)
-                                      .withValues(alpha: 0.45),
-                                  width: 0.8,
-                                ),
-                              ),
-                              child: Text(
-                                vibe,
-                                style: const TextStyle(
-                                  fontSize: 10,
-                                  fontWeight: FontWeight.w800,
-                                  color: Color(0xFFCBB7FF),
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
+  @override
+  Widget build(BuildContext context) {
+    return ScaleTransition(
+      scale: _scale,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
+        decoration: BoxDecoration(
+          color: const Color(0xFF7C3AED).withValues(alpha: 0.28),
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: const Color(0xFFA855F7).withValues(alpha: 0.5), width: 1.2),
+          boxShadow: [
+            BoxShadow(color: const Color(0xFF8B5CF6).withValues(alpha: 0.3), blurRadius: 10),
+          ],
+        ),
+        child: Text(
+          'RD ${_displayed.toString().padLeft(2, '0')}',
+          style: const TextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.w900,
+            color: Color(0xFFD8B4FE),
+            letterSpacing: 1,
+          ),
+        ),
+      ),
+    );
+  }
+}
 
-                      // Chosen Heart Pulse
-                      if (isChosen)
-                        Positioned.fill(
-                          child: Container(
-                            color: const Color(0xFF4F75FF)
-                                .withValues(alpha: 0.25),
-                            child: const Center(
-                              child: Icon(
-                                Icons.favorite_rounded,
-                                color: Colors.white,
-                                size: 54,
-                              ),
-                            ),
-                          ),
-                        ),
-                    ],
-                  ),
-                ),
+// ─── VS Badge ───────────────────────────────────────────────────────────────────
+
+class _VsBadge extends StatelessWidget {
+  final Animation<double> anim;
+  const _VsBadge({required this.anim});
+
+  @override
+  Widget build(BuildContext context) {
+    return ScaleTransition(
+      scale: Tween<double>(begin: 0.4, end: 1.0)
+          .animate(CurvedAnimation(parent: anim, curve: Curves.elasticOut)),
+      child: Container(
+        width: 38, height: 38,
+        decoration: BoxDecoration(
+          gradient: const LinearGradient(
+            colors: [Color(0xFFFF2D87), Color(0xFFF59E0B)],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          ),
+          shape: BoxShape.circle,
+          border: Border.all(color: const Color(0xFF0D0717), width: 3.0),
+          boxShadow: [
+            BoxShadow(
+              color: const Color(0xFFFF2D87).withValues(alpha: 0.55),
+              blurRadius: 12,
+              spreadRadius: 1,
+            ),
+          ],
+        ),
+        child: const Center(
+          child: Text(
+            'vs',
+            style: TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w900,
+              color: Colors.white,
+              letterSpacing: 0.3,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ─── Nah Button ───────────────────────────────────────────────────────────────────
+
+class _NahButton extends StatefulWidget {
+  final VoidCallback onTap;
+  const _NahButton({required this.onTap});
+
+  @override
+  State<_NahButton> createState() => _NahButtonState();
+}
+
+class _NahButtonState extends State<_NahButton> with SingleTickerProviderStateMixin {
+  late AnimationController _ctrl;
+  late Animation<double> _scale;
+
+  @override
+  void initState() {
+    super.initState();
+    _ctrl = AnimationController(vsync: this, duration: const Duration(milliseconds: 100));
+    _scale = Tween<double>(begin: 1.0, end: 0.94).animate(_ctrl);
+  }
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return MouseRegion(
+      cursor: SystemMouseCursors.click,
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTapDown: (_) => _ctrl.forward(),
+        onTapUp: (_) => _ctrl.reverse(),
+        onTapCancel: () => _ctrl.reverse(),
+        onTap: widget.onTap,
+        child: ScaleTransition(
+          scale: _scale,
+          child: Container(
+            height: 42,
+            padding: const EdgeInsets.symmetric(horizontal: 18),
+            decoration: BoxDecoration(
+              color: const Color(0xFF140D22),
+              borderRadius: BorderRadius.circular(21),
+              border: Border.all(
+                color: Colors.white.withValues(alpha: 0.16),
+                width: 1.0,
               ),
-
-              const SizedBox(height: 7),
-
-              // ── Lower Prompt Card (Compact Fixed Height ~72px) ───────────
-              Container(
-                height: 72,
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
-                decoration: BoxDecoration(
-                  color: isDark ? const Color(0xFF131024) : Colors.white,
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(
-                    color: isDark
-                        ? const Color(0xFF2E2652).withValues(alpha: 0.65)
-                        : const Color(0xFFE2E8F0),
-                    width: 1,
-                  ),
-                  boxShadow: isDark
-                      ? null
-                      : [
-                          BoxShadow(
-                            color: Colors.black.withValues(alpha: 0.04),
-                            blurRadius: 8,
-                            offset: const Offset(0, 2),
-                          ),
-                        ],
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(
+                  Icons.close_rounded,
+                  color: Colors.white.withValues(alpha: 0.7),
+                  size: 15,
                 ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    // Prompt header with quotation mark
-                    Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Text(
-                          '"',
-                          style: TextStyle(
-                            color: Color(0xFF6C63FF),
-                            fontSize: 13,
-                            fontWeight: FontWeight.w900,
-                            height: 1,
-                          ),
-                        ),
-                        const SizedBox(width: 3),
-                        Expanded(
-                          child: Text(
-                            promptHeader,
-                            style: const TextStyle(
-                              fontSize: 8.5,
-                              fontWeight: FontWeight.w800,
-                              color: Color(0xFF6C63FF),
-                              letterSpacing: 0.3,
-                            ),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
-                      ],
-                    ),
+                const SizedBox(width: 6),
+                Text(
+                  'nah',
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w700,
+                    color: Colors.white.withValues(alpha: 0.85),
+                    letterSpacing: -0.1,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
 
-                    const SizedBox(height: 3),
+// ─── Take Both Button ─────────────────────────────────────────────────────────────
 
-                    // Quote content
-                    Text(
-                      quoteText,
-                      style: TextStyle(
-                        fontSize: 11,
-                        fontWeight: FontWeight.w600,
-                        color: isDark ? Colors.white : const Color(0xFF1E293B),
-                        height: 1.25,
-                      ),
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
+class _TakeBothButton extends StatefulWidget {
+  final VoidCallback onTap;
+  const _TakeBothButton({required this.onTap});
+
+  @override
+  State<_TakeBothButton> createState() => _TakeBothButtonState();
+}
+
+class _TakeBothButtonState extends State<_TakeBothButton>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _ctrl;
+  late Animation<double> _scale;
+
+  @override
+  void initState() {
+    super.initState();
+    _ctrl = AnimationController(vsync: this, duration: const Duration(milliseconds: 100));
+    _scale = Tween<double>(begin: 1.0, end: 0.96).animate(_ctrl);
+  }
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return MouseRegion(
+      cursor: SystemMouseCursors.click,
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTapDown: (_) => _ctrl.forward(),
+        onTapUp: (_) => _ctrl.reverse(),
+        onTapCancel: () => _ctrl.reverse(),
+        onTap: widget.onTap,
+        child: ScaleTransition(
+          scale: _scale,
+          child: Stack(
+            clipBehavior: Clip.none,
+            children: [
+              Container(
+                height: 42,
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(
+                    colors: [Color(0xFFFF2E93), Color(0xFFC084FC)],
+                    begin: Alignment.centerLeft,
+                    end: Alignment.centerRight,
+                  ),
+                  borderRadius: BorderRadius.circular(21),
+                  boxShadow: [
+                    BoxShadow(
+                      color: const Color(0xFFFF2E93).withValues(alpha: 0.40),
+                      blurRadius: 14,
+                      offset: const Offset(0, 3),
                     ),
                   ],
+                ),
+                child: const Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(
+                      Icons.workspace_premium_rounded,
+                      color: Color(0xFF160826),
+                      size: 16,
+                    ),
+                    SizedBox(width: 6),
+                    Text(
+                      'take both',
+                      style: TextStyle(
+                        fontSize: 14.5,
+                        fontWeight: FontWeight.w900,
+                        color: Color(0xFF160826),
+                        letterSpacing: -0.2,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              // Tiny vibrant lime dot on top right
+              Positioned(
+                top: 4,
+                right: 6,
+                child: Container(
+                  width: 7,
+                  height: 7,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFA3E635),
+                    shape: BoxShape.circle,
+                    boxShadow: [
+                      BoxShadow(
+                        color: const Color(0xFFA3E635).withValues(alpha: 0.8),
+                        blurRadius: 5,
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ],
@@ -743,13 +1029,589 @@ class _ProfileMatchCard extends StatelessWidget {
       ),
     );
   }
+}
+
+// ─── FaceOff Card ────────────────────────────────────────────────────────────────
+
+class _FaceOffCard extends StatefulWidget {
+  final UserModel user;
+  final UserModel currentUser;
+  final bool isChosen;
+  final bool isOther;
+  final double? deviceLat;
+  final double? deviceLon;
+  final Animation<double> glowAnim;
+  final VoidCallback onTap;
+  final VoidCallback onLongPress;
+
+  const _FaceOffCard({
+    required this.user,
+    required this.currentUser,
+    required this.isChosen,
+    required this.isOther,
+    this.deviceLat,
+    this.deviceLon,
+    required this.glowAnim,
+    required this.onTap,
+    required this.onLongPress,
+  });
+
+  @override
+  State<_FaceOffCard> createState() => _FaceOffCardState();
+}
+
+class _FaceOffCardState extends State<_FaceOffCard> with SingleTickerProviderStateMixin {
+  late AnimationController _pressCtrl;
+  late Animation<double> _pressScale;
+  bool _isHovered = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _pressCtrl = AnimationController(vsync: this, duration: const Duration(milliseconds: 120));
+    _pressScale = Tween<double>(begin: 1.0, end: 0.97).animate(_pressCtrl);
+  }
+
+  @override
+  void dispose() { _pressCtrl.dispose(); super.dispose(); }
+
+  @override
+  Widget build(BuildContext context) {
+    final vibe = _vibeFor(widget.user);
+    final quote = _quoteFor(widget.user);
+    final distance = LocationHelper.getDistanceKm(
+      lat1: widget.deviceLat,
+      lon1: widget.deviceLon,
+      loc1: widget.currentUser.location,
+      loc2: widget.user.location,
+      id1: widget.currentUser.id,
+      id2: widget.user.id,
+    );
+
+    // Compute scale: hover slightly lifts up, chosen scales to 1.03, other shrinks to 0.94
+    double targetScale = 1.0;
+    if (widget.isChosen) {
+      targetScale = 1.03;
+    } else if (widget.isOther) {
+      targetScale = 0.94;
+    } else if (_isHovered) {
+      targetScale = 1.03;
+    }
+
+    return MouseRegion(
+      cursor: widget.isOther ? SystemMouseCursors.basic : SystemMouseCursors.click,
+      onEnter: (_) {
+        if (!widget.isOther && !widget.isChosen && mounted) {
+          setState(() => _isHovered = true);
+        }
+      },
+      onExit: (_) {
+        if (mounted) {
+          setState(() => _isHovered = false);
+        }
+      },
+      child: GestureDetector(
+        onTap: widget.isOther ? null : widget.onTap,
+        onLongPress: widget.onLongPress,
+        onTapDown: widget.isOther ? null : (_) => _pressCtrl.forward(),
+        onTapUp: widget.isOther ? null : (_) => _pressCtrl.reverse(),
+        onTapCancel: () => _pressCtrl.reverse(),
+        child: AnimatedOpacity(
+          duration: const Duration(milliseconds: 280),
+          opacity: widget.isOther ? 0.32 : 1.0,
+          child: AnimatedScale(
+            duration: const Duration(milliseconds: 260),
+            scale: targetScale,
+            curve: Curves.easeOutCubic,
+            child: ScaleTransition(
+              scale: _pressScale,
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(24),
+                child: Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    // Photo with Grayscale filter when other card is picked
+                    widget.isOther
+                        ? ColorFiltered(
+                            colorFilter: const ColorFilter.matrix(_grayscaleMatrix),
+                            child: _buildImage(),
+                          )
+                        : _buildImage(),
+
+                    // Bottom gradient overlay
+                    Positioned.fill(
+                      child: DecoratedBox(
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            begin: Alignment.topCenter,
+                            end: Alignment.bottomCenter,
+                            colors: [
+                              Colors.transparent,
+                              Colors.black.withValues(alpha: 0.02),
+                              Colors.black.withValues(alpha: 0.88),
+                            ],
+                            stops: const [0.38, 0.58, 1.0],
+                          ),
+                        ),
+                      ),
+                    ),
+
+                    // Hover outline glow (when hovered but not chosen)
+                    if (_isHovered && !widget.isChosen && !widget.isOther)
+                      Positioned.fill(
+                        child: DecoratedBox(
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(24),
+                            border: Border.all(
+                              color: const Color(0xFFE879F9).withValues(alpha: 0.7),
+                              width: 2.0,
+                            ),
+                            boxShadow: [
+                              BoxShadow(
+                                color: const Color(0xFFE879F9).withValues(alpha: 0.35),
+                                blurRadius: 14,
+                                spreadRadius: 1,
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+
+                    // Neon Lime Green Glow Border when chosen (matches Image 2 exactly)
+                    if (widget.isChosen)
+                      AnimatedBuilder(
+                        animation: widget.glowAnim,
+                        builder: (context, _) => Positioned.fill(
+                          child: DecoratedBox(
+                            decoration: BoxDecoration(
+                              borderRadius: BorderRadius.circular(24),
+                              border: Border.all(
+                                color: const Color(0xFFA3E635), // Neon lime / chartreuse
+                                width: 3.2,
+                              ),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: const Color(0xFFA3E635).withValues(alpha: widget.glowAnim.value * 0.75),
+                                  blurRadius: 18,
+                                  spreadRadius: 2,
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      )
+                    else if (!_isHovered)
+                      Positioned.fill(
+                        child: DecoratedBox(
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(24),
+                            border: Border.all(
+                              color: Colors.white.withValues(alpha: 0.1),
+                              width: 1,
+                            ),
+                          ),
+                        ),
+                      ),
+
+                    // Top Right Heart Badge when chosen (matches Image 2)
+                    if (widget.isChosen)
+                      Positioned(
+                        top: 14,
+                        right: 14,
+                        child: AnimatedBuilder(
+                          animation: widget.glowAnim,
+                          builder: (context, _) => Transform.scale(
+                            scale: widget.glowAnim.value,
+                            child: Container(
+                              width: 36,
+                              height: 36,
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                gradient: const LinearGradient(
+                                  colors: [Color(0xFFE879F9), Color(0xFFC084FC)],
+                                  begin: Alignment.topLeft,
+                                  end: Alignment.bottomRight,
+                                ),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: const Color(0xFFE879F9).withValues(alpha: 0.6),
+                                    blurRadius: 10,
+                                    spreadRadius: 1,
+                                  ),
+                                ],
+                              ),
+                              child: const Center(
+                                child: Icon(
+                                  Icons.favorite_rounded,
+                                  color: Color(0xFF1E0A30), // Black / deep plum heart
+                                  size: 19,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+
+                    // Info overlay at bottom (matches Image 2)
+                    Positioned(
+                      left: 10,
+                      right: 10,
+                      bottom: 10,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          // Name & age
+                          RichText(
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            text: TextSpan(children: [
+                              TextSpan(
+                                text: widget.user.name.toLowerCase(),
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.w900,
+                                  fontSize: 15,
+                                  fontStyle: FontStyle.italic,
+                                  letterSpacing: -0.2,
+                                ),
+                              ),
+                              TextSpan(
+                                text: ' /${widget.user.age}',
+                                style: TextStyle(
+                                  color: Colors.white.withValues(alpha: 0.75),
+                                  fontWeight: FontWeight.w600,
+                                  fontSize: 12.5,
+                                ),
+                              ),
+                            ]),
+                          ),
+                          const SizedBox(height: 2),
+                          // Quote
+                          Text(
+                            quote,
+                            style: TextStyle(
+                              fontSize: 10.5,
+                              fontWeight: FontWeight.w500,
+                              color: Colors.white.withValues(alpha: 0.8),
+                              fontStyle: FontStyle.italic,
+                              height: 1.2,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          const SizedBox(height: 6),
+                          // Vibe pill + Distance
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              // Sleek dark pill for vibe
+                              Flexible(
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                                  decoration: BoxDecoration(
+                                    color: Colors.black.withValues(alpha: 0.55),
+                                    borderRadius: BorderRadius.circular(10),
+                                    border: Border.all(
+                                      color: Colors.white.withValues(alpha: 0.14),
+                                      width: 1,
+                                    ),
+                                  ),
+                                  child: Text(
+                                    vibe,
+                                    style: const TextStyle(
+                                      fontSize: 9.5,
+                                      fontWeight: FontWeight.w700,
+                                      color: Colors.white,
+                                    ),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 4),
+                              Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(
+                                    Icons.location_on_rounded,
+                                    size: 9.5,
+                                    color: Colors.white.withValues(alpha: 0.55),
+                                  ),
+                                  const SizedBox(width: 2),
+                                  Text(
+                                    '$distance mi',
+                                    style: TextStyle(
+                                      fontSize: 9.5,
+                                      fontWeight: FontWeight.w700,
+                                      color: Colors.white.withValues(alpha: 0.55),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildImage() {
+    return CachedNetworkImage(
+      imageUrl: widget.user.avatarUrl ?? 'https://i.pravatar.cc/600?u=${widget.user.id}',
+      fit: BoxFit.cover,
+      alignment: const Alignment(0, -0.2),
+      memCacheWidth: 600,
+      placeholder: (_, __) => _placeholder(),
+      errorWidget: (_, __, ___) => _placeholder(),
+    );
+  }
 
   Widget _placeholder() {
     return Container(
-      color: const Color(0xFF15102A),
-      child: const Center(
-        child: Icon(Icons.person_rounded, size: 40, color: Colors.white24),
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          colors: [Color(0xFF1E1033), Color(0xFF2D1B56)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+      ),
+      child: const Center(child: Icon(Icons.person_rounded, size: 44, color: Colors.white24)),
+    );
+  }
+}
+
+// ─── Pulsing dot for spotlight header ─────────────────────────────────────────────
+
+class _PulsingDot extends StatefulWidget {
+  @override
+  State<_PulsingDot> createState() => _PulsingDotState();
+}
+
+class _PulsingDotState extends State<_PulsingDot> with SingleTickerProviderStateMixin {
+  late AnimationController _ctrl;
+  late Animation<double> _scale;
+
+  @override
+  void initState() {
+    super.initState();
+    _ctrl = AnimationController(vsync: this, duration: const Duration(milliseconds: 900))..repeat(reverse: true);
+    _scale = Tween<double>(begin: 0.7, end: 1.3).animate(CurvedAnimation(parent: _ctrl, curve: Curves.easeInOut));
+  }
+
+  @override
+  void dispose() { _ctrl.dispose(); super.dispose(); }
+
+  @override
+  Widget build(BuildContext context) {
+    return ScaleTransition(
+      scale: _scale,
+      child: Container(
+        width: 7, height: 7,
+        decoration: BoxDecoration(
+          color: const Color(0xFF4ADE80),
+          shape: BoxShape.circle,
+          boxShadow: [BoxShadow(color: const Color(0xFF4ADE80).withValues(alpha: 0.8), blurRadius: 7)],
+        ),
       ),
     );
+  }
+}
+
+// ─── Premium Modal ───────────────────────────────────────────────────────────────
+
+class _PremiumModal extends ConsumerWidget {
+  const _PremiumModal();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final user = ref.watch(currentUserProvider);
+    final bottomPadding = MediaQuery.of(context).padding.bottom;
+
+    return SafeArea(
+      top: false,
+      child: Container(
+        margin: EdgeInsets.fromLTRB(16, 0, 16, 16 + bottomPadding),
+        decoration: BoxDecoration(
+          color: const Color(0xFF130D22),
+          borderRadius: BorderRadius.circular(28),
+          border: Border.all(color: Colors.white.withValues(alpha: 0.12), width: 1),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.6),
+              blurRadius: 40,
+              offset: const Offset(0, -8),
+            ),
+          ],
+        ),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(28, 28, 28, 22),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+          children: [
+            // Crown icon
+            Container(
+              width: 68,
+              height: 68,
+              decoration: BoxDecoration(
+                gradient: const RadialGradient(
+                  colors: [Color(0xFFEC4899), Color(0xFF9333EA)],
+                ),
+                shape: BoxShape.circle,
+                boxShadow: [
+                  BoxShadow(
+                    color: const Color(0xFFEC4899).withValues(alpha: 0.5),
+                    blurRadius: 22,
+                    spreadRadius: 2,
+                  ),
+                ],
+              ),
+              child: const Center(
+                child: Icon(Icons.workspace_premium_rounded, color: Colors.white, size: 32),
+              ),
+            ),
+            const SizedBox(height: 20),
+            const Text(
+              'premium only',
+              style: TextStyle(
+                fontSize: 22,
+                fontWeight: FontWeight.w900,
+                color: Colors.white,
+                letterSpacing: -0.3,
+              ),
+            ),
+            const SizedBox(height: 10),
+            Text(
+              'take both is a premium feature. get unlimited\nrounds & pick both contenders in every faceoff.',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 13.5,
+                fontWeight: FontWeight.w500,
+                color: Colors.white.withValues(alpha: 0.60),
+                height: 1.5,
+              ),
+            ),
+            const SizedBox(height: 24),
+            // Unlock button -> routes to wallet
+            GestureDetector(
+              onTap: () {
+                HapticFeedback.mediumImpact();
+                Navigator.of(context).pop();
+                context.push('/wallet');
+              },
+              child: Container(
+                width: double.infinity,
+                height: 52,
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(
+                    colors: [Color(0xFFEC4899), Color(0xFFD946EF)],
+                    begin: Alignment.centerLeft,
+                    end: Alignment.centerRight,
+                  ),
+                  borderRadius: BorderRadius.circular(28),
+                  boxShadow: [
+                    BoxShadow(
+                      color: const Color(0xFFEC4899).withValues(alpha: 0.45),
+                      blurRadius: 16,
+                      offset: const Offset(0, 5),
+                    ),
+                  ],
+                ),
+                child: const Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(Icons.workspace_premium_rounded, color: Colors.white, size: 18),
+                    SizedBox(width: 8),
+                    Text(
+                      'unlock premium in wallet',
+                      style: TextStyle(
+                        fontSize: 15.5,
+                        fontWeight: FontWeight.w900,
+                        color: Colors.white,
+                        letterSpacing: -0.1,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 12),
+            // Quick 24H Trial Pass Activation
+            GestureDetector(
+              onTap: () async {
+                HapticFeedback.mediumImpact();
+                final expiry = DateTime.now().add(const Duration(days: 1));
+                try {
+                  if (user.id.isNotEmpty) {
+                    await firestoreProvider.collection('users').doc(user.id).update({
+                      'isSubscribed': true,
+                      'subscriptionExpiry': Timestamp.fromDate(expiry),
+                    });
+                  }
+                  ref.invalidate(userDataStreamProvider);
+                } catch (e) {
+                  debugPrint('Trial pass error: $e');
+                }
+                if (context.mounted) {
+                  Navigator.of(context).pop();
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: const Text('🎉 24H Premium Pass Activated! You can now Take Both!'),
+                      backgroundColor: const Color(0xFFFF2D87),
+                      behavior: SnackBarBehavior.floating,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    ),
+                  );
+                }
+              },
+              child: Container(
+                padding: const EdgeInsets.symmetric(vertical: 8),
+                child: const Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(Icons.bolt_rounded, size: 16, color: Color(0xFFA3E635)),
+                    SizedBox(width: 4),
+                    Text(
+                      'ACTIVATE 24H TRIAL PASS',
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w900,
+                        color: Color(0xFFA3E635),
+                        letterSpacing: 0.8,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 8),
+            // Maybe later
+            GestureDetector(
+              onTap: () => Navigator.of(context).pop(),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 4),
+                child: Text(
+                  'MAYBE LATER',
+                  style: TextStyle(
+                    fontSize: 11.5,
+                    fontWeight: FontWeight.w800,
+                    color: Colors.white.withValues(alpha: 0.35),
+                    letterSpacing: 1.2,
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    ),);
   }
 }

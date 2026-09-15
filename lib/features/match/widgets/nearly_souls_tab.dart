@@ -233,7 +233,7 @@ class _NearlySoulsTabState extends ConsumerState<NearlySoulsTab> {
 
 // ─── Grid Card ────────────────────────────────────────────────────────────────
 
-class _GridCard extends StatelessWidget {
+class _GridCard extends StatefulWidget {
   final UserModel user;
   final int matchPct;
   final bool isLiked;
@@ -249,169 +249,217 @@ class _GridCard extends StatelessWidget {
   });
 
   @override
+  State<_GridCard> createState() => _GridCardState();
+}
+
+class _GridCardState extends State<_GridCard> {
+  bool _isHovered = false;
+
+  @override
   Widget build(BuildContext context) {
-    final vibe = _vibeFor(user);
-    final vibeColor = _vibeColorFor(user);
+    final vibe = _vibeFor(widget.user);
+    final vibeColor = _vibeColorFor(widget.user);
 
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        clipBehavior: Clip.hardEdge,
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(20),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.3),
-              blurRadius: 16,
-              offset: const Offset(0, 8),
+    return MouseRegion(
+      cursor: SystemMouseCursors.click,
+      onEnter: (_) => setState(() => _isHovered = true),
+      onExit: (_) => setState(() => _isHovered = false),
+      child: GestureDetector(
+        onTap: widget.onTap,
+        child: AnimatedScale(
+          duration: const Duration(milliseconds: 220),
+          scale: _isHovered ? 1.03 : 1.0,
+          curve: Curves.easeOutCubic,
+          child: Container(
+            clipBehavior: Clip.hardEdge,
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(22),
+              border: Border.all(
+                color: _isHovered
+                    ? const Color(0xFFEC4899)
+                    : Colors.white.withValues(alpha: 0.1),
+                width: _isHovered ? 1.8 : 1.0,
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: _isHovered
+                      ? const Color(0xFFEC4899).withValues(alpha: 0.35)
+                      : Colors.black.withValues(alpha: 0.3),
+                  blurRadius: _isHovered ? 20 : 16,
+                  offset: const Offset(0, 8),
+                ),
+              ],
             ),
-          ],
-        ),
-        child: Stack(
-          fit: StackFit.expand,
-          children: [
-            // Photo
-            CachedNetworkImage(
-              imageUrl:
-                  user.avatarUrl ?? 'https://i.pravatar.cc/400?u=${user.id}',
-              fit: BoxFit.cover,
-              memCacheWidth: 500,
-              placeholder: (_, __) => Container(
-                color: const Color(0xFF1C2232),
-                child: const Center(
-                  child: CircularProgressIndicator(
-                    color: AppTheme.primaryBlue,
-                    strokeWidth: 2,
+            child: Stack(
+              fit: StackFit.expand,
+              children: [
+                // Photo
+                CachedNetworkImage(
+                  imageUrl:
+                      widget.user.avatarUrl ?? 'https://i.pravatar.cc/400?u=${widget.user.id}',
+                  fit: BoxFit.cover,
+                  alignment: const Alignment(0, -0.2),
+                  memCacheWidth: 500,
+                  placeholder: (_, __) => Container(
+                    color: const Color(0xFF19112E),
+                    child: const Center(
+                      child: CircularProgressIndicator(
+                        color: Color(0xFFEC4899),
+                        strokeWidth: 2,
+                      ),
+                    ),
+                  ),
+                  errorWidget: (_, __, ___) => Container(
+                    color: const Color(0xFF19112E),
+                    child: const Icon(Icons.person_rounded,
+                        size: 40, color: Colors.white30),
                   ),
                 ),
-              ),
-              errorWidget: (_, __, ___) => Container(
-                color: const Color(0xFF1C2232),
-                child: const Icon(Icons.person_rounded,
-                    size: 40, color: Colors.white30),
-              ),
-            ),
 
-            // Gradient
-            Positioned.fill(
-              child: DecoratedBox(
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topCenter,
-                    end: Alignment.bottomCenter,
-                    colors: [
-                      Colors.transparent,
-                      Colors.black.withValues(alpha: 0.75),
-                    ],
-                    stops: const [0.45, 1.0],
+                // Gradient
+                Positioned.fill(
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                        colors: [
+                          Colors.transparent,
+                          Colors.black.withValues(alpha: 0.8),
+                        ],
+                        stops: const [0.45, 1.0],
+                      ),
+                    ),
                   ),
                 ),
-              ),
-            ),
 
-            // Match % badge (top right)
-            Positioned(
-              top: 8,
-              right: 8,
-              child: Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                decoration: BoxDecoration(
-                  color: Colors.black.withValues(alpha: 0.6),
-                  borderRadius: BorderRadius.circular(20),
-                ),
-                child: Text(
-                  '$matchPct%',
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.w900,
-                    fontSize: 11.5,
-                  ),
-                ),
-              ),
-            ),
-
-            // Name, age, vibe + heart button at bottom
-            Positioned(
-              left: 10,
-              right: 10,
-              bottom: 10,
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.end,
-                children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+                // Match % badge (top right)
+                Positioned(
+                  top: 8,
+                  right: 8,
+                  child: Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF140D24).withValues(alpha: 0.75),
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(
+                        color: const Color(0xFFA3E635).withValues(alpha: 0.4),
+                        width: 0.8,
+                      ),
+                    ),
+                    child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
+                        const Text('⚡', style: TextStyle(fontSize: 10)),
+                        const SizedBox(width: 2),
                         Text(
-                          '${user.name}, ${user.age}',
+                          '${widget.matchPct}%',
                           style: const TextStyle(
-                            color: Colors.white,
-                            fontWeight: FontWeight.w800,
-                            fontSize: 14,
-                            letterSpacing: -0.2,
-                          ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                        const SizedBox(height: 4),
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 7, vertical: 3),
-                          decoration: BoxDecoration(
-                            color: vibeColor.withValues(alpha: 0.18),
-                            borderRadius: BorderRadius.circular(20),
-                            border: Border.all(
-                              color: vibeColor.withValues(alpha: 0.4),
-                              width: 0.8,
-                            ),
-                          ),
-                          child: Text(
-                            vibe,
-                            style: TextStyle(
-                              fontSize: 10,
-                              fontWeight: FontWeight.w700,
-                              color: vibeColor,
-                            ),
+                            color: Color(0xFFA3E635),
+                            fontWeight: FontWeight.w900,
+                            fontSize: 11,
                           ),
                         ),
                       ],
                     ),
                   ),
-                  const SizedBox(width: 6),
-                  // Heart button
-                  GestureDetector(
-                    onTap: onLike,
-                    child: AnimatedContainer(
-                      duration: const Duration(milliseconds: 300),
-                      width: 36,
-                      height: 36,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: isLiked
-                            ? AppTheme.primaryBlue.withValues(alpha: 0.9)
-                            : Colors.white.withValues(alpha: 0.15),
-                        border: Border.all(
-                          color: isLiked
-                              ? AppTheme.primaryBlue
-                              : Colors.white.withValues(alpha: 0.3),
-                          width: 1.5,
+                ),
+
+                // Name, age, vibe + heart button at bottom
+                Positioned(
+                  left: 10,
+                  right: 10,
+                  bottom: 10,
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              '${widget.user.name.toLowerCase()}, ${widget.user.age}',
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontWeight: FontWeight.w900,
+                                fontStyle: FontStyle.italic,
+                                fontSize: 14.5,
+                                letterSpacing: -0.2,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            const SizedBox(height: 4),
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 7, vertical: 3),
+                              decoration: BoxDecoration(
+                                color: Colors.black.withValues(alpha: 0.55),
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(
+                                  color: vibeColor.withValues(alpha: 0.4),
+                                  width: 0.8,
+                                ),
+                              ),
+                              child: Text(
+                                vibe,
+                                style: TextStyle(
+                                  fontSize: 9.5,
+                                  fontWeight: FontWeight.w700,
+                                  color: vibeColor,
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                          ],
                         ),
                       ),
-                      child: Icon(
-                        isLiked
-                            ? Icons.favorite_rounded
-                            : Icons.favorite_border_rounded,
-                        size: 18,
-                        color: Colors.white,
+                      const SizedBox(width: 6),
+                      // Heart button
+                      GestureDetector(
+                        onTap: widget.onLike,
+                        child: AnimatedContainer(
+                          duration: const Duration(milliseconds: 300),
+                          width: 36,
+                          height: 36,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: widget.isLiked
+                                ? const Color(0xFFEC4899)
+                                : Colors.white.withValues(alpha: 0.15),
+                            border: Border.all(
+                              color: widget.isLiked
+                                  ? const Color(0xFFEC4899)
+                                  : Colors.white.withValues(alpha: 0.3),
+                              width: 1.5,
+                            ),
+                            boxShadow: widget.isLiked
+                                ? [
+                                    BoxShadow(
+                                      color: const Color(0xFFEC4899).withValues(alpha: 0.5),
+                                      blurRadius: 10,
+                                    ),
+                                  ]
+                                : [],
+                          ),
+                          child: Icon(
+                            widget.isLiked
+                                ? Icons.favorite_rounded
+                                : Icons.favorite_border_rounded,
+                            size: 18,
+                            color: Colors.white,
+                          ),
+                        ),
                       ),
-                    ),
+                    ],
                   ),
-                ],
-              ),
+                ),
+              ],
             ),
-          ],
+          ),
         ),
       ),
     );

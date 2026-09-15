@@ -471,44 +471,45 @@ class _MatchScreenState extends ConsumerState<MatchScreen>
               child: ConstrainedBox(
                 constraints: const BoxConstraints(maxWidth: 440),
                 child: Padding(
-                  padding: const EdgeInsets.only(bottom: 74),
+                  padding: const EdgeInsets.only(top: 14, bottom: 74),
                   child: Column(
                     children: [
                       _buildHeader(currentUser, isDark),
+                      const SizedBox(height: 8),
                       _buildTabBar(likesCount, isDark),
-                      const SizedBox(height: 6),
-                Expanded(
-                  child: TabBarView(
-                    controller: _tabController,
-                    physics: const NeverScrollableScrollPhysics(),
-                    children: [
-                      DiscoverTab(
-                        users: discoverList,  // curated pair at top
-                        deviceLat: _deviceLat,
-                        deviceLon: _deviceLon,
-                        onLike: _onLike,
-                        onSkip: _onSkip,
-                      ),
-                      SoulModeTab(
-                        key: _soulModeKey,
-                        users: ranked,        // engine-ranked
-                        onLike: _onLike,
-                        onSkip: _onSkip,
-                      ),
-                      const LikedHistoryScreen(),
-                      NearlySoulsTab(
-                        users: ranked,        // engine-ranked
-                        onLike: _onLike,
+                      const SizedBox(height: 10),
+                      Expanded(
+                        child: TabBarView(
+                          controller: _tabController,
+                          physics: const NeverScrollableScrollPhysics(),
+                          children: [
+                            DiscoverTab(
+                              users: discoverList, // curated pair at top
+                              deviceLat: _deviceLat,
+                              deviceLon: _deviceLon,
+                              onLike: _onLike,
+                              onSkip: _onSkip,
+                            ),
+                            SoulModeTab(
+                              key: _soulModeKey,
+                              users: ranked, // engine-ranked
+                              onLike: _onLike,
+                              onSkip: _onSkip,
+                            ),
+                            const LikedHistoryScreen(),
+                            NearlySoulsTab(
+                              users: ranked, // engine-ranked
+                              onLike: _onLike,
+                            ),
+                          ],
+                        ),
                       ),
                     ],
                   ),
                 ),
-              ],
+              ),
             ),
           ),
-        ),
-      ),
-    ),
 
           // ── Match celebration overlay ─────────────────────────────────
           if (_showMatchOverlay && _matchedUser != null)
@@ -553,67 +554,184 @@ class _MatchScreenState extends ConsumerState<MatchScreen>
   // ── Header ─────────────────────────────────────────────────────────────────
 
   Widget _buildHeader(UserModel currentUser, bool isDark) {
+    final sparkCount = currentUser.likedBy.length;
+    final displayStreak = sparkCount > 0 ? sparkCount : 3;
+
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Text(
-            'Hearts',
-            style: TextStyle(
-              fontSize: 24,
-              fontWeight: FontWeight.w900,
-              color: isDark ? Colors.white : AppTheme.textPrimary,
-              letterSpacing: -0.4,
-            ),
-          ),
-          GestureDetector(
-            onTap: _showFilters,
-            child: Container(
-              width: 36,
-              height: 36,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: isDark
-                    ? Colors.white.withValues(alpha: 0.08)
-                    : Colors.black.withValues(alpha: 0.05),
-                border: Border.all(
-                  color: isDark
-                      ? Colors.white.withValues(alpha: 0.12)
-                      : Colors.black.withValues(alpha: 0.08),
-                  width: 0.8,
+          // Logo + Shield badge (exact match to image)
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ShaderMask(
+                shaderCallback: (bounds) => const LinearGradient(
+                  colors: [
+                    Color(0xFFA3E635), // Neon lime
+                    Color(0xFFD9F99D), // Light lime
+                    Color(0xFFE9D5FF), // Soft lilac
+                    Color(0xFFE879F9), // Radiant lavender
+                    Color(0xFFD946EF), // Magenta
+                  ],
+                  stops: [0.0, 0.28, 0.55, 0.82, 1.0],
+                ).createShader(bounds),
+                child: const Text(
+                  'situationship',
+                  style: TextStyle(
+                    fontSize: 23,
+                    fontWeight: FontWeight.w900,
+                    fontStyle: FontStyle.italic,
+                    color: Colors.white,
+                    letterSpacing: -0.6,
+                  ),
                 ),
               ),
-              child: Icon(
-                Icons.more_horiz_rounded,
-                size: 20,
-                color: isDark ? Colors.white70 : AppTheme.textPrimary,
+              const SizedBox(width: 7),
+              Container(
+                width: 22,
+                height: 22,
+                decoration: const BoxDecoration(
+                  color: Color(0xFFA3E635),
+                  shape: BoxShape.circle,
+                ),
+                child: const Center(
+                  child: Icon(
+                    Icons.verified_user_rounded,
+                    color: Color(0xFF140D24),
+                    size: 13.5,
+                  ),
+                ),
               ),
-            ),
+            ],
+          ),
+
+          // Action buttons: Fire pill, Shop bag, Bell with pink badge, Search
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // 🔥 Streak flame pill
+              GestureDetector(
+                onTap: () => context.push('/wallet'),
+                child: Container(
+                  height: 35,
+                  padding: const EdgeInsets.symmetric(horizontal: 10),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF182613),
+                    borderRadius: BorderRadius.circular(18),
+                    border: Border.all(
+                      color: const Color(0xFFA3E635),
+                      width: 1.4,
+                    ),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(
+                        Icons.local_fire_department_rounded,
+                        color: Color(0xFFA3E635),
+                        size: 16,
+                      ),
+                      const SizedBox(width: 4),
+                      Text(
+                        '$displayStreak',
+                        style: const TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w900,
+                          color: Color(0xFFA3E635),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(width: 7),
+
+              // Shop / Store bag button (tote bag with handles)
+              _HeaderCircleButton(
+                icon: Icons.shopping_bag_outlined,
+                onTap: () => context.push('/wallet'),
+              ),
+              const SizedBox(width: 7),
+
+              // Bell with hot pink badge (count = 3)
+              Stack(
+                clipBehavior: Clip.none,
+                children: [
+                  _HeaderCircleButton(
+                    icon: Icons.notifications_none_rounded,
+                    onTap: _showFilters,
+                  ),
+                  Positioned(
+                    top: -2,
+                    right: -2,
+                    child: Container(
+                      width: 16,
+                      height: 16,
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFFF2D87),
+                        shape: BoxShape.circle,
+                        border: Border.all(color: const Color(0xFF0B0715), width: 1.5),
+                        boxShadow: [
+                          BoxShadow(
+                            color: const Color(0xFFFF2D87).withValues(alpha: 0.6),
+                            blurRadius: 6,
+                          ),
+                        ],
+                      ),
+                      child: const Center(
+                        child: Text(
+                          '3',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 9,
+                            fontWeight: FontWeight.w900,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(width: 7),
+
+              // Search icon button
+              _HeaderCircleButton(
+                icon: Icons.search_rounded,
+                onTap: () => context.push('/search'),
+              ),
+            ],
           ),
         ],
       ),
     );
   }
 
-  // ── 4-Tab Pill Bar ─────────────────────────────────────────────────────────
+  // ── 4-Tab Segmented Pill Bar ───────────────────────────────────────────────
 
   Widget _buildTabBar(int likesCount, bool isDark) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(14, 0, 14, 0),
-      child: SingleChildScrollView(
-        scrollDirection: Axis.horizontal,
-        child: Row(
-          children: [
-            _buildTabPill(0, 'Discover', isDark),
-            const SizedBox(width: 6),
-            _buildTabPill(1, 'Soul Mode', isDark),
-            const SizedBox(width: 6),
-            _buildLikesPill(likesCount, isDark),
-            const SizedBox(width: 6),
-            _buildTabPill(3, 'Nearly Souls', isDark),
-          ],
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 16),
+      padding: const EdgeInsets.all(3.5),
+      decoration: BoxDecoration(
+        color: const Color(0xFF130D20),
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(
+          color: Colors.white.withValues(alpha: 0.1),
+          width: 0.8,
         ),
+      ),
+      child: Row(
+        children: [
+          Expanded(child: _buildTabPill(0, 'Discover', isDark)),
+          const SizedBox(width: 3),
+          Expanded(child: _buildTabPill(1, 'Soul Mode', isDark)),
+          const SizedBox(width: 3),
+          Expanded(child: _buildLikesPill(likesCount, isDark)),
+          const SizedBox(width: 3),
+          Expanded(child: _buildTabPill(3, 'Nearly Souls', isDark)),
+        ],
       ),
     );
   }
@@ -626,53 +744,33 @@ class _MatchScreenState extends ConsumerState<MatchScreen>
         _tabController.index = index;
       },
       child: AnimatedContainer(
-        duration: const Duration(milliseconds: 220),
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+        duration: const Duration(milliseconds: 200),
+        curve: Curves.easeOutCubic,
+        padding: const EdgeInsets.symmetric(vertical: 6.5),
         decoration: BoxDecoration(
           gradient: active
               ? const LinearGradient(
-                  colors: [Color(0xFF4F75FF), Color(0xFF8B5CF6)],
+                  colors: [Color(0xFFEC4899), Color(0xFF8B5CF6)],
                 )
               : null,
-          color: active
-              ? null
-              : (isDark ? const Color(0xFF161228) : Colors.white),
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(
-            color: active
-                ? Colors.transparent
-                : (isDark
-                    ? Colors.white.withValues(alpha: 0.09)
-                    : Colors.black.withValues(alpha: 0.08)),
-            width: 0.8,
-          ),
-          boxShadow: active
-              ? [
-                  BoxShadow(
-                    color: const Color(0xFF4F75FF).withValues(alpha: 0.35),
-                    blurRadius: 12,
-                    offset: const Offset(0, 3),
-                  )
-                ]
-              : [
-                  if (!isDark)
-                    BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.04),
-                      blurRadius: 6,
-                      offset: const Offset(0, 2),
-                    ),
-                ],
+          color: active ? null : Colors.transparent,
+          borderRadius: BorderRadius.circular(18),
         ),
-        child: Text(
-          label,
-          style: TextStyle(
-            fontSize: 12.5,
-            fontWeight: active ? FontWeight.w800 : FontWeight.w600,
-            color: active
-                ? Colors.white
-                : (isDark
-                    ? Colors.white.withValues(alpha: 0.65)
-                    : AppTheme.textSecondary),
+        child: Center(
+          child: AnimatedDefaultTextStyle(
+            duration: const Duration(milliseconds: 200),
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: active ? FontWeight.w900 : FontWeight.w600,
+              color: active
+                  ? Colors.white
+                  : Colors.white.withValues(alpha: 0.65),
+            ),
+            child: Text(
+              label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
           ),
         ),
       ),
@@ -687,84 +785,57 @@ class _MatchScreenState extends ConsumerState<MatchScreen>
         _tabController.index = 2;
       },
       child: AnimatedContainer(
-        duration: const Duration(milliseconds: 220),
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+        duration: const Duration(milliseconds: 200),
+        curve: Curves.easeOutCubic,
+        padding: const EdgeInsets.symmetric(vertical: 6.5),
         decoration: BoxDecoration(
           gradient: active
               ? const LinearGradient(
-                  colors: [Color(0xFF4F75FF), Color(0xFF8B5CF6)],
+                  colors: [Color(0xFFEC4899), Color(0xFF8B5CF6)],
                 )
               : null,
-          color: active
-              ? null
-              : (isDark ? const Color(0xFF161228) : Colors.white),
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(
-            color: active
-                ? Colors.transparent
-                : (isDark
-                    ? Colors.white.withValues(alpha: 0.09)
-                    : Colors.black.withValues(alpha: 0.08)),
-            width: 0.8,
-          ),
-          boxShadow: active
-              ? [
-                  BoxShadow(
-                    color: const Color(0xFF4F75FF).withValues(alpha: 0.35),
-                    blurRadius: 12,
-                    offset: const Offset(0, 3),
-                  )
-                ]
-              : [
-                  if (!isDark)
-                    BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.04),
-                      blurRadius: 6,
-                      offset: const Offset(0, 2),
-                    ),
-                ],
+          color: active ? null : Colors.transparent,
+          borderRadius: BorderRadius.circular(18),
         ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(
-              'Likes',
-              style: TextStyle(
-                fontSize: 12.5,
-                fontWeight: active ? FontWeight.w800 : FontWeight.w600,
-                color: active
-                    ? Colors.white
-                    : (isDark
-                        ? Colors.white.withValues(alpha: 0.65)
-                        : AppTheme.textSecondary),
-              ),
-            ),
-            if (count > 0) ...[
-              const SizedBox(width: 5),
-              Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
-                decoration: BoxDecoration(
+        child: Center(
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              AnimatedDefaultTextStyle(
+                duration: const Duration(milliseconds: 200),
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: active ? FontWeight.w900 : FontWeight.w600,
                   color: active
-                      ? Colors.white.withValues(alpha: 0.25)
-                      : (isDark
-                          ? const Color(0xFF8B5CF6).withValues(alpha: 0.30)
-                          : const Color(0xFF8B5CF6).withValues(alpha: 0.15)),
-                  borderRadius: BorderRadius.circular(10),
+                      ? Colors.white
+                      : Colors.white.withValues(alpha: 0.65),
                 ),
-                child: Text(
-                  count > 99 ? '99+' : '$count',
-                  style: TextStyle(
-                    fontSize: 10,
-                    fontWeight: FontWeight.w900,
+                child: const Text('Likes'),
+              ),
+              if (count > 0) ...[
+                const SizedBox(width: 4),
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 4, vertical: 0.5),
+                  decoration: BoxDecoration(
                     color: active
-                        ? Colors.white
-                        : (isDark ? const Color(0xFFB8A9FF) : const Color(0xFF6D28D9)),
+                        ? Colors.white.withValues(alpha: 0.25)
+                        : const Color(0xFF8B5CF6).withValues(alpha: 0.30),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Text(
+                    count > 99 ? '99+' : '$count',
+                    style: const TextStyle(
+                      fontSize: 9,
+                      fontWeight: FontWeight.w900,
+                      color: Colors.white,
+                    ),
                   ),
                 ),
-              ),
+              ],
             ],
-          ],
+          ),
         ),
       ),
     );
@@ -999,6 +1070,141 @@ class _MatchScreenState extends ConsumerState<MatchScreen>
           },
         );
       },
+    );
+  }
+}
+
+// ─── Sparks Pill (Header) ─────────────────────────────────────────────────────
+
+class _SparksPill extends StatefulWidget {
+  final int count;
+  const _SparksPill({required this.count});
+
+  @override
+  State<_SparksPill> createState() => _SparksPillState();
+}
+
+class _SparksPillState extends State<_SparksPill>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _ctrl;
+  late Animation<double> _scale;
+
+  @override
+  void initState() {
+    super.initState();
+    _ctrl = AnimationController(
+        vsync: this, duration: const Duration(milliseconds: 380));
+    _scale = Tween<double>(begin: 1.0, end: 1.25).animate(
+        CurvedAnimation(parent: _ctrl, curve: Curves.elasticOut));
+  }
+
+  @override
+  void didUpdateWidget(_SparksPill old) {
+    super.didUpdateWidget(old);
+    if (widget.count != old.count) {
+      _ctrl.forward(from: 0).then((_) => _ctrl.reverse());
+    }
+  }
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return ScaleTransition(
+      scale: _scale,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        decoration: BoxDecoration(
+          color: const Color(0xFF14532D),
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(
+              color: const Color(0xFF22C55E).withValues(alpha: 0.5), width: 1.2),
+          boxShadow: [
+            BoxShadow(
+                color: const Color(0xFF22C55E).withValues(alpha: 0.25),
+                blurRadius: 10)
+          ],
+        ),
+        child: Row(mainAxisSize: MainAxisSize.min, children: [
+          const Text('🔥', style: TextStyle(fontSize: 13)),
+          const SizedBox(width: 5),
+          Text(
+            '${widget.count}',
+            style: const TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w900,
+              color: Color(0xFF4ADE80),
+            ),
+          ),
+        ]),
+      ),
+    );
+  }
+}
+
+// ─── Header Action Circle Button ──────────────────────────────────────────────
+
+class _HeaderCircleButton extends StatefulWidget {
+  final IconData icon;
+  final VoidCallback onTap;
+
+  const _HeaderCircleButton({
+    required this.icon,
+    required this.onTap,
+  });
+
+  @override
+  State<_HeaderCircleButton> createState() => _HeaderCircleButtonState();
+}
+
+class _HeaderCircleButtonState extends State<_HeaderCircleButton> {
+  bool _isHovered = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return MouseRegion(
+      cursor: SystemMouseCursors.click,
+      onEnter: (_) => setState(() => _isHovered = true),
+      onExit: (_) => setState(() => _isHovered = false),
+      child: GestureDetector(
+        onTap: widget.onTap,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 150),
+          width: 35,
+          height: 35,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            color: _isHovered
+                ? Colors.white.withValues(alpha: 0.14)
+                : const Color(0xFF161026),
+            border: Border.all(
+              color: _isHovered
+                  ? const Color(0xFF8B5CF6).withValues(alpha: 0.6)
+                  : Colors.white.withValues(alpha: 0.16),
+              width: 1.0,
+            ),
+            boxShadow: _isHovered
+                ? [
+                    BoxShadow(
+                      color: const Color(0xFF8B5CF6).withValues(alpha: 0.3),
+                      blurRadius: 10,
+                    ),
+                  ]
+                : null,
+          ),
+          child: Center(
+            child: Icon(
+              widget.icon,
+              size: 17.5,
+              color: _isHovered ? Colors.white : Colors.white.withValues(alpha: 0.85),
+            ),
+          ),
+        ),
+      ),
     );
   }
 }

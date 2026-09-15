@@ -28,6 +28,10 @@ class _CommunitiesScreenState extends ConsumerState<CommunitiesScreen>
   int _selectedRangeKm = 3;
   bool _isLiveVisible = true;
 
+  // Featured profile card paging
+  late PageController _featuredPageController;
+  int _featuredPageIndex = 0;
+
   // Communities tab filter
   String _selectedCommunityCategory = 'All';
 
@@ -45,11 +49,19 @@ class _CommunitiesScreenState extends ConsumerState<CommunitiesScreen>
         setState(() => _selectedTab = _tabController.index);
       }
     });
+    _featuredPageController = PageController(viewportFraction: 0.92);
+    _featuredPageController.addListener(() {
+      final page = _featuredPageController.page?.round() ?? 0;
+      if (page != _featuredPageIndex) {
+        setState(() => _featuredPageIndex = page);
+      }
+    });
   }
 
   @override
   void dispose() {
     _tabController.dispose();
+    _featuredPageController.dispose();
     _searchCtrl.dispose();
     super.dispose();
   }
@@ -621,113 +633,174 @@ class _CommunitiesScreenState extends ConsumerState<CommunitiesScreen>
 
     // Use nearby users if found within radius; otherwise show available
     final displayUsers = nearbyUsers.isNotEmpty ? nearbyUsers : users;
-
-    final featuredUser = displayUsers.isNotEmpty ? displayUsers[0] : _fallbackUsers[0];
-    final otherUsers = displayUsers.length > 1
-        ? displayUsers.sublist(1)
-        : (users.length > 1 ? users.sublist(1) : _fallbackUsers.sublist(1));
-
+    final safePageIndex = _featuredPageIndex.clamp(0, (displayUsers.length - 1).clamp(0, 9999));
+    final otherUsers = displayUsers.length > 1 ? displayUsers.sublist(1) : <UserModel>[];
     final countDisplay = nearbyUsers.isNotEmpty ? nearbyUsers.length : displayUsers.length;
 
     return SingleChildScrollView(
       physics: const BouncingScrollPhysics(),
-      padding: const EdgeInsets.fromLTRB(16, 10, 16, 96),
+      padding: const EdgeInsets.fromLTRB(0, 10, 0, 96),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           // ── Live Nearby Status Header ──────────────────────────────────────
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              Row(
-                children: [
-                  Container(
-                    width: 8,
-                    height: 8,
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF10B981),
-                      shape: BoxShape.circle,
-                      boxShadow: [
-                        BoxShadow(
-                          color: const Color(0xFF10B981).withOpacity(0.6),
-                          blurRadius: 8,
-                          spreadRadius: 2,
-                        ),
-                      ],
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                Row(
+                  children: [
+                    Container(
+                      width: 8,
+                      height: 8,
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF10B981),
+                        shape: BoxShape.circle,
+                        boxShadow: [
+                          BoxShadow(
+                            color: const Color(0xFF10B981).withOpacity(0.6),
+                            blurRadius: 8,
+                            spreadRadius: 2,
+                          ),
+                        ],
+                      ),
                     ),
-                  ),
-                  const SizedBox(width: 7),
-                  Text(
-                    'Live nearby',
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w800,
-                      color: isDark ? Colors.white : const Color(0xFF0F172A),
-                      letterSpacing: -0.2,
+                    const SizedBox(width: 7),
+                    Text(
+                      'Live nearby',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w800,
+                        color: isDark ? Colors.white : const Color(0xFF0F172A),
+                        letterSpacing: -0.2,
+                      ),
                     ),
-                  ),
-                ],
-              ),
-              Text(
-                '$countDisplay online · $_selectedRangeKm km',
-                style: const TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w700,
-                  color: Color(0xFF10B981),
+                  ],
                 ),
-              ),
-            ],
+                Text(
+                  '$countDisplay online · $_selectedRangeKm km',
+                  style: const TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                    color: Color(0xFF10B981),
+                  ),
+                ),
+              ],
+            ),
           ),
           const SizedBox(height: 2),
-          Text(
-            "Tap someone who's around right now",
-            style: TextStyle(
-              fontSize: 12,
-              color: isDark ? Colors.white.withOpacity(0.45) : const Color(0xFF64748B),
-              fontWeight: FontWeight.w500,
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: Text(
+              "Swipe to browse people around you",
+              style: TextStyle(
+                fontSize: 12,
+                color: isDark ? Colors.white.withOpacity(0.45) : const Color(0xFF64748B),
+                fontWeight: FontWeight.w500,
+              ),
             ),
           ),
 
           const SizedBox(height: 14),
 
-          // ── Featured Active Profile Card ──────────────────────────────────
-          _buildFeaturedActiveCard(featuredUser, currentUser, isDark),
+          // ── Sliding Profile Cards ─────────────────────────────────────────
+          if (displayUsers.isEmpty)
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: _buildFeaturedActiveCard(_fallbackUsers[0], currentUser, isDark),
+            )
+          else
+            Column(
+              children: [
+                SizedBox(
+                  height: 360,
+                  child: PageView.builder(
+                    controller: _featuredPageController,
+                    itemCount: displayUsers.length,
+                    physics: const BouncingScrollPhysics(),
+                    onPageChanged: (idx) {
+                      HapticFeedback.selectionClick();
+                      setState(() => _featuredPageIndex = idx);
+                    },
+                    itemBuilder: (context, index) {
+                      return Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 6),
+                        child: _buildFeaturedActiveCard(
+                          displayUsers[index], currentUser, isDark),
+                      );
+                    },
+                  ),
+                ),
+                // ── Dot indicators ──────────────────────────────────────────
+                if (displayUsers.length > 1)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 10),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: List.generate(displayUsers.length > 8 ? 8 : displayUsers.length, (i) {
+                        final isActive = i == safePageIndex;
+                        return AnimatedContainer(
+                          duration: const Duration(milliseconds: 220),
+                          margin: const EdgeInsets.symmetric(horizontal: 3),
+                          width: isActive ? 18 : 6,
+                          height: 6,
+                          decoration: BoxDecoration(
+                            color: isActive
+                                ? const Color(0xFF4F75FF)
+                                : (isDark ? Colors.white24 : Colors.black12),
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                        );
+                      }),
+                    ),
+                  ),
+              ],
+            ),
 
           const SizedBox(height: 20),
 
           // ── ALSO AROUND section ───────────────────────────────────────────
-          Text(
-            'ALSO AROUND',
-            style: TextStyle(
-              fontSize: 11,
-              fontWeight: FontWeight.w800,
-              letterSpacing: 0.8,
-              color: isDark ? Colors.white.withOpacity(0.4) : const Color(0xFF64748B),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: Text(
+              'ALSO AROUND',
+              style: TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w800,
+                letterSpacing: 0.8,
+                color: isDark ? Colors.white.withOpacity(0.4) : const Color(0xFF64748B),
+              ),
             ),
           ),
           const SizedBox(height: 12),
 
           // Horizontal list of avatars
-          SizedBox(
-            height: 96,
-            child: ListView.separated(
-              scrollDirection: Axis.horizontal,
-              physics: const BouncingScrollPhysics(),
-              itemCount: otherUsers.length,
-              separatorBuilder: (_, __) => const SizedBox(width: 14),
-              itemBuilder: (context, index) {
-                final u = otherUsers[index];
-                return _buildAlsoAroundAvatarItem(u, currentUser, isDark);
-              },
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: SizedBox(
+              height: 96,
+              child: ListView.separated(
+                scrollDirection: Axis.horizontal,
+                physics: const BouncingScrollPhysics(),
+                itemCount: otherUsers.length,
+                separatorBuilder: (_, __) => const SizedBox(width: 14),
+                itemBuilder: (context, index) {
+                  final u = otherUsers[index];
+                  return _buildAlsoAroundAvatarItem(u, currentUser, isDark);
+                },
+              ),
             ),
           ),
 
           const SizedBox(height: 18),
 
           // ── Bottom Utility Cards (Live & Km range) ────────────────────────
-          Row(
-            children: [
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: Row(
+              children: [
               // Left: Live visibility card
               Expanded(
                 child: GestureDetector(
@@ -884,6 +957,7 @@ class _CommunitiesScreenState extends ConsumerState<CommunitiesScreen>
                 ),
               ),
             ],
+            ),
           ),
         ],
       ),
