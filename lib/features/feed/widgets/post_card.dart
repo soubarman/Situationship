@@ -612,9 +612,10 @@ class _PostCardState extends ConsumerState<PostCard>
               child: ClipOval(
                 child: CachedNetworkImage(
                   imageUrl: displayAvatar,
+                  width: 44,
+                  height: 44,
                   fit: BoxFit.cover,
-                  memCacheWidth: 132,
-                  memCacheHeight: 132,
+                  memCacheWidth: 200,
                   errorWidget: (context, url, error) => Container(
                     color: isDark ? Colors.white10 : Colors.black12,
                     child: const Icon(Icons.person, color: Colors.white54, size: 24),
@@ -1199,7 +1200,6 @@ class _PostCardState extends ConsumerState<PostCard>
                                       imageUrl: comment.text,
                                       fit: BoxFit.cover,
                                       memCacheWidth: 240,
-                                      memCacheHeight: 240,
                                     ),
                                   ),
                                 )
