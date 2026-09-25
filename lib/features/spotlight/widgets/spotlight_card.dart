@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:situationship/core/theme/app_theme.dart';
 import '../models/spotlight_model.dart';
 import 'dart:math' as math;
@@ -48,34 +49,43 @@ class SpotlightCard extends StatelessWidget {
         ];
     }
 
-    return AnimatedContainer(
-      duration: const Duration(milliseconds: 400),
-      curve: Curves.easeOutCubic,
-      margin: EdgeInsets.symmetric(
-        horizontal: isTop3 ? 6.0 : 16.0,
-        vertical: isTop3 ? 0.0 : 6.0,
-      ),
-      width: isTop3 ? 110 : null,
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: gradientColors,
+    return GestureDetector(
+      onTap: () {
+        if (bid.userId.isNotEmpty) {
+          context.push('/profile/view/${bid.userId}');
+        } else {
+          context.push('/spotlight');
+        }
+      },
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 400),
+        curve: Curves.easeOutCubic,
+        margin: EdgeInsets.symmetric(
+          horizontal: isTop3 ? 6.0 : 16.0,
+          vertical: isTop3 ? 0.0 : 6.0,
         ),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: rankColor.withOpacity(isTop3 ? 0.4 : 0.1),
-          width: isTop3 ? 1.5 : 1.0,
+        width: isTop3 ? 110 : null,
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: gradientColors,
+          ),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: rankColor.withOpacity(isTop3 ? 0.4 : 0.1),
+            width: isTop3 ? 1.5 : 1.0,
+          ),
+          boxShadow: isTop3 ? [
+            BoxShadow(
+              color: rankColor.withOpacity(0.15),
+              blurRadius: 12,
+              spreadRadius: 2,
+            )
+          ] : null,
         ),
-        boxShadow: isTop3 ? [
-          BoxShadow(
-            color: rankColor.withOpacity(0.15),
-            blurRadius: 12,
-            spreadRadius: 2,
-          )
-        ] : null,
+        child: isTop3 ? _buildTop3Card(context, rankColor) : _buildListCard(context, rankColor),
       ),
-      child: isTop3 ? _buildTop3Card(context, rankColor) : _buildListCard(context, rankColor),
     );
   }
 
@@ -100,7 +110,7 @@ class SpotlightCard extends StatelessWidget {
                     color: isPlaceholder ? rankColor.withOpacity(0.3) : rankColor, 
                     width: 2,
                   ),
-                  image: isPlaceholder ? null : DecorationImage(
+                  image: isPlaceholder || bid.profileImageUrl.isEmpty ? null : DecorationImage(
                     image: NetworkImage(bid.profileImageUrl),
                     fit: BoxFit.cover,
                   ),
@@ -108,7 +118,14 @@ class SpotlightCard extends StatelessWidget {
                 ),
                 child: isPlaceholder 
                     ? Icon(Icons.add_rounded, color: rankColor.withOpacity(0.7), size: 24)
-                    : null,
+                    : (bid.profileImageUrl.isEmpty
+                        ? Center(
+                            child: Text(
+                              bid.username.isNotEmpty ? bid.username.substring(0, 1).toUpperCase() : '?',
+                              style: TextStyle(color: rankColor, fontWeight: FontWeight.bold, fontSize: 18),
+                            ),
+                          )
+                        : null),
               ),
               if (bid.rank == 1)
                 Positioned(
@@ -144,11 +161,11 @@ class SpotlightCard extends StatelessWidget {
             children: [
               Flexible(
                 child: Text(
-                  isPlaceholder ? 'Empty' : bid.username,
+                  isPlaceholder ? 'Spot Open' : bid.username,
                   style: TextStyle(
                     fontWeight: FontWeight.w600,
                     fontSize: 13,
-                    color: isPlaceholder ? Colors.white38 : Colors.white,
+                    color: isPlaceholder ? Colors.white60 : Colors.white,
                   ),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
@@ -168,9 +185,9 @@ class SpotlightCard extends StatelessWidget {
               borderRadius: BorderRadius.circular(12),
             ),
             child: Text(
-              '₹${bid.amount}',
+              isPlaceholder ? 'Min 🪙 ${bid.amount}' : '🪙 ${bid.amount}',
               style: TextStyle(
-                color: isPlaceholder ? rankColor.withOpacity(0.4) : rankColor,
+                color: isPlaceholder ? rankColor.withOpacity(0.8) : rankColor,
                 fontWeight: FontWeight.bold,
                 fontSize: 12,
               ),
@@ -240,8 +257,8 @@ class SpotlightCard extends StatelessWidget {
               border: Border.all(color: AppTheme.primaryBlue.withOpacity(0.3)),
             ),
             child: Text(
-              '₹${bid.amount}',
-              style: const TextStyle(
+              '🪙 ${bid.amount}',
+              style: TextStyle(
                 color: AppTheme.primaryBlue,
                 fontWeight: FontWeight.bold,
                 fontSize: 13,

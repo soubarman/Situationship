@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import 'package:geolocator/geolocator.dart';
 
 import 'package:situationship/core/theme/app_theme.dart';
+import 'package:situationship/core/theme/app_palette.dart';
 import '../models/spotlight_model.dart';
 import '../providers/spotlight_provider.dart';
 import '../providers/location_provider.dart';
@@ -16,17 +17,19 @@ class SpotlightFeedSection extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final locationAsync = ref.watch(locationProvider);
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final palette = ref.watch(appPaletteProvider);
 
     return locationAsync.when(
       loading: () => const SizedBox(
         height: 120,
         child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
       ),
-      error: (e, _) => _LocationPrompt(isDark: isDark, isPermanentlyDenied: true, errorMessage: e.toString(), ref: ref),
+      error: (e, _) => _LocationPrompt(isDark: isDark, palette: palette, isPermanentlyDenied: true, errorMessage: e.toString(), ref: ref),
       data: (locState) {
         if (locState.status != LocationStatus.granted) {
           return _LocationPrompt(
             isDark: isDark,
+            palette: palette,
             isPermanentlyDenied: locState.status == LocationStatus.deniedForever,
             ref: ref,
           );
@@ -44,89 +47,35 @@ class SpotlightFeedSection extends ConsumerWidget {
               loading: () => const SizedBox(height: 120, child: Center(child: CircularProgressIndicator())),
               error: (e, _) => const SizedBox.shrink(),
               data: (bids) {
-                return Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Expanded(
-                            child: Row(
-                              children: [
-                                const Icon(Icons.bolt_rounded, color: Color(0xFFFFD700), size: 16),
-                                const SizedBox(width: 6),
-                                const Flexible(
-                                  child: Text(
-                                    'SPOTLIGHT',
-                                    style: TextStyle(
-                                      fontSize: 13,
-                                      fontWeight: FontWeight.w900,
-                                      letterSpacing: 0.8,
-                                    ),
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                ),
-                                const SizedBox(width: 6),
-                                Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                  decoration: BoxDecoration(
-                                    color: Colors.green.withOpacity(0.15),
-                                    borderRadius: BorderRadius.circular(8),
-                                    border: Border.all(color: Colors.green.withOpacity(0.4), width: 1),
-                                  ),
-                                  child: const Row(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      Icon(Icons.location_on_rounded, color: Colors.green, size: 10),
-                                      SizedBox(width: 2),
-                                      Text('Your Area', style: TextStyle(color: Colors.green, fontSize: 9, fontWeight: FontWeight.w700)),
-                                    ],
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          GestureDetector(
-                            onTap: () => context.push('/spotlight'),
-                            child: ShaderMask(
-                              shaderCallback: (bounds) => const LinearGradient(
-                                colors: [Color(0xFF9E8FFF), Color(0xFFFF4B4B)],
-                              ).createShader(bounds),
-                              child: const Text(
-                                'See all 30 →',
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w800,
-                                  color: Colors.white,
-                                ),
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    SizedBox(
-                      height: 140,
-                      child: ListView.builder(
-                        scrollDirection: Axis.horizontal,
-                        padding: const EdgeInsets.symmetric(horizontal: 12),
-                        itemCount: bids.length < 5 ? 5 : bids.length,
-                        itemBuilder: (context, index) {
-                          SpotlightBid? bid;
-                          if (index < bids.length) {
-                            bid = bids[index];
-                          } else {
-                            bid = _createPlaceholderBid(session.id, index + 1, session.minStartingBid);
-                          }
-                          return SpotlightFeedCard(bid: bid);
-                        },
-                      ),
-                    ),
-                  ],
+                // Filter real bids from Firestore
+                final realBids = bids.where((b) => b.userId.isNotEmpty).toList();
+
+                final List<SpotlightBid> displayBids = [];
+                // Take up to 10 booked bids
+                final bookedBids = realBids.take(10).toList();
+                displayBids.addAll(bookedBids);
+
+                // If slots are booked, the single open slot shifts up until the 10th position.
+                // Once 10 slots are booked, the open slot disappears.
+                // If any slot is deleted (bookedBids.length < 10), the open slot appears again!
+                if (bookedBids.length < 10) {
+                  displayBids.add(_createPlaceholderBid(
+                    session.id,
+                    bookedBids.length + 1,
+                    session.minStartingBid,
+                  ));
+                }
+
+                return SizedBox(
+                  height: 185,
+                  child: ListView.builder(
+                    scrollDirection: Axis.horizontal,
+                    padding: const EdgeInsets.symmetric(horizontal: 12),
+                    itemCount: displayBids.length,
+                    itemBuilder: (context, index) {
+                      return SpotlightFeedCard(bid: displayBids[index], palette: palette);
+                    },
+                  ),
                 );
               },
             );
@@ -141,7 +90,7 @@ class SpotlightFeedSection extends ConsumerWidget {
       id: 'placeholder_$rank',
       sessionId: sessionId,
       userId: '',
-      username: 'Empty',
+      username: 'Spot Open',
       profileImageUrl: '',
       isVerified: false,
       amount: minBid,
@@ -156,12 +105,14 @@ class SpotlightFeedSection extends ConsumerWidget {
 class _LocationPrompt extends StatelessWidget {
   final bool isDark;
   final bool isPermanentlyDenied;
+  final AppPalette palette;
   final String? errorMessage;
   final WidgetRef ref;
 
   const _LocationPrompt({
     required this.isDark,
     required this.isPermanentlyDenied,
+    required this.palette,
     this.errorMessage,
     required this.ref,
   });
@@ -172,10 +123,10 @@ class _LocationPrompt extends StatelessWidget {
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
       padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
       decoration: BoxDecoration(
-        color: isDark ? const Color(0xFF1A1628) : const Color(0xFFF3F0FF),
+        color: isDark ? const Color(0xFF1A0D20) : const Color(0xFFFDE8F0),
         borderRadius: BorderRadius.circular(18),
         border: Border.all(
-          color: AppTheme.accentPurple.withOpacity(0.35),
+          color: palette.primary.withOpacity(0.35),
           width: 1.2,
         ),
       ),
@@ -184,7 +135,7 @@ class _LocationPrompt extends StatelessWidget {
           Container(
             padding: const EdgeInsets.all(10),
             decoration: BoxDecoration(
-              gradient: AppTheme.primaryGradient,
+              gradient: palette.primaryGradient,
               shape: BoxShape.circle,
             ),
             child: const Icon(Icons.location_on_rounded, color: Colors.white, size: 18),
@@ -244,11 +195,11 @@ class _LocationPrompt extends StatelessWidget {
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
               decoration: BoxDecoration(
-                gradient: AppTheme.primaryGradient,
+                gradient: palette.primaryGradient,
                 borderRadius: BorderRadius.circular(20),
                 boxShadow: [
                   BoxShadow(
-                    color: AppTheme.primaryBlue.withOpacity(0.3),
+                    color: palette.primary.withOpacity(0.3),
                     blurRadius: 8,
                     offset: const Offset(0, 3),
                   ),
@@ -273,63 +224,379 @@ class _LocationPrompt extends StatelessWidget {
 
 class SpotlightFeedCard extends StatelessWidget {
   final SpotlightBid bid;
+  final AppPalette palette;
 
-  const SpotlightFeedCard({super.key, required this.bid});
+  const SpotlightFeedCard({super.key, required this.bid, required this.palette});
 
   @override
   Widget build(BuildContext context) {
-    final isTop3 = bid.rank <= 3;
-    Color rankColor;
+    final rank = bid.rank;
+    final isReal = bid.userId.isNotEmpty;
 
-    switch (bid.rank) {
+    // Border color and rank styling
+    final Color borderColor;
+    final Widget rankBadge;
+
+    switch (rank) {
       case 1:
-        rankColor = const Color(0xFFFFD700);
+        borderColor = const Color(0xFFFFB800);
+        rankBadge = Container(
+          padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+          decoration: BoxDecoration(
+            color: const Color(0xFFFFB800),
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: const [
+              Text('👑', style: TextStyle(fontSize: 10)),
+              SizedBox(width: 3),
+              Text(
+                '#1',
+                style: TextStyle(
+                  color: Colors.black,
+                  fontWeight: FontWeight.w900,
+                  fontSize: 10,
+                ),
+              ),
+            ],
+          ),
+        );
         break;
       case 2:
-        rankColor = const Color(0xFFE0E0E0);
+        borderColor = const Color(0xFF38BDF8);
+        rankBadge = Container(
+          padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+          decoration: BoxDecoration(
+            color: const Color(0xFF0284C7),
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: const [
+              Text('👑', style: TextStyle(fontSize: 10)),
+              SizedBox(width: 3),
+              Text(
+                '#2',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.w900,
+                  fontSize: 10,
+                ),
+              ),
+            ],
+          ),
+        );
         break;
       case 3:
-        rankColor = const Color(0xFFCD7F32);
+        borderColor = const Color(0xFFEC4899);
+        rankBadge = Container(
+          padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+          decoration: BoxDecoration(
+            color: const Color(0xFFDB2777),
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: const [
+              Text('👑', style: TextStyle(fontSize: 10)),
+              SizedBox(width: 3),
+              Text(
+                '#3',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.w900,
+                  fontSize: 10,
+                ),
+              ),
+            ],
+          ),
+        );
+        break;
+      case 4:
+        borderColor = const Color(0xFFA855F7);
+        rankBadge = Container(
+          padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+          decoration: BoxDecoration(
+            color: const Color(0xFF7E22CE),
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: const [
+              Text('⚡', style: TextStyle(fontSize: 10)),
+              SizedBox(width: 3),
+              Text('#4', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 10)),
+            ],
+          ),
+        );
+        break;
+      case 5:
+        borderColor = const Color(0xFF10B981);
+        rankBadge = Container(
+          padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+          decoration: BoxDecoration(
+            color: const Color(0xFF059669),
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: const [
+              Text('⚡', style: TextStyle(fontSize: 10)),
+              SizedBox(width: 3),
+              Text('#5', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 10)),
+            ],
+          ),
+        );
+        break;
+      case 6:
+        borderColor = const Color(0xFFF59E0B);
+        rankBadge = Container(
+          padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+          decoration: BoxDecoration(
+            color: const Color(0xFFD97706),
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: const [
+              Text('⚡', style: TextStyle(fontSize: 10)),
+              SizedBox(width: 3),
+              Text('#6', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 10)),
+            ],
+          ),
+        );
+        break;
+      case 7:
+        borderColor = const Color(0xFF6366F1);
+        rankBadge = Container(
+          padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+          decoration: BoxDecoration(
+            color: const Color(0xFF4F46E5),
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: const [
+              Text('⚡', style: TextStyle(fontSize: 10)),
+              SizedBox(width: 3),
+              Text('#7', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 10)),
+            ],
+          ),
+        );
+        break;
+      case 8:
+        borderColor = const Color(0xFF14B8A6);
+        rankBadge = Container(
+          padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+          decoration: BoxDecoration(
+            color: const Color(0xFF0D9488),
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: const [
+              Text('⚡', style: TextStyle(fontSize: 10)),
+              SizedBox(width: 3),
+              Text('#8', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 10)),
+            ],
+          ),
+        );
+        break;
+      case 9:
+        borderColor = const Color(0xFF06B6D4);
+        rankBadge = Container(
+          padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+          decoration: BoxDecoration(
+            color: const Color(0xFF0891B2),
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: const [
+              Text('⚡', style: TextStyle(fontSize: 10)),
+              SizedBox(width: 3),
+              Text('#9', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 10)),
+            ],
+          ),
+        );
+        break;
+      case 10:
+        borderColor = const Color(0xFFF43F5E);
+        rankBadge = Container(
+          padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+          decoration: BoxDecoration(
+            color: const Color(0xFFE11D48),
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: const [
+              Text('🔥', style: TextStyle(fontSize: 10)),
+              SizedBox(width: 3),
+              Text('#10', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 10)),
+            ],
+          ),
+        );
         break;
       default:
-        rankColor = const Color(0xFFA855F7);
+        borderColor = const Color(0xFFA855F7);
+        rankBadge = Container(
+          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+          decoration: BoxDecoration(
+            color: const Color(0xFF7E22CE),
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: Text(
+            '#$rank',
+            style: const TextStyle(
+              color: Colors.white,
+              fontWeight: FontWeight.w900,
+              fontSize: 10,
+            ),
+          ),
+        );
     }
 
-    final isPlaceholder = bid.userId.isEmpty;
+    if (!isReal) {
+      // Clean, premium Open Slot card without any fake user data
+      return GestureDetector(
+        onTap: () => context.push('/spotlight'),
+        child: Container(
+          width: 124,
+          margin: const EdgeInsets.symmetric(horizontal: 5),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(20),
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [
+                borderColor.withValues(alpha: 0.16),
+                const Color(0xFF140F22),
+                Colors.black.withValues(alpha: 0.88),
+              ],
+            ),
+            border: Border.all(
+              color: borderColor.withValues(alpha: 0.65),
+              width: 1.5,
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: borderColor.withValues(alpha: 0.20),
+                blurRadius: 10,
+                spreadRadius: 1,
+              ),
+            ],
+          ),
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
+              // Rank badge at top-left
+              Positioned(
+                top: 10,
+                left: 10,
+                child: rankBadge,
+              ),
 
-    List<Color> getPlaceholderGradient() {
-      switch (bid.rank) {
-        case 1:
-          return [const Color(0xFFFEF08A), const Color(0xFFF59E0B)];
-        case 2:
-          return [const Color(0xFFA855F7), const Color(0xFF6366F1)];
-        case 3:
-          return [const Color(0xFFFF3CAC), Color(0xFF7C3AED)];
-        default:
-          return [const Color(0xFF00C6FF), const Color(0xFF0072FF)];
-      }
+              // Center: Action icon and "Spot Open"
+              Center(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Container(
+                      width: 44,
+                      height: 44,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: borderColor.withValues(alpha: 0.15),
+                        border: Border.all(
+                          color: borderColor.withValues(alpha: 0.6),
+                          width: 1.5,
+                        ),
+                      ),
+                      child: Icon(
+                        Icons.add_rounded,
+                        color: borderColor,
+                        size: 26,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    const Text(
+                      'Spot Open',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: -0.2,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+
+              // Bottom Info: Min bid & Claim CTA
+              Positioned(
+                bottom: 10,
+                left: 10,
+                right: 10,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.08),
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(
+                      color: Colors.white.withValues(alpha: 0.12),
+                    ),
+                  ),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        'Min 🪙 ${bid.amount}',
+                        style: TextStyle(
+                          color: borderColor,
+                          fontSize: 10,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      const Text(
+                        'Tap to claim',
+                        style: TextStyle(
+                          color: Colors.white70,
+                          fontSize: 9,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
     }
+
+    // Real user bid card
+    final displayUsername = bid.username;
+    final displayLikes = '🪙 ${bid.amount}';
+    final hasPhoto = bid.profileImageUrl.isNotEmpty;
 
     return GestureDetector(
-      onTap: () {
-        if (!isPlaceholder && bid.userId.isNotEmpty) {
-          context.push('/profile/view/${bid.userId}');
-        } else {
-          context.push('/spotlight');
-        }
-      },
+      onTap: () => context.push('/profile/view/${bid.userId}'),
       child: Container(
-        width: 104,
-        margin: const EdgeInsets.symmetric(horizontal: 4),
+        width: 124,
+        margin: const EdgeInsets.symmetric(horizontal: 5),
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(20),
           border: Border.all(
-            color: isTop3 ? rankColor : rankColor.withOpacity(0.5),
-            width: 1.5,
+            color: borderColor.withValues(alpha: 0.85),
+            width: 1.8,
           ),
           boxShadow: [
             BoxShadow(
-              color: (isTop3 ? rankColor : const Color(0xFFA855F7)).withOpacity(0.25),
+              color: borderColor.withValues(alpha: 0.35),
               blurRadius: 12,
               spreadRadius: 1,
             ),
@@ -340,148 +607,136 @@ class SpotlightFeedCard extends StatelessWidget {
           child: Stack(
             fit: StackFit.expand,
             children: [
-              // Background: User profile photo or Vibrant Gradient Placeholder
-              if (!isPlaceholder && bid.profileImageUrl.isNotEmpty)
+              // Photo background or initials fallback
+              if (hasPhoto)
                 Image.network(
                   bid.profileImageUrl,
                   fit: BoxFit.cover,
-                  errorBuilder: (_, __, ___) => Container(
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(colors: getPlaceholderGradient()),
-                    ),
-                  ),
+                  errorBuilder: (_, __, ___) => _buildFallbackAvatar(displayUsername, borderColor),
                 )
               else
-                Container(
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      colors: getPlaceholderGradient(),
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                    ),
-                  ),
-                  child: Stack(
-                    alignment: Alignment.center,
-                    children: [
-                      Positioned.fill(
-                        child: Container(
-                          color: Colors.black.withOpacity(0.15),
-                        ),
-                      ),
-                      Container(
-                        padding: const EdgeInsets.all(8),
-                        decoration: BoxDecoration(
-                          color: Colors.white.withOpacity(0.25),
-                          shape: BoxShape.circle,
-                          border: Border.all(
-                            color: Colors.white.withOpacity(0.6),
-                            width: 1.2,
-                          ),
-                        ),
-                        child: const Icon(Icons.add_rounded, color: Colors.white, size: 20),
-                      ),
-                    ],
-                  ),
-                ),
+                _buildFallbackAvatar(displayUsername, borderColor),
 
-              // Gradient Overlay
-              Container(
+              // Gradient Overlay for readability
+              DecoratedBox(
                 decoration: BoxDecoration(
                   gradient: LinearGradient(
                     begin: Alignment.topCenter,
                     end: Alignment.bottomCenter,
                     colors: [
                       Colors.transparent,
-                      Colors.black.withOpacity(0.85),
+                      Colors.black.withValues(alpha: 0.25),
+                      Colors.black.withValues(alpha: 0.90),
                     ],
-                    stops: const [0.4, 1.0],
+                    stops: const [0.35, 0.65, 1.0],
                   ),
                 ),
               ),
 
-              // Rank Badge
+              // Top-left: Rank Badge
               Positioned(
-                top: 8,
-                left: 8,
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
-                  decoration: BoxDecoration(
-                    color: isTop3 ? rankColor : Colors.black.withOpacity(0.55),
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(
-                      color: Colors.white.withOpacity(0.4),
-                      width: 0.8,
+                top: 10,
+                left: 10,
+                child: rankBadge,
+              ),
+
+              // Top-right: Glassmorphic Add (+) button
+              Positioned(
+                top: 10,
+                right: 10,
+                child: GestureDetector(
+                  onTap: () {
+                    context.push('/spotlight');
+                  },
+                  child: Container(
+                    width: 26,
+                    height: 26,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: Colors.black.withValues(alpha: 0.45),
+                      border: Border.all(
+                        color: Colors.white.withValues(alpha: 0.35),
+                        width: 1,
+                      ),
+                    ),
+                    child: const Center(
+                      child: Icon(Icons.add_rounded, color: Colors.white, size: 16),
                     ),
                   ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      if (bid.rank == 1) const Text('👑 ', style: TextStyle(fontSize: 10)),
-                      if (bid.rank == 2) const Text('🥈 ', style: TextStyle(fontSize: 10)),
-                      if (bid.rank == 3) const Text('🥉 ', style: TextStyle(fontSize: 10)),
-                      Text(
-                        '#${bid.rank}',
-                        style: TextStyle(
-                          color: isTop3 ? Colors.black87 : Colors.white,
-                          fontWeight: FontWeight.w900,
-                          fontSize: 10.5,
-                        ),
-                      ),
-                    ],
-                  ),
                 ),
               ),
 
-              // Bottom Info
+              // Bottom Info: Username, Bid Amount
               Positioned(
-                bottom: 8,
-                left: 8,
-                right: 8,
+                bottom: 10,
+                left: 10,
+                right: 10,
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
                   children: [
                     Text(
-                      isPlaceholder ? 'Claim Slot' : '@${bid.username.toLowerCase().replaceAll(' ', '')}',
+                      displayUsername,
                       style: const TextStyle(
                         color: Colors.white,
+                        fontSize: 12.5,
                         fontWeight: FontWeight.w900,
-                        fontSize: 11.5,
                         letterSpacing: -0.2,
                       ),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                     ),
                     const SizedBox(height: 3),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
-                      decoration: BoxDecoration(
-                        color: Colors.black.withOpacity(0.45),
-                        borderRadius: BorderRadius.circular(10),
-                        border: Border.all(
-                          color: Colors.white.withOpacity(0.2),
-                          width: 0.8,
+                    Row(
+                      children: [
+                        const Icon(
+                          Icons.flash_on_rounded,
+                          size: 12,
+                          color: Color(0xFFFFB800),
                         ),
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          const Icon(Icons.favorite_rounded, color: Color(0xFFFF4B4B), size: 11),
-                          const SizedBox(width: 3),
-                          Text(
-                            '${bid.amount}',
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontWeight: FontWeight.w900,
-                              fontSize: 10.5,
-                            ),
+                        const SizedBox(width: 3),
+                        Text(
+                          displayLikes,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 11,
+                            fontWeight: FontWeight.w800,
                           ),
-                        ],
-                      ),
+                        ),
+                      ],
                     ),
                   ],
                 ),
               ),
             ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildFallbackAvatar(String name, Color accentColor) {
+    final initial = name.isNotEmpty ? name.substring(0, 1).toUpperCase() : '?';
+    return Container(
+      color: const Color(0xFF1E1B2E),
+      child: Center(
+        child: Container(
+          width: 54,
+          height: 54,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            color: accentColor.withValues(alpha: 0.2),
+            border: Border.all(color: accentColor.withValues(alpha: 0.5)),
+          ),
+          child: Center(
+            child: Text(
+              initial,
+              style: TextStyle(
+                color: accentColor,
+                fontSize: 22,
+                fontWeight: FontWeight.w900,
+              ),
+            ),
           ),
         ),
       ),

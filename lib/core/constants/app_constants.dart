@@ -2,11 +2,11 @@ import 'package:flutter/material.dart';
 import '../theme/app_theme.dart';
 
 class AppColors {
-  static const Color primaryBlue = AppTheme.primaryBlue;
-  static const Color primaryGreen = AppTheme.primaryGreen;
-  static const Color accentPurple = AppTheme.accentPurple;
-  static const Color accentPink = AppTheme.accentPink;
-  static const Color success = AppTheme.success;
+  static Color get primaryBlue => AppTheme.primaryBlue;
+  static Color get primaryGreen => AppTheme.primaryGreen;
+  static Color get accentPurple => AppTheme.accentPurple;
+  static Color get accentPink => AppTheme.accentPink;
+  static Color get success => AppTheme.success;
   static const Color error = AppTheme.error;
   static const Color warning = AppTheme.warning;
 }

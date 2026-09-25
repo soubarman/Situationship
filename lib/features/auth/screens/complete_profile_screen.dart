@@ -37,6 +37,8 @@ class _CompleteProfileScreenState extends ConsumerState<CompleteProfileScreen>
 
   // Form data
   String _gender = ''; // 'male' | 'female' | 'other'
+  String _interestedIn = 'female';
+  String _relationshipIntent = 'serious';
   XFile? _avatarFile;
   String? _avatarUrl;
   final _nameCtrl = TextEditingController();
@@ -207,8 +209,12 @@ class _CompleteProfileScreenState extends ConsumerState<CompleteProfileScreen>
         'matches': [],
         'postCount': 0,
         'createdAt': FieldValue.serverTimestamp(),
-        // ── New economy fields ──
+        // ── New economy & matching fields ──
         'gender': _gender,
+        'interestedIn': _interestedIn == 'all'
+            ? ['male', 'female', 'other']
+            : [_interestedIn],
+        'relationshipIntent': _relationshipIntent,
         'phoneNumber': '+91 98765 ${10000 + user.uid.hashCode % 90000}',
         'unlockedUserPhones': [],
         'unlockedVisitors': [],
@@ -382,7 +388,7 @@ class _CompleteProfileScreenState extends ConsumerState<CompleteProfileScreen>
             widthFactor: (_currentStep + 1) / _steps.length,
             child: Container(
               decoration: BoxDecoration(
-                gradient: const LinearGradient(
+                gradient: LinearGradient(
                   colors: [AppTheme.primaryBlue, AppTheme.accentPurple],
                 ),
                 borderRadius: BorderRadius.circular(99),
@@ -437,7 +443,103 @@ class _CompleteProfileScreenState extends ConsumerState<CompleteProfileScreen>
             description: 'Express yourself freely\non Situationship',
             gradient: const LinearGradient(colors: [Color(0xFFCE93D8), Color(0xFF6A1B9A)]),
           ),
+          if (_gender.isNotEmpty) ...[
+            const SizedBox(height: 28),
+            const Align(
+              alignment: Alignment.centerLeft,
+              child: Text(
+                'Who would you like to date? 💕',
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: AppTheme.textPrimary),
+              ),
+            ),
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                _buildPreferenceChip('Women 🌸', 'female'),
+                const SizedBox(width: 8),
+                _buildPreferenceChip('Men ⚡', 'male'),
+                const SizedBox(width: 8),
+                _buildPreferenceChip('Everyone ✨', 'all'),
+              ],
+            ),
+            const SizedBox(height: 20),
+            const Align(
+              alignment: Alignment.centerLeft,
+              child: Text(
+                'What are you looking for? 🎯',
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: AppTheme.textPrimary),
+              ),
+            ),
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                _buildIntentChip('Serious 💍', 'serious'),
+                _buildIntentChip('Casual 🥂', 'casual'),
+                _buildIntentChip('Open to explore 🌊', 'open'),
+                _buildIntentChip('New friends ☕', 'friendship'),
+              ],
+            ),
+          ],
         ],
+      ),
+    );
+  }
+
+  Widget _buildPreferenceChip(String label, String value) {
+    final isSelected = _interestedIn == value;
+    return Expanded(
+      child: GestureDetector(
+        onTap: () => setState(() => _interestedIn = value),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 200),
+          padding: const EdgeInsets.symmetric(vertical: 12),
+          decoration: BoxDecoration(
+            color: isSelected ? AppTheme.primaryBlue : Colors.white.withOpacity(0.7),
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(
+              color: isSelected ? AppTheme.primaryBlue : Colors.white,
+              width: 1.5,
+            ),
+          ),
+          alignment: Alignment.center,
+          child: Text(
+            label,
+            style: TextStyle(
+              fontSize: 13,
+              fontWeight: isSelected ? FontWeight.w700 : FontWeight.w600,
+              color: isSelected ? Colors.white : AppTheme.textPrimary,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildIntentChip(String label, String value) {
+    final isSelected = _relationshipIntent == value;
+    return GestureDetector(
+      onTap: () => setState(() => _relationshipIntent = value),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        decoration: BoxDecoration(
+          color: isSelected ? AppTheme.primaryBlue : Colors.white.withOpacity(0.7),
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(
+            color: isSelected ? AppTheme.primaryBlue : Colors.white,
+            width: 1.5,
+          ),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            fontSize: 13,
+            fontWeight: isSelected ? FontWeight.w700 : FontWeight.w600,
+            color: isSelected ? Colors.white : AppTheme.textPrimary,
+          ),
+        ),
       ),
     );
   }
@@ -451,7 +553,18 @@ class _CompleteProfileScreenState extends ConsumerState<CompleteProfileScreen>
   }) {
     final selected = _gender == value;
     return GestureDetector(
-      onTap: () => setState(() => _gender = value),
+      onTap: () {
+        setState(() {
+          _gender = value;
+          if (value == 'male') {
+            _interestedIn = 'female';
+          } else if (value == 'female') {
+            _interestedIn = 'male';
+          } else {
+            _interestedIn = 'all';
+          }
+        });
+      },
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 200),
         width: double.infinity,
@@ -536,7 +649,7 @@ class _CompleteProfileScreenState extends ConsumerState<CompleteProfileScreen>
                 shape: BoxShape.circle,
                 gradient: _avatarFile != null
                     ? null
-                    : const LinearGradient(
+                    : LinearGradient(
                         colors: [AppTheme.primaryBlue, AppTheme.accentPurple],
                         begin: Alignment.topLeft,
                         end: Alignment.bottomRight,
@@ -814,7 +927,7 @@ class _CompleteProfileScreenState extends ConsumerState<CompleteProfileScreen>
         child: Container(
           height: 58,
           decoration: BoxDecoration(
-            gradient: const LinearGradient(
+            gradient: LinearGradient(
               colors: [AppTheme.primaryBlue, AppTheme.accentPurple],
               begin: Alignment.centerLeft,
               end: Alignment.centerRight,

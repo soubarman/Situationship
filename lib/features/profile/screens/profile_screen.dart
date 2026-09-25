@@ -8,6 +8,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_core/firebase_core.dart';
 
 import '../../../core/theme/app_theme.dart';
+import '../../../core/theme/app_palette.dart';
 import '../../../core/providers/app_state_provider.dart';
 import '../../../core/providers/theme_provider.dart';
 import '../../../core/models/post_model.dart';
@@ -146,6 +147,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
     });
 
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final palette = ref.watch(appPaletteProvider);
 
     if (userDataAsync.isLoading) {
       return _buildLoadingShimmer(isDark);
@@ -165,19 +167,19 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
                   bottom: false,
                   child: Padding(
                     padding: const EdgeInsets.fromLTRB(20, 56, 20, 0),
-                    child: _buildGlassHeader(context, user, isDark),
+                    child: _buildGlassHeader(context, user, isDark, palette),
                   ),
                 ),
               ),
 
               // Animated Glass Stats Row
               SliverToBoxAdapter(
-                child: _buildStats(user, posts.length, context, isDark),
+                child: _buildStats(user, posts.length, context, isDark, palette),
               ),
 
               // Profile Visitors section
               SliverToBoxAdapter(
-                child: _buildVisitorsCard(context, user, isDark),
+                child: _buildVisitorsCard(context, user, isDark, palette),
               ),
 
               // About Me & Traits section
@@ -185,9 +187,9 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    _buildBio(user, context, isDark),
-                    _buildInterests(user, context, isDark),
-                    _buildGridHeader(context, isDark, posts.length),
+                    _buildBio(user, context, isDark, palette),
+                    _buildInterests(user, context, isDark, palette),
+                    _buildGridHeader(context, isDark, posts.length, palette),
                   ],
                 ),
               ),
@@ -227,7 +229,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
   }
 
   // ─── GLASS HEADER WITH ROTATING RING ───────────────────────────────────────
-  Widget _buildGlassHeader(BuildContext context, UserModel user, bool isDark) {
+  Widget _buildGlassHeader(BuildContext context, UserModel user, bool isDark, AppPalette palette) {
     return Row(
       crossAxisAlignment: CrossAxisAlignment.center,
       children: [
@@ -243,6 +245,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
                 child: CustomPaint(
                   painter: _AvatarRingPainter(
                     angle: _ringAnim.value * 2 * math.pi,
+                    palette: palette,
                   ),
                   child: Padding(
                     padding: const EdgeInsets.all(4.5),
@@ -302,7 +305,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      const Icon(Icons.location_on_rounded, size: 12, color: Color(0xFFFF3CAC)),
+                      Icon(Icons.location_on_rounded, size: 12, color: palette.primary),
                       const SizedBox(width: 4),
                       Text(
                         user.location!,
@@ -325,7 +328,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
                   // Edit Profile — icon only
                   _buildIconButton(
                     icon: Icons.edit_rounded,
-                    gradientColors: const [Color(0xFFFF3CAC), Color(0xFF7C3AED)],
+                    gradientColors: [palette.primary, palette.secondary],
                     onTap: () => context.push('/profile/edit'),
                   isDark: isDark,
                   ),
@@ -334,7 +337,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
                   // View Public Button
                   _buildIconButton(
                     icon: Icons.remove_red_eye_rounded,
-                    gradientColors: [const Color(0xFF00C6FF), const Color(0xFF0072FF)],
+                    gradientColors: [palette.primary, palette.secondary],
                     onTap: () => ProfileChoiceSheet.show(context, user, isDark),
                     isDark: isDark,
                   ),
@@ -354,7 +357,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
                     const SizedBox(width: 8),
                     _buildIconButton(
                       icon: Icons.verified_user_rounded,
-                      gradientColors: [const Color(0xFFA855F7), const Color(0xFF6366F1)],
+                      gradientColors: [palette.secondary, palette.primary],
                       onTap: () => context.push('/verification'),
                       isDark: isDark,
                     ),
@@ -410,7 +413,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
   }
 
   // ─── STATS CARD ─────────────────────────────────────────────────────────────
-  Widget _buildStats(UserModel user, int postCount, BuildContext context, bool isDark) {
+  Widget _buildStats(UserModel user, int postCount, BuildContext context, bool isDark, AppPalette palette) {
     return Padding(
       padding: const EdgeInsets.fromLTRB(20, 24, 20, 10),
       child: ClipRRect(
@@ -429,12 +432,12 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
               ),
               borderRadius: BorderRadius.circular(26),
               border: Border.all(
-                color: isDark ? const Color(0xFF9333EA).withOpacity(0.35) : const Color(0xFF9333EA).withOpacity(0.2),
+                color: palette.primary.withOpacity(isDark ? 0.35 : 0.2),
                 width: 1.3,
               ),
               boxShadow: [
                 BoxShadow(
-                  color: const Color(0xFF9333EA).withOpacity(isDark ? 0.2 : 0.08),
+                  color: palette.primary.withOpacity(isDark ? 0.2 : 0.08),
                   blurRadius: 20,
                   spreadRadius: 1,
                   offset: const Offset(0, 6),
@@ -448,7 +451,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
                   icon: Icons.people_alt_rounded,
                   label: 'Followers',
                   value: '${user.followers.length}',
-                  color: const Color(0xFF00C6FF),
+                  color: palette.primary,
                   isDark: isDark,
                 ),
                 _Divider(isDark: isDark),
@@ -456,7 +459,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
                   icon: Icons.favorite_rounded,
                   label: 'Likes',
                   value: '${user.likedBy.length}',
-                  color: const Color(0xFFFF3CAC),
+                  color: palette.secondary,
                   isDark: isDark,
                 ),
                 _Divider(isDark: isDark),
@@ -464,7 +467,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
                   icon: Icons.photo_library_rounded,
                   label: 'Posts',
                   value: '$postCount',
-                  color: const Color(0xFFFF8C42),
+                  color: palette.accent,
                   isDark: isDark,
                 ),
               ],
@@ -476,7 +479,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
   }
 
   // ─── PROFILE VISITORS CARD ──────────────────────────────────────────────────
-  Widget _buildVisitorsCard(BuildContext context, UserModel currentUser, bool isDark) {
+  Widget _buildVisitorsCard(BuildContext context, UserModel currentUser, bool isDark, AppPalette palette) {
     final db = FirebaseFirestore.instanceFor(app: Firebase.app(), databaseId: 'default');
 
     return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
@@ -517,12 +520,12 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
                   ),
                   borderRadius: BorderRadius.circular(26),
                   border: Border.all(
-                    color: const Color(0xFFA855F7).withOpacity(isDark ? 0.35 : 0.2),
+                    color: palette.primary.withOpacity(isDark ? 0.35 : 0.2),
                     width: 1.3,
                   ),
                   boxShadow: [
                     BoxShadow(
-                      color: const Color(0xFFA855F7).withOpacity(isDark ? 0.18 : 0.08),
+                      color: palette.primary.withOpacity(isDark ? 0.18 : 0.08),
                       blurRadius: 20,
                       spreadRadius: 0,
                     ),
@@ -539,8 +542,8 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
                             Container(
                               padding: const EdgeInsets.all(7),
                               decoration: BoxDecoration(
-                                gradient: const LinearGradient(
-                                  colors: [Color(0xFFA855F7), Color(0xFF6366F1)],
+                                gradient: LinearGradient(
+                                  colors: [palette.primary, palette.secondary],
                                 ),
                                 borderRadius: BorderRadius.circular(10),
                               ),
@@ -561,8 +564,8 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
                               Container(
                                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                                 decoration: BoxDecoration(
-                                  gradient: const LinearGradient(
-                                    colors: [Color(0xFF00C6FF), Color(0xFF0072FF)],
+                                  gradient: LinearGradient(
+                                    colors: [palette.primary, palette.secondary],
                                   ),
                                   borderRadius: BorderRadius.circular(12),
                                 ),
@@ -661,13 +664,13 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
                                         child: Container(
                                           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                                           decoration: BoxDecoration(
-                                            gradient: const LinearGradient(
-                                              colors: [Color(0xFF00C6FF), Color(0xFF0072FF)],
+                                            gradient: LinearGradient(
+                                              colors: [palette.primary, palette.secondary],
                                             ),
                                             borderRadius: BorderRadius.circular(12),
                                             boxShadow: [
                                               BoxShadow(
-                                                color: const Color(0xFF00C6FF).withOpacity(0.3),
+                                                color: palette.primary.withOpacity(0.3),
                                                 blurRadius: 8,
                                               ),
                                             ],
@@ -733,7 +736,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
   }
 
   // ─── ABOUT ME & TRAITS ──────────────────────────────────────────────────────
-  Widget _buildBio(UserModel user, BuildContext context, bool isDark) {
+  Widget _buildBio(UserModel user, BuildContext context, bool isDark, AppPalette palette) {
     if (user.bio == null || user.bio!.trim().isEmpty) return const SizedBox.shrink();
 
     return Padding(
@@ -759,8 +762,8 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
                     width: 3,
                     height: 14,
                     decoration: BoxDecoration(
-                      gradient: const LinearGradient(
-                        colors: [Color(0xFFFF3CAC), Color(0xFFFF8C42)],
+                      gradient: LinearGradient(
+                        colors: [palette.primary, palette.secondary],
                       ),
                       borderRadius: BorderRadius.circular(2),
                     ),
@@ -771,7 +774,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
                     style: TextStyle(
                       fontSize: 11,
                       fontWeight: FontWeight.w900,
-                      color: isDark ? const Color(0xFFC084FC) : const Color(0xFF7C3AED),
+                      color: isDark ? palette.accent : palette.primary,
                       letterSpacing: 1.1,
                     ),
                   ),
@@ -794,7 +797,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
     );
   }
 
-  Widget _buildInterests(UserModel user, BuildContext context, bool isDark) {
+  Widget _buildInterests(UserModel user, BuildContext context, bool isDark, AppPalette palette) {
     if (user.interests == null || user.interests!.isEmpty) return const SizedBox.shrink();
 
     return Padding(
@@ -805,7 +808,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
         children: user.interests!.map((interest) {
           final label = interest.toString();
           final icon = _getInterestIcon(label);
-          const color = Color(0xFF9333EA);
+          final color = palette.primary;
 
           return Container(
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
@@ -827,7 +830,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
                   style: TextStyle(
                     fontSize: 12.5,
                     fontWeight: FontWeight.w800,
-                    color: isDark ? Colors.white : const Color(0xFF5B21B6),
+                    color: isDark ? Colors.white : palette.primary,
                   ),
                 ),
               ],
@@ -853,7 +856,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
     return '✨';
   }
 
-  Widget _buildGridHeader(BuildContext context, bool isDark, int count) {
+  Widget _buildGridHeader(BuildContext context, bool isDark, int count, AppPalette palette) {
     return Padding(
       padding: const EdgeInsets.fromLTRB(20, 24, 20, 14),
       child: Row(
@@ -861,8 +864,8 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
           Container(
             padding: const EdgeInsets.all(7),
             decoration: BoxDecoration(
-              gradient: const LinearGradient(
-                colors: [Color(0xFFFF3CAC), Color(0xFFFF8C42)],
+              gradient: LinearGradient(
+                colors: [palette.primary, palette.secondary],
               ),
               borderRadius: BorderRadius.circular(10),
             ),
@@ -882,8 +885,8 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 3),
             decoration: BoxDecoration(
-              gradient: const LinearGradient(
-                colors: [Color(0xFFFF3CAC), Color(0xFFFF8C42)],
+              gradient: LinearGradient(
+                colors: [palette.primary, palette.secondary],
               ),
               borderRadius: BorderRadius.circular(20),
             ),
@@ -979,7 +982,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
                         Container(
                           decoration: BoxDecoration(
                             gradient: LinearGradient(
-                              colors: [const Color(0xFFFF3CAC).withOpacity(0.3), const Color(0xFF7C3AED).withOpacity(0.3)],
+                              colors: [AppTheme.primaryBlue.withOpacity(0.3), AppTheme.accentPurple.withOpacity(0.3)],
                             ),
                           ),
                           child: Center(
@@ -1082,7 +1085,8 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
 // ─── ROTATING AVATAR RING PAINTER ────────────────────────────────────────────
 class _AvatarRingPainter extends CustomPainter {
   final double angle;
-  const _AvatarRingPainter({required this.angle});
+  final AppPalette palette;
+  const _AvatarRingPainter({required this.angle, required this.palette});
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -1097,13 +1101,13 @@ class _AvatarRingPainter extends CustomPainter {
     final gradient = SweepGradient(
       startAngle: angle,
       endAngle: angle + math.pi * 2,
-      colors: const [
-        Color(0xFFFF3CAC),
-        Color(0xFFFF8C42),
-        Color(0xFFFFE44D),
-        Color(0xFF00C6FF),
-        Color(0xFF7C3AED),
-        Color(0xFFFF3CAC),
+      colors: [
+        palette.primary,
+        palette.secondary,
+        palette.accent,
+        palette.primary,
+        palette.secondary,
+        palette.primary,
       ],
     );
 
@@ -1302,7 +1306,7 @@ class _SettingsSheet extends StatelessWidget {
     required bool isSelected,
     required bool isDark,
   }) {
-    const activeColor = Color(0xFF9333EA);
+    final activeColor = AppTheme.primaryBlue;
     return GestureDetector(
       onTap: () => ref.read(themeModeProvider.notifier).setThemeMode(mode),
       child: Container(

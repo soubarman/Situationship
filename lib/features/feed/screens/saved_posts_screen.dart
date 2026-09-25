@@ -63,7 +63,7 @@ class _SavedPostsScreenState extends ConsumerState<SavedPostsScreen> {
         title: const Text('Saved Posts', style: TextStyle(fontWeight: FontWeight.bold)),
       ),
       body: _isLoading
-          ? const Center(child: CircularProgressIndicator(color: AppTheme.primaryBlue))
+          ? Center(child: CircularProgressIndicator(color: AppTheme.primaryBlue))
           : Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [

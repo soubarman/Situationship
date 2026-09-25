@@ -1,3 +1,5 @@
+import '../../../core/theme/app_theme.dart';
+import '../../../core/theme/app_palette.dart';
 import 'dart:async';
 import 'dart:math';
 import 'package:flutter/material.dart';
@@ -11,6 +13,7 @@ import '../../../core/providers/app_state_provider.dart';
 import '../../../core/providers/firestore_provider.dart';
 import '../../../core/utils/location_helper.dart';
 import '../../spotlight/widgets/spotlight_feed_section.dart';
+import 'upgrade_likes_banner.dart';
 
 // ─── Data & Constants ────────────────────────────────────────────────────────
 
@@ -88,6 +91,10 @@ class DiscoverTab extends ConsumerStatefulWidget {
   final double? deviceLon;
   final Future<void> Function(UserModel liked, {UserModel? pairedWith}) onLike;
   final void Function(UserModel user) onSkip;
+  final VoidCallback? onOpenFilters;
+  final VoidCallback? onExpandRadius;
+  final VoidCallback? onResetSeen;
+  final VoidCallback? onShowEveryone;
 
   const DiscoverTab({
     super.key,
@@ -96,6 +103,10 @@ class DiscoverTab extends ConsumerStatefulWidget {
     this.deviceLon,
     required this.onLike,
     required this.onSkip,
+    this.onOpenFilters,
+    this.onExpandRadius,
+    this.onResetSeen,
+    this.onShowEveryone,
   });
 
   @override
@@ -334,6 +345,7 @@ class _DiscoverTabState extends ConsumerState<DiscoverTab>
   @override
   Widget build(BuildContext context) {
     final currentUser = ref.watch(currentUserProvider);
+    final palette = ref.watch(appPaletteProvider);
     final pair = _pair;
     if (pair.isEmpty) return _buildEmptyState();
 
@@ -344,17 +356,19 @@ class _DiscoverTabState extends ConsumerState<DiscoverTab>
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            _buildHeader(),
+            _buildHeader(palette),
             const SizedBox(height: 6),
-            _buildSubline(),
+            _buildSubline(palette),
             const SizedBox(height: 16),
-            _buildFaceOffCards(currentUser, pair),
+            _buildFaceOffCards(currentUser, pair, palette),
             const SizedBox(height: 16),
-            _buildActionButtons(),
+            _buildActionButtons(palette),
             const SizedBox(height: 14),
-            _buildProgressBar(),
+            _buildProgressBar(palette),
             const SizedBox(height: 18),
-            _buildWeeklySpotlightHeader(),
+            const UpgradeLikesBanner(),
+            const SizedBox(height: 22),
+            _buildWeeklySpotlightHeader(palette),
             const SizedBox(height: 8),
             const SpotlightFeedSection(),
             const SizedBox(height: 28),
@@ -366,13 +380,13 @@ class _DiscoverTabState extends ConsumerState<DiscoverTab>
 
   // ─── Header ──────────────────────────────────────────────────────────────────
 
-  Widget _buildHeader() {
+  Widget _buildHeader(AppPalette palette) {
     return Row(
       crossAxisAlignment: CrossAxisAlignment.center,
       children: [
         RichText(
-          text: const TextSpan(children: [
-            TextSpan(
+          text: TextSpan(children: [
+            const TextSpan(
               text: 'the ',
               style: TextStyle(
                 fontSize: 24,
@@ -388,25 +402,60 @@ class _DiscoverTabState extends ConsumerState<DiscoverTab>
                 fontSize: 24,
                 fontWeight: FontWeight.w900,
                 fontStyle: FontStyle.italic,
-                color: Color(0xFFFF2D87),
+                color: palette.primary,
                 letterSpacing: -0.5,
               ),
             ),
           ]),
         ),
         const Spacer(),
-        _RoundBadge(round: _round),
+        if (widget.onOpenFilters != null) ...[
+          GestureDetector(
+            onTap: () {
+              HapticFeedback.lightImpact();
+              widget.onOpenFilters!();
+            },
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5.5),
+              decoration: BoxDecoration(
+                color: Colors.white.withValues(alpha: 0.08),
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(
+                  color: Colors.white.withValues(alpha: 0.16),
+                  width: 0.9,
+                ),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.tune_rounded, size: 14, color: palette.primary),
+                  const SizedBox(width: 4),
+                  const Text(
+                    'Filters',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+        ],
+        _RoundBadge(round: _round, palette: palette),
       ],
     );
   }
 
-  Widget _buildSubline() {
+  Widget _buildSubline(AppPalette palette) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         RichText(
-          text: const TextSpan(children: [
-            TextSpan(
+          text: TextSpan(children: [
+            const TextSpan(
               text: 'two pulled up. ',
               style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w700, color: Colors.white),
             ),
@@ -415,7 +464,7 @@ class _DiscoverTabState extends ConsumerState<DiscoverTab>
               style: TextStyle(
                 fontSize: 13.5,
                 fontWeight: FontWeight.w800,
-                color: Color(0xFFA3E635),
+                color: palette.secondary,
                 fontStyle: FontStyle.italic,
               ),
             ),
@@ -440,7 +489,7 @@ class _DiscoverTabState extends ConsumerState<DiscoverTab>
 
   // ─── FaceOff Cards ────────────────────────────────────────────────────────────
 
-  Widget _buildFaceOffCards(UserModel currentUser, List<UserModel> pair) {
+  Widget _buildFaceOffCards(UserModel currentUser, List<UserModel> pair, AppPalette palette) {
     return LayoutBuilder(
       builder: (context, constraints) {
         final availableW = constraints.maxWidth;
@@ -461,6 +510,7 @@ class _DiscoverTabState extends ConsumerState<DiscoverTab>
               isChosen: _chosenId == pair[0].id,
               isOther: _chosenId != null && _chosenId != pair[0].id,
               glowAnim: _glowAnim,
+              palette: palette,
               onTap: () => _choose(pair[0]),
               onLongPress: () => context.push('/profile/view/${pair[0].id}'),
             ),
@@ -480,6 +530,7 @@ class _DiscoverTabState extends ConsumerState<DiscoverTab>
                     isChosen: _chosenId == pair[1].id,
                     isOther: _chosenId != null && _chosenId != pair[1].id,
                     glowAnim: _glowAnim,
+                    palette: palette,
                     onTap: () => _choose(pair[1]),
                     onLongPress: () => context.push('/profile/view/${pair[1].id}'),
                   ),
@@ -506,7 +557,7 @@ class _DiscoverTabState extends ConsumerState<DiscoverTab>
                   child: AnimatedOpacity(
                     duration: const Duration(milliseconds: 200),
                     opacity: _chosenId != null ? 0.0 : 1.0,
-                    child: _VsBadge(anim: _entryFade),
+                    child: _VsBadge(anim: _entryFade, palette: palette),
                   ),
                 ),
               // Reaction Abbreviation Popup ("ok we see you", etc.)
@@ -514,7 +565,7 @@ class _DiscoverTabState extends ConsumerState<DiscoverTab>
                 Center(
                   child: ScaleTransition(
                     scale: _reactionScale,
-                    child: _ReactionBubble(text: _currentReaction!),
+                    child: _ReactionBubble(text: _currentReaction!, palette: palette),
                   ),
                 ),
             ],
@@ -526,7 +577,7 @@ class _DiscoverTabState extends ConsumerState<DiscoverTab>
 
   // ─── Action Buttons ───────────────────────────────────────────────────────────
 
-  Widget _buildActionButtons() {
+  Widget _buildActionButtons(AppPalette palette) {
     return Row(
       children: [
         // Compact Nah button
@@ -534,7 +585,7 @@ class _DiscoverTabState extends ConsumerState<DiscoverTab>
         const SizedBox(width: 10),
         // Expanded glowing Take Both button with lime dot indicator
         Expanded(
-          child: _TakeBothButton(onTap: _takeBoth),
+          child: _TakeBothButton(onTap: _takeBoth, palette: palette),
         ),
       ],
     );
@@ -542,7 +593,7 @@ class _DiscoverTabState extends ConsumerState<DiscoverTab>
 
   // ─── Progress Bar ─────────────────────────────────────────────────────────────
 
-  Widget _buildProgressBar() {
+  Widget _buildProgressBar(AppPalette palette) {
     final progress = (_round - 1) / _totalRounds;
     return Column(
       children: [
@@ -557,10 +608,8 @@ class _DiscoverTabState extends ConsumerState<DiscoverTab>
                 widthFactor: progress.clamp(0.0, 1.0),
                 child: Container(
                   height: 3,
-                  decoration: const BoxDecoration(
-                    gradient: LinearGradient(
-                      colors: [Color(0xFFFF2D87), Color(0xFF8B5CF6)],
-                    ),
+                  decoration: BoxDecoration(
+                    gradient: palette.primaryGradient,
                   ),
                 ),
               ),
@@ -585,10 +634,10 @@ class _DiscoverTabState extends ConsumerState<DiscoverTab>
               children: [
                 Text(
                   '${_round - 1}/$_totalRounds',
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 12,
                     fontWeight: FontWeight.w900,
-                    color: Color(0xFFD8B4FE),
+                    color: palette.accent,
                   ),
                 ),
                 const SizedBox(width: 4),
@@ -603,7 +652,7 @@ class _DiscoverTabState extends ConsumerState<DiscoverTab>
 
   // ─── Weekly Spotlight Header ──────────────────────────────────────────────────
 
-  Widget _buildWeeklySpotlightHeader() {
+  Widget _buildWeeklySpotlightHeader(AppPalette palette) {
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
       onTap: () {
@@ -614,19 +663,19 @@ class _DiscoverTabState extends ConsumerState<DiscoverTab>
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
           decoration: BoxDecoration(
-            color: const Color(0xFF166534),
+            color: palette.secondary.withValues(alpha: 0.12),
             borderRadius: BorderRadius.circular(24),
-            border: Border.all(color: const Color(0xFF22C55E).withValues(alpha: 0.5), width: 1.2),
+            border: Border.all(color: palette.secondary.withValues(alpha: 0.5), width: 1.2),
             boxShadow: [
-              BoxShadow(color: const Color(0xFF22C55E).withValues(alpha: 0.25), blurRadius: 12),
+              BoxShadow(color: palette.secondary.withValues(alpha: 0.25), blurRadius: 12),
             ],
           ),
           child: Row(mainAxisSize: MainAxisSize.min, children: [
-            _PulsingDot(),
+            _PulsingDot(palette: palette),
             const SizedBox(width: 7),
-            const Text(
+            Text(
               'WEEKLY SPOTLIGHT',
-              style: TextStyle(fontSize: 11, fontWeight: FontWeight.w900, color: Color(0xFF4ADE80), letterSpacing: 0.7),
+              style: TextStyle(fontSize: 11, fontWeight: FontWeight.w900, color: palette.secondary, letterSpacing: 0.7),
             ),
           ]),
         ),
@@ -653,31 +702,195 @@ class _DiscoverTabState extends ConsumerState<DiscoverTab>
   // ─── Empty State ──────────────────────────────────────────────────────────────
 
   Widget _buildEmptyState() {
+    final currentPref = ref.watch(filterInterestedInProvider);
+    final matchIrrespective = ref.watch(filterMatchIrrespectiveProvider);
+
     return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(40),
-        child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-          Container(
-            width: 80, height: 80,
-            decoration: BoxDecoration(
-              gradient: const LinearGradient(colors: [Color(0xFFEC4899), Color(0xFF8B5CF6)]),
-              shape: BoxShape.circle,
-              boxShadow: [BoxShadow(color: const Color(0xFFEC4899).withValues(alpha: 0.4), blurRadius: 20)],
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 36),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Container(
+              width: 84,
+              height: 84,
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [AppTheme.primaryBlue, AppTheme.accentPurple],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
+                shape: BoxShape.circle,
+                boxShadow: [
+                  BoxShadow(
+                    color: AppTheme.accentPurple.withValues(alpha: 0.45),
+                    blurRadius: 28,
+                    spreadRadius: 2,
+                  ),
+                ],
+              ),
+              child: const Center(
+                child: Text('🏆', style: TextStyle(fontSize: 36)),
+              ),
             ),
-            child: const Center(child: Text('🏆', style: TextStyle(fontSize: 34))),
-          ),
-          const SizedBox(height: 22),
-          const Text(
-            "you've seen them all!",
-            style: TextStyle(fontSize: 22, fontWeight: FontWeight.w900, color: Colors.white, letterSpacing: -0.3),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            "Round complete. More faces drop soon.\nDon't fumble the streak.",
-            textAlign: TextAlign.center,
-            style: TextStyle(fontSize: 13.5, color: Colors.white.withValues(alpha: 0.45), height: 1.5),
-          ),
-        ]),
+            const SizedBox(height: 22),
+            const Text(
+              "you've seen them all!",
+              style: TextStyle(
+                fontSize: 23,
+                fontWeight: FontWeight.w900,
+                color: Colors.white,
+                letterSpacing: -0.4,
+              ),
+            ),
+            const SizedBox(height: 10),
+            Text(
+              "Round complete or no new faces in this radius right now.\nExpand search or re-explore to keep the streak going!",
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 13.5,
+                color: Colors.white.withValues(alpha: 0.55),
+                height: 1.5,
+              ),
+            ),
+            const SizedBox(height: 28),
+
+            // Action 1: Explore Again / Reset Seen
+            if (widget.onResetSeen != null)
+              GestureDetector(
+                onTap: () {
+                  HapticFeedback.mediumImpact();
+                  setState(() => _round = 1);
+                  widget.onResetSeen!();
+                },
+                child: Container(
+                  width: double.infinity,
+                  constraints: const BoxConstraints(maxWidth: 280),
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: [AppTheme.primaryBlue, AppTheme.accentPurple],
+                    ),
+                    borderRadius: BorderRadius.circular(24),
+                    boxShadow: [
+                      BoxShadow(
+                        color: AppTheme.accentPurple.withValues(alpha: 0.4),
+                        blurRadius: 16,
+                        offset: const Offset(0, 4),
+                      ),
+                    ],
+                  ),
+                  child: const Center(
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.refresh_rounded, color: Colors.white, size: 18),
+                        SizedBox(width: 8),
+                        Text(
+                          'Explore Again 🔄',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 15,
+                            fontWeight: FontWeight.w800,
+                            letterSpacing: -0.2,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+
+            const SizedBox(height: 14),
+
+            // Action 2 & 3: Expand Radius + Filter Settings
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                if (!matchIrrespective && widget.onExpandRadius != null) ...[
+                  OutlinedButton.icon(
+                    onPressed: () {
+                      HapticFeedback.lightImpact();
+                      widget.onExpandRadius!();
+                    },
+                    icon: const Icon(Icons.explore_rounded, size: 15, color: Colors.white),
+                    label: const Text(
+                      'Expand Radius 🌍',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 12.5,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    style: OutlinedButton.styleFrom(
+                      side: BorderSide(color: Colors.white.withValues(alpha: 0.2)),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                ],
+                if (widget.onOpenFilters != null)
+                  OutlinedButton.icon(
+                    onPressed: () {
+                      HapticFeedback.lightImpact();
+                      widget.onOpenFilters!();
+                    },
+                    icon: const Icon(Icons.tune_rounded, size: 15, color: Colors.white70),
+                    label: const Text(
+                      'Filters 🎛️',
+                      style: TextStyle(
+                        color: Colors.white70,
+                        fontSize: 12.5,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    style: OutlinedButton.styleFrom(
+                      side: BorderSide(color: Colors.white.withValues(alpha: 0.2)),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                    ),
+                  ),
+              ],
+            ),
+
+            if (currentPref != 'all' && widget.onShowEveryone != null) ...[
+              const SizedBox(height: 14),
+              GestureDetector(
+                onTap: () {
+                  HapticFeedback.lightImpact();
+                  widget.onShowEveryone!();
+                },
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.08),
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(
+                      color: AppTheme.primaryBlue.withValues(alpha: 0.4),
+                      width: 1,
+                    ),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Text(
+                        'Show Everyone ✨',
+                        style: TextStyle(
+                          fontSize: 12.5,
+                          fontWeight: FontWeight.w700,
+                          color: Colors.white,
+                        ),
+                      ),
+                      const SizedBox(width: 4),
+                      Icon(Icons.arrow_forward_rounded, size: 13, color: AppTheme.primaryBlue),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ],
+        ),
       ),
     );
   }
@@ -687,25 +900,22 @@ class _DiscoverTabState extends ConsumerState<DiscoverTab>
 
 class _ReactionBubble extends StatelessWidget {
   final String text;
-  const _ReactionBubble({required this.text});
+  final AppPalette palette;
+  const _ReactionBubble({required this.text, required this.palette});
 
   @override
   Widget build(BuildContext context) {
     return Transform.rotate(
-      angle: -0.065, // ~-3.7 degrees tilt, exactly like image 2
+      angle: -0.065, // ~-3.7 degrees tilt
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 10),
         decoration: BoxDecoration(
-          gradient: const LinearGradient(
-            colors: [Color(0xFFFF2E93), Color(0xFFC084FC)],
-            begin: Alignment.centerLeft,
-            end: Alignment.centerRight,
-          ),
+          gradient: palette.primaryGradient,
           borderRadius: BorderRadius.circular(26),
           border: Border.all(color: Colors.white, width: 1.8),
           boxShadow: [
             BoxShadow(
-              color: const Color(0xFFFF2E93).withValues(alpha: 0.55),
+              color: palette.primary.withValues(alpha: 0.55),
               blurRadius: 20,
               spreadRadius: 2,
               offset: const Offset(0, 4),
@@ -720,7 +930,7 @@ class _ReactionBubble extends StatelessWidget {
         child: Text(
           text,
           style: const TextStyle(
-            color: Color(0xFF160826), // Deep dark plum/black text matching Image 2
+            color: Color(0xFF160826),
             fontSize: 15,
             fontWeight: FontWeight.w900,
             letterSpacing: -0.2,
@@ -735,7 +945,8 @@ class _ReactionBubble extends StatelessWidget {
 
 class _RoundBadge extends StatefulWidget {
   final int round;
-  const _RoundBadge({required this.round});
+  final AppPalette palette;
+  const _RoundBadge({required this.round, required this.palette});
 
   @override
   State<_RoundBadge> createState() => _RoundBadgeState();
@@ -779,19 +990,19 @@ class _RoundBadgeState extends State<_RoundBadge> with SingleTickerProviderState
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
         decoration: BoxDecoration(
-          color: const Color(0xFF7C3AED).withValues(alpha: 0.28),
+          color: widget.palette.primary.withValues(alpha: 0.18),
           borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: const Color(0xFFA855F7).withValues(alpha: 0.5), width: 1.2),
+          border: Border.all(color: widget.palette.secondary.withValues(alpha: 0.5), width: 1.2),
           boxShadow: [
-            BoxShadow(color: const Color(0xFF8B5CF6).withValues(alpha: 0.3), blurRadius: 10),
+            BoxShadow(color: widget.palette.secondary.withValues(alpha: 0.3), blurRadius: 10),
           ],
         ),
         child: Text(
           'RD ${_displayed.toString().padLeft(2, '0')}',
-          style: const TextStyle(
+          style: TextStyle(
             fontSize: 12,
             fontWeight: FontWeight.w900,
-            color: Color(0xFFD8B4FE),
+            color: widget.palette.accent,
             letterSpacing: 1,
           ),
         ),
@@ -804,7 +1015,8 @@ class _RoundBadgeState extends State<_RoundBadge> with SingleTickerProviderState
 
 class _VsBadge extends StatelessWidget {
   final Animation<double> anim;
-  const _VsBadge({required this.anim});
+  final AppPalette palette;
+  const _VsBadge({required this.anim, required this.palette});
 
   @override
   Widget build(BuildContext context) {
@@ -814,8 +1026,8 @@ class _VsBadge extends StatelessWidget {
       child: Container(
         width: 38, height: 38,
         decoration: BoxDecoration(
-          gradient: const LinearGradient(
-            colors: [Color(0xFFFF2D87), Color(0xFFF59E0B)],
+          gradient: LinearGradient(
+            colors: [palette.primary, palette.secondary],
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
           ),
@@ -823,7 +1035,7 @@ class _VsBadge extends StatelessWidget {
           border: Border.all(color: const Color(0xFF0D0717), width: 3.0),
           boxShadow: [
             BoxShadow(
-              color: const Color(0xFFFF2D87).withValues(alpha: 0.55),
+              color: palette.primary.withValues(alpha: 0.55),
               blurRadius: 12,
               spreadRadius: 1,
             ),
@@ -927,7 +1139,8 @@ class _NahButtonState extends State<_NahButton> with SingleTickerProviderStateMi
 
 class _TakeBothButton extends StatefulWidget {
   final VoidCallback onTap;
-  const _TakeBothButton({required this.onTap});
+  final AppPalette palette;
+  const _TakeBothButton({required this.onTap, required this.palette});
 
   @override
   State<_TakeBothButton> createState() => _TakeBothButtonState();
@@ -969,15 +1182,11 @@ class _TakeBothButtonState extends State<_TakeBothButton>
               Container(
                 height: 42,
                 decoration: BoxDecoration(
-                  gradient: const LinearGradient(
-                    colors: [Color(0xFFFF2E93), Color(0xFFC084FC)],
-                    begin: Alignment.centerLeft,
-                    end: Alignment.centerRight,
-                  ),
+                  gradient: widget.palette.primaryGradient,
                   borderRadius: BorderRadius.circular(21),
                   boxShadow: [
                     BoxShadow(
-                      color: const Color(0xFFFF2E93).withValues(alpha: 0.40),
+                      color: widget.palette.primary.withValues(alpha: 0.40),
                       blurRadius: 14,
                       offset: const Offset(0, 3),
                     ),
@@ -988,7 +1197,7 @@ class _TakeBothButtonState extends State<_TakeBothButton>
                   children: [
                     Icon(
                       Icons.workspace_premium_rounded,
-                      color: Color(0xFF160826),
+                      color: Colors.white,
                       size: 16,
                     ),
                     SizedBox(width: 6),
@@ -997,14 +1206,14 @@ class _TakeBothButtonState extends State<_TakeBothButton>
                       style: TextStyle(
                         fontSize: 14.5,
                         fontWeight: FontWeight.w900,
-                        color: Color(0xFF160826),
+                        color: Colors.white,
                         letterSpacing: -0.2,
                       ),
                     ),
                   ],
                 ),
               ),
-              // Tiny vibrant lime dot on top right
+              // Tiny dot on top right — premium indicator
               Positioned(
                 top: 4,
                 right: 6,
@@ -1012,11 +1221,11 @@ class _TakeBothButtonState extends State<_TakeBothButton>
                   width: 7,
                   height: 7,
                   decoration: BoxDecoration(
-                    color: const Color(0xFFA3E635),
+                    color: Colors.white,
                     shape: BoxShape.circle,
                     boxShadow: [
                       BoxShadow(
-                        color: const Color(0xFFA3E635).withValues(alpha: 0.8),
+                        color: Colors.white.withValues(alpha: 0.8),
                         blurRadius: 5,
                       ),
                     ],
@@ -1041,6 +1250,7 @@ class _FaceOffCard extends StatefulWidget {
   final double? deviceLat;
   final double? deviceLon;
   final Animation<double> glowAnim;
+  final AppPalette palette;
   final VoidCallback onTap;
   final VoidCallback onLongPress;
 
@@ -1052,6 +1262,7 @@ class _FaceOffCard extends StatefulWidget {
     this.deviceLat,
     this.deviceLon,
     required this.glowAnim,
+    required this.palette,
     required this.onTap,
     required this.onLongPress,
   });
@@ -1163,12 +1374,12 @@ class _FaceOffCardState extends State<_FaceOffCard> with SingleTickerProviderSta
                           decoration: BoxDecoration(
                             borderRadius: BorderRadius.circular(24),
                             border: Border.all(
-                              color: const Color(0xFFE879F9).withValues(alpha: 0.7),
+                              color: widget.palette.primary.withValues(alpha: 0.7),
                               width: 2.0,
                             ),
                             boxShadow: [
                               BoxShadow(
-                                color: const Color(0xFFE879F9).withValues(alpha: 0.35),
+                                color: widget.palette.primary.withValues(alpha: 0.35),
                                 blurRadius: 14,
                                 spreadRadius: 1,
                               ),
@@ -1177,7 +1388,7 @@ class _FaceOffCardState extends State<_FaceOffCard> with SingleTickerProviderSta
                         ),
                       ),
 
-                    // Neon Lime Green Glow Border when chosen (matches Image 2 exactly)
+                    // Glow Border when chosen
                     if (widget.isChosen)
                       AnimatedBuilder(
                         animation: widget.glowAnim,
@@ -1186,12 +1397,12 @@ class _FaceOffCardState extends State<_FaceOffCard> with SingleTickerProviderSta
                             decoration: BoxDecoration(
                               borderRadius: BorderRadius.circular(24),
                               border: Border.all(
-                                color: const Color(0xFFA3E635), // Neon lime / chartreuse
+                                color: widget.palette.primary,
                                 width: 3.2,
                               ),
                               boxShadow: [
                                 BoxShadow(
-                                  color: const Color(0xFFA3E635).withValues(alpha: widget.glowAnim.value * 0.75),
+                                  color: widget.palette.primary.withValues(alpha: widget.glowAnim.value * 0.75),
                                   blurRadius: 18,
                                   spreadRadius: 2,
                                 ),
@@ -1213,7 +1424,7 @@ class _FaceOffCardState extends State<_FaceOffCard> with SingleTickerProviderSta
                         ),
                       ),
 
-                    // Top Right Heart Badge when chosen (matches Image 2)
+                    // Top Right Heart Badge when chosen
                     if (widget.isChosen)
                       Positioned(
                         top: 14,
@@ -1227,14 +1438,10 @@ class _FaceOffCardState extends State<_FaceOffCard> with SingleTickerProviderSta
                               height: 36,
                               decoration: BoxDecoration(
                                 shape: BoxShape.circle,
-                                gradient: const LinearGradient(
-                                  colors: [Color(0xFFE879F9), Color(0xFFC084FC)],
-                                  begin: Alignment.topLeft,
-                                  end: Alignment.bottomRight,
-                                ),
+                                gradient: widget.palette.primaryGradient,
                                 boxShadow: [
                                   BoxShadow(
-                                    color: const Color(0xFFE879F9).withValues(alpha: 0.6),
+                                    color: widget.palette.primary.withValues(alpha: 0.6),
                                     blurRadius: 10,
                                     spreadRadius: 1,
                                   ),
@@ -1243,7 +1450,7 @@ class _FaceOffCardState extends State<_FaceOffCard> with SingleTickerProviderSta
                               child: const Center(
                                 child: Icon(
                                   Icons.favorite_rounded,
-                                  color: Color(0xFF1E0A30), // Black / deep plum heart
+                                  color: Colors.white,
                                   size: 19,
                                 ),
                               ),
@@ -1392,6 +1599,9 @@ class _FaceOffCardState extends State<_FaceOffCard> with SingleTickerProviderSta
 // ─── Pulsing dot for spotlight header ─────────────────────────────────────────────
 
 class _PulsingDot extends StatefulWidget {
+  final AppPalette palette;
+  const _PulsingDot({required this.palette});
+
   @override
   State<_PulsingDot> createState() => _PulsingDotState();
 }
@@ -1417,9 +1627,9 @@ class _PulsingDotState extends State<_PulsingDot> with SingleTickerProviderState
       child: Container(
         width: 7, height: 7,
         decoration: BoxDecoration(
-          color: const Color(0xFF4ADE80),
+          color: widget.palette.secondary,
           shape: BoxShape.circle,
-          boxShadow: [BoxShadow(color: const Color(0xFF4ADE80).withValues(alpha: 0.8), blurRadius: 7)],
+          boxShadow: [BoxShadow(color: widget.palette.secondary.withValues(alpha: 0.8), blurRadius: 7)],
         ),
       ),
     );
@@ -1436,182 +1646,193 @@ class _PremiumModal extends ConsumerWidget {
     final user = ref.watch(currentUserProvider);
     final bottomPadding = MediaQuery.of(context).padding.bottom;
 
+    final palette = ref.watch(appPaletteProvider);
     return SafeArea(
       top: false,
       child: Container(
-        margin: EdgeInsets.fromLTRB(16, 0, 16, 16 + bottomPadding),
+        margin: EdgeInsets.fromLTRB(16, 0, 16, bottomPadding > 0 ? bottomPadding + 12 : 24),
         decoration: BoxDecoration(
-          color: const Color(0xFF130D22),
-          borderRadius: BorderRadius.circular(28),
-          border: Border.all(color: Colors.white.withValues(alpha: 0.12), width: 1),
+          color: palette.backgroundTint,
+          borderRadius: BorderRadius.circular(32),
+          border: Border.all(color: Colors.white.withValues(alpha: 0.14), width: 1.2),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withValues(alpha: 0.6),
-              blurRadius: 40,
-              offset: const Offset(0, -8),
+              color: Colors.black.withValues(alpha: 0.75),
+              blurRadius: 48,
+              offset: const Offset(0, -10),
+            ),
+            BoxShadow(
+              color: palette.secondary.withValues(alpha: 0.15),
+              blurRadius: 30,
+              offset: const Offset(0, -4),
             ),
           ],
         ),
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(28, 28, 28, 22),
+          padding: const EdgeInsets.fromLTRB(28, 16, 28, 20),
           child: Column(
             mainAxisSize: MainAxisSize.min,
-          children: [
-            // Crown icon
-            Container(
-              width: 68,
-              height: 68,
-              decoration: BoxDecoration(
-                gradient: const RadialGradient(
-                  colors: [Color(0xFFEC4899), Color(0xFF9333EA)],
-                ),
-                shape: BoxShape.circle,
-                boxShadow: [
-                  BoxShadow(
-                    color: const Color(0xFFEC4899).withValues(alpha: 0.5),
-                    blurRadius: 22,
-                    spreadRadius: 2,
-                  ),
-                ],
-              ),
-              child: const Center(
-                child: Icon(Icons.workspace_premium_rounded, color: Colors.white, size: 32),
-              ),
-            ),
-            const SizedBox(height: 20),
-            const Text(
-              'premium only',
-              style: TextStyle(
-                fontSize: 22,
-                fontWeight: FontWeight.w900,
-                color: Colors.white,
-                letterSpacing: -0.3,
-              ),
-            ),
-            const SizedBox(height: 10),
-            Text(
-              'take both is a premium feature. get unlimited\nrounds & pick both contenders in every faceoff.',
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                fontSize: 13.5,
-                fontWeight: FontWeight.w500,
-                color: Colors.white.withValues(alpha: 0.60),
-                height: 1.5,
-              ),
-            ),
-            const SizedBox(height: 24),
-            // Unlock button -> routes to wallet
-            GestureDetector(
-              onTap: () {
-                HapticFeedback.mediumImpact();
-                Navigator.of(context).pop();
-                context.push('/wallet');
-              },
-              child: Container(
-                width: double.infinity,
-                height: 52,
+            children: [
+              // Top drag indicator handle
+              Container(
+                width: 38,
+                height: 4,
                 decoration: BoxDecoration(
-                  gradient: const LinearGradient(
-                    colors: [Color(0xFFEC4899), Color(0xFFD946EF)],
-                    begin: Alignment.centerLeft,
-                    end: Alignment.centerRight,
-                  ),
-                  borderRadius: BorderRadius.circular(28),
+                  color: Colors.white.withValues(alpha: 0.22),
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              const SizedBox(height: 20),
+              // Crown icon
+              Container(
+                width: 68,
+                height: 68,
+                decoration: BoxDecoration(
+                  gradient: palette.primaryGradient,
+                  shape: BoxShape.circle,
                   boxShadow: [
                     BoxShadow(
-                      color: const Color(0xFFEC4899).withValues(alpha: 0.45),
-                      blurRadius: 16,
-                      offset: const Offset(0, 5),
+                      color: palette.primary.withValues(alpha: 0.5),
+                      blurRadius: 22,
+                      spreadRadius: 2,
                     ),
                   ],
                 ),
-                child: const Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(Icons.workspace_premium_rounded, color: Colors.white, size: 18),
-                    SizedBox(width: 8),
-                    Text(
-                      'unlock premium in wallet',
-                      style: TextStyle(
-                        fontSize: 15.5,
-                        fontWeight: FontWeight.w900,
-                        color: Colors.white,
-                        letterSpacing: -0.1,
-                      ),
-                    ),
-                  ],
+                child: const Center(
+                  child: Icon(Icons.workspace_premium_rounded, color: Colors.white, size: 32),
                 ),
               ),
-            ),
-            const SizedBox(height: 12),
-            // Quick 24H Trial Pass Activation
-            GestureDetector(
-              onTap: () async {
-                HapticFeedback.mediumImpact();
-                final expiry = DateTime.now().add(const Duration(days: 1));
-                try {
-                  if (user.id.isNotEmpty) {
-                    await firestoreProvider.collection('users').doc(user.id).update({
-                      'isSubscribed': true,
-                      'subscriptionExpiry': Timestamp.fromDate(expiry),
-                    });
-                  }
-                  ref.invalidate(userDataStreamProvider);
-                } catch (e) {
-                  debugPrint('Trial pass error: $e');
-                }
-                if (context.mounted) {
-                  Navigator.of(context).pop();
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: const Text('🎉 24H Premium Pass Activated! You can now Take Both!'),
-                      backgroundColor: const Color(0xFFFF2D87),
-                      behavior: SnackBarBehavior.floating,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                    ),
-                  );
-                }
-              },
-              child: Container(
-                padding: const EdgeInsets.symmetric(vertical: 8),
-                child: const Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(Icons.bolt_rounded, size: 16, color: Color(0xFFA3E635)),
-                    SizedBox(width: 4),
-                    Text(
-                      'ACTIVATE 24H TRIAL PASS',
-                      style: TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w900,
-                        color: Color(0xFFA3E635),
-                        letterSpacing: 0.8,
-                      ),
-                    ),
-                  ],
+              const SizedBox(height: 18),
+              const Text(
+                'premium only',
+                style: TextStyle(
+                  fontSize: 22,
+                  fontWeight: FontWeight.w900,
+                  color: Colors.white,
+                  letterSpacing: -0.3,
                 ),
               ),
-            ),
-            const SizedBox(height: 8),
-            // Maybe later
-            GestureDetector(
-              onTap: () => Navigator.of(context).pop(),
-              child: Padding(
-                padding: const EdgeInsets.symmetric(vertical: 4),
-                child: Text(
-                  'MAYBE LATER',
-                  style: TextStyle(
-                    fontSize: 11.5,
-                    fontWeight: FontWeight.w800,
-                    color: Colors.white.withValues(alpha: 0.35),
-                    letterSpacing: 1.2,
+              const SizedBox(height: 10),
+              Text(
+                'take both is a premium feature. get unlimited\nrounds & pick both contenders in every faceoff.',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 13.5,
+                  fontWeight: FontWeight.w500,
+                  color: Colors.white.withValues(alpha: 0.60),
+                  height: 1.5,
+                ),
+              ),
+              const SizedBox(height: 24),
+              // Unlock button -> routes to wallet
+              GestureDetector(
+                onTap: () {
+                  HapticFeedback.mediumImpact();
+                  Navigator.of(context, rootNavigator: true).pop();
+                  context.push('/wallet');
+                },
+                child: Container(
+                  width: double.infinity,
+                  height: 52,
+                  decoration: BoxDecoration(
+                    gradient: palette.primaryGradient,
+                    borderRadius: BorderRadius.circular(28),
+                    boxShadow: [
+                      BoxShadow(
+                        color: palette.primary.withValues(alpha: 0.45),
+                        blurRadius: 16,
+                        offset: const Offset(0, 5),
+                      ),
+                    ],
+                  ),
+                  child: const Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.workspace_premium_rounded, color: Colors.white, size: 18),
+                      SizedBox(width: 8),
+                      Text(
+                        'unlock premium in wallet',
+                        style: TextStyle(
+                          fontSize: 15.5,
+                          fontWeight: FontWeight.w900,
+                          color: Colors.white,
+                          letterSpacing: -0.1,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               ),
-            ),
-          ],
+              const SizedBox(height: 12),
+              // Quick 24H Trial Pass Activation
+              GestureDetector(
+                onTap: () async {
+                  HapticFeedback.mediumImpact();
+                  final expiry = DateTime.now().add(const Duration(days: 1));
+                  try {
+                    if (user.id.isNotEmpty) {
+                      await firestoreProvider.collection('users').doc(user.id).update({
+                        'isSubscribed': true,
+                        'subscriptionExpiry': Timestamp.fromDate(expiry),
+                      });
+                    }
+                    ref.invalidate(userDataStreamProvider);
+                  } catch (e) {
+                    debugPrint('Trial pass error: $e');
+                  }
+                  if (context.mounted) {
+                    Navigator.of(context, rootNavigator: true).pop();
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: const Text('🎉 24H Premium Pass Activated! You can now Take Both!'),
+                        backgroundColor: palette.primary,
+                        behavior: SnackBarBehavior.floating,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      ),
+                    );
+                  }
+                },
+                child: Container(
+                  padding: const EdgeInsets.symmetric(vertical: 8),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.bolt_rounded, size: 16, color: palette.accent),
+                      const SizedBox(width: 4),
+                      Text(
+                        'ACTIVATE 24H TRIAL PASS',
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w900,
+                          color: palette.accent,
+                          letterSpacing: 0.8,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(height: 8),
+              // Maybe later
+              GestureDetector(
+                onTap: () => Navigator.of(context, rootNavigator: true).pop(),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 4),
+                  child: Text(
+                    'MAYBE LATER',
+                    style: TextStyle(
+                      fontSize: 11.5,
+                      fontWeight: FontWeight.w800,
+                      color: Colors.white.withValues(alpha: 0.35),
+                      letterSpacing: 1.2,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
-    ),);
+    );
   }
 }

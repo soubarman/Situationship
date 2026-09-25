@@ -26,9 +26,19 @@ class UserModel {
   final String? homeCityId;
   final String? campusId;
 
-  // ── Gender & Economy ──────────────────────────────────────────────────
+  // ── Gender, Dating Preference & Economy ─────────────────────────────
   /// 'male' | 'female' | 'other'
   final String gender;
+  /// Target genders this user wants to date: ['female'], ['male'], ['other'], etc.
+  final List<String> interestedIn;
+  /// 'serious' | 'casual' | 'open' | 'friendship'
+  final String? relationshipIntent;
+  /// User IDs blocked by this user
+  final List<String> blockedUsers;
+  /// Whether user appears in matching/discovery pools
+  final bool isDiscoverable;
+  /// Explicit dealbreakers, e.g. ['smoking', 'drinking']
+  final List<String> dealbreakers;
 
   // ── Contact Info & Unlocks ───────────────────────────────────────────
   final String? phoneNumber;
@@ -85,6 +95,11 @@ class UserModel {
     this.homeCityId,
     this.campusId,
     this.gender = 'other',
+    this.interestedIn = const [],
+    this.relationshipIntent,
+    this.blockedUsers = const [],
+    this.isDiscoverable = true,
+    this.dealbreakers = const [],
     this.phoneNumber,
     this.isPhonePublic = false,
     this.phoneVisibilityVersion = 0,
@@ -104,8 +119,46 @@ class UserModel {
     this.suspendedUntil,
   });
 
-  bool get isMale => gender == 'male';
-  bool get isFemale => gender == 'female';
+  bool get isMale => normalizedGender == 'male';
+  bool get isFemale => normalizedGender == 'female';
+
+  /// Normalized gender: 'male', 'female', or 'other'
+  String get normalizedGender {
+    final g = gender.trim().toLowerCase();
+    if (g == 'man' || g == 'm') return 'male';
+    if (g == 'woman' || g == 'w' || g == 'f') return 'female';
+    if (g == 'other' || g == 'non-binary' || g == 'nonbinary' || g == 'nb') return 'other';
+    return g.isNotEmpty ? g : 'other';
+  }
+
+  /// Effective dating preference.
+  /// If not explicitly set, defaults reciprocally based on user's own gender:
+  /// male -> ['female'], female -> ['male'], other -> ['male', 'female', 'other'].
+  List<String> get effectiveInterestedIn {
+    if (interestedIn.isNotEmpty) {
+      final list = <String>[];
+      for (final e in interestedIn) {
+        final clean = e.trim().toLowerCase();
+        if (clean == 'man' || clean == 'men' || clean == 'm' || clean == 'male') {
+          list.add('male');
+        } else if (clean == 'woman' || clean == 'women' || clean == 'w' || clean == 'f' || clean == 'female') {
+          list.add('female');
+        } else if (clean == 'other' || clean == 'non-binary' || clean == 'nonbinary' || clean == 'nb') {
+          list.add('other');
+        } else if (clean == 'all' || clean == 'everyone') {
+          return const ['male', 'female', 'other'];
+        } else if (clean.isNotEmpty) {
+          list.add(clean);
+        }
+      }
+      if (list.isNotEmpty) return list;
+    }
+    // Reciprocal product defaults:
+    if (isMale) return const ['female'];
+    if (isFemale) return const ['male'];
+    return const ['male', 'female', 'other'];
+  }
+
   bool get hasActiveSubscription =>
       isSubscribed &&
       subscriptionExpiry != null &&
@@ -148,6 +201,11 @@ class UserModel {
       homeCityId: map['homeCityId'],
       campusId: map['campusId'],
       gender: map['gender'] ?? 'other',
+      interestedIn: List<String>.from(map['interestedIn'] ?? (map['datingPreference'] != null ? [map['datingPreference']] : [])),
+      relationshipIntent: map['relationshipIntent'] ?? map['intent'],
+      blockedUsers: List<String>.from(map['blockedUsers'] ?? []),
+      isDiscoverable: map['isDiscoverable'] ?? true,
+      dealbreakers: List<String>.from(map['dealbreakers'] ?? []),
       phoneNumber: map['phoneNumber'],
       isPhonePublic: map['isPhonePublic'] ?? false,
       phoneVisibilityVersion: map['phoneVisibilityVersion'] ?? 0,
@@ -201,6 +259,11 @@ class UserModel {
       'homeCityId': homeCityId,
       'campusId': campusId,
       'gender': gender,
+      'interestedIn': interestedIn,
+      'relationshipIntent': relationshipIntent,
+      'blockedUsers': blockedUsers,
+      'isDiscoverable': isDiscoverable,
+      'dealbreakers': dealbreakers,
       'phoneNumber': phoneNumber,
       'isPhonePublic': isPhonePublic,
       'phoneVisibilityVersion': phoneVisibilityVersion,
@@ -241,6 +304,7 @@ class UserModel {
     List<String>? following,
     List<String>? likedBy,
     List<String>? matches,
+    List<String>? dislikedUsers,
     int? postCount,
     int? coins,
     List<String>? joinedCommunities,
@@ -248,6 +312,11 @@ class UserModel {
     String? homeCityId,
     String? campusId,
     String? gender,
+    List<String>? interestedIn,
+    String? relationshipIntent,
+    List<String>? blockedUsers,
+    bool? isDiscoverable,
+    List<String>? dealbreakers,
     String? phoneNumber,
     bool? isPhonePublic,
     int? phoneVisibilityVersion,
@@ -286,6 +355,7 @@ class UserModel {
       following: following ?? this.following,
       likedBy: likedBy ?? this.likedBy,
       matches: matches ?? this.matches,
+      dislikedUsers: dislikedUsers ?? this.dislikedUsers,
       postCount: postCount ?? this.postCount,
       coins: coins ?? this.coins,
       joinedCommunities: joinedCommunities ?? this.joinedCommunities,
@@ -293,6 +363,11 @@ class UserModel {
       homeCityId: homeCityId ?? this.homeCityId,
       campusId: campusId ?? this.campusId,
       gender: gender ?? this.gender,
+      interestedIn: interestedIn ?? this.interestedIn,
+      relationshipIntent: relationshipIntent ?? this.relationshipIntent,
+      blockedUsers: blockedUsers ?? this.blockedUsers,
+      isDiscoverable: isDiscoverable ?? this.isDiscoverable,
+      dealbreakers: dealbreakers ?? this.dealbreakers,
       phoneNumber: phoneNumber ?? this.phoneNumber,
       isPhonePublic: isPhonePublic ?? this.isPhonePublic,
       phoneVisibilityVersion: phoneVisibilityVersion ?? this.phoneVisibilityVersion,
@@ -332,6 +407,11 @@ class UserModel {
         homeCityId: null,
         campusId: null,
         gender: 'other',
+        interestedIn: [],
+        relationshipIntent: null,
+        blockedUsers: [],
+        isDiscoverable: true,
+        dealbreakers: [],
         phoneNumber: null,
         unlockedUserPhones: [],
         unlockedVisitors: [],

@@ -116,8 +116,8 @@ def ensure_models_loaded():
     logger.info("✓ InsightFace models ready")
 
 # ── Security: Token Authenticator ─────────────────────────────────────────────
-def authenticate_user(request) -> str:
-    """Validate Authorization header and return Firebase User UID."""
+def authenticate_token(request) -> dict:
+    """Validate Authorization header and return decoded Firebase token."""
     auth_header = request.headers.get("Authorization")
     if not auth_header or not auth_header.startswith("Bearer "):
         raise ValueError("Missing or invalid authorization header")
@@ -125,9 +125,24 @@ def authenticate_user(request) -> str:
     token = auth_header.split(" ")[1]
     try:
         decoded = auth.verify_id_token(token)
-        return decoded["uid"]
+        return decoded
     except Exception as e:
         raise ValueError(f"Authentication failed: {str(e)}")
+
+def authenticate_user(request) -> str:
+    """Validate Authorization header and return Firebase User UID."""
+    decoded = authenticate_token(request)
+    return decoded["uid"]
+
+def authenticate_admin(request) -> str:
+    """Validate Authorization header and ensure the caller has verified admin status."""
+    decoded = authenticate_token(request)
+    uid = decoded.get("uid", "")
+    email = decoded.get("email", "")
+    is_admin = decoded.get("admin") is True
+    if is_admin or email == "situationship@gmail.com":
+        return uid
+    raise ValueError("Forbidden: Admin privileges required")
 
 # ── Request Handlers ──────────────────────────────────────────────────────────
 
@@ -549,10 +564,12 @@ def api(request: https_fn.Request) -> https_fn.Response:
     path = request.path.rstrip("/")
     
     try:
-        # Public reset endpoint for staging/debug (helps when user reaches 5/5 attempts)
+        # Protected reset endpoint (admin-only)
         if path.endswith("/reset-attempts") and request.method == "GET":
-            # Extract user ID from query parameters or default to the test user ID
-            target_uid = request.args.get("userId") or "6JKEYKfEoGgewQJ9IwPzvsQRQe42"
+            admin_uid = authenticate_admin(request)
+            target_uid = request.args.get("userId")
+            if not target_uid:
+                return https_fn.Response("Missing userId parameter", status=400)
             get_db().collection("verifications").document(target_uid).set({
                 "verificationAttempts": 0,
                 "verificationStatus": "not_started",
@@ -564,56 +581,18 @@ def api(request: https_fn.Request) -> https_fn.Response:
                 headers={"Access-Control-Allow-Origin": "*"}
             )
 
-        # Create dedicated admin account endpoint (staging/developer helper)
+        # Admin account creation is restricted to verified admins only
         if path.endswith("/create-admin") and request.method == "GET":
-            try:
-                # 1. Create or get user in Firebase Auth
-                email = "admin@situationship.com"
-                password = "AdminPassword123!"
-                try:
-                    user = auth.create_user(
-                        email=email,
-                        password=password,
-                        display_name="Verification Admin"
-                    )
-                    uid = user.uid
-                except auth.EmailAlreadyExistsError:
-                    user = auth.get_user_by_email(email)
-                    uid = user.uid
-                    # Update password in case they want a fresh reset
-                    auth.update_user(uid, password=password)
-                
-                # 2. Grant admin claims
-                auth.set_custom_user_claims(uid, {"admin": True})
-                
-                # 3. Create document in Firestore users collection
-                get_db().collection("users").document(uid).set({
-                    "id": uid,
-                    "name": "Verification Admin",
-                    "email": email,
-                    "bio": "Situationship Verification Administrator",
-                    "avatarUrl": "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150",
-                    "isVerified": True,
-                    "verifiedBadge": "S",
-                    "coins": 9999,
-                    "createdAt": firestore.SERVER_TIMESTAMP
-                }, merge=True)
-
-                return https_fn.Response(
-                    f"Success! Admin account created/updated.<br>Email: <b>{email}</b><br>Password: <b>{password}</b>",
-                    status=200,
-                    headers={"Access-Control-Allow-Origin": "*", "Content-Type": "text/html"}
-                )
-            except Exception as ex:
-                return https_fn.Response(f"Error creating admin: {ex}", status=500)
-
-
-
-        # Validate Firebase ID token
-        user_id = authenticate_user(request)
+            authenticate_admin(request)
+            return https_fn.Response(
+                "Admin self-provisioning endpoint is disabled in production.",
+                status=403,
+                headers={"Access-Control-Allow-Origin": "*"}
+            )
 
         # ── Admin Stats ──
         if path.endswith("/admin/stats") and request.method == "GET":
+            admin_uid = authenticate_admin(request)
             db = get_db()
             col = db.collection("verifications")
             
@@ -637,6 +616,7 @@ def api(request: https_fn.Request) -> https_fn.Response:
 
         # ── Admin Verification Actions ──
         elif "/admin/verifications/" in path and request.method == "POST":
+            admin_uid = authenticate_admin(request)
             # Extract target user ID and action from path (e.g., /admin/verifications/{userId}/{action})
             parts = [p for p in path.split("/") if p]
             if len(parts) >= 4:
@@ -650,7 +630,7 @@ def api(request: https_fn.Request) -> https_fn.Response:
                 if action == "approve":
                     db.collection("verifications").document(target_uid).set({
                         "verificationStatus": "approved",
-                        "verifiedBy": f"admin:{user_id}",
+                        "verifiedBy": f"admin:{admin_uid}",
                         "verificationReason": reason,
                         "verifiedBadge": "S",
                         "adminReviewedAt": firestore.SERVER_TIMESTAMP
@@ -664,7 +644,7 @@ def api(request: https_fn.Request) -> https_fn.Response:
                 elif action == "reject":
                     db.collection("verifications").document(target_uid).set({
                         "verificationStatus": "rejected",
-                        "verifiedBy": f"admin:{user_id}",
+                        "verifiedBy": f"admin:{admin_uid}",
                         "verificationReason": reason,
                         "adminReviewedAt": firestore.SERVER_TIMESTAMP
                     }, merge=True)

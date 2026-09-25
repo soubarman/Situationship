@@ -19,6 +19,7 @@ class PostModel {
   final String? communityId;
   final String? communityName;
   final String? voiceUrl;
+  final List<String> planParticipants;
   
   // New Flow Fields
   final String? musicTrack;
@@ -49,6 +50,7 @@ class PostModel {
     this.communityId,
     this.communityName,
     this.voiceUrl,
+    this.planParticipants = const [],
     this.musicTrack,
     this.musicArtist,
     this.isPinned = false,
@@ -83,6 +85,7 @@ class PostModel {
       communityId: map['communityId'],
       communityName: map['communityName'],
       voiceUrl: map['voiceUrl'],
+      planParticipants: List<String>.from(map['planParticipants'] ?? []),
       musicTrack: map['musicTrack'],
       musicArtist: map['musicArtist'],
       isPinned: map['isPinned'] ?? false,
@@ -114,6 +117,7 @@ class PostModel {
       'communityId': communityId,
       'communityName': communityName,
       'voiceUrl': voiceUrl,
+      'planParticipants': planParticipants,
       'musicTrack': musicTrack,
       'musicArtist': musicArtist,
       'isPinned': isPinned,
@@ -144,6 +148,7 @@ class PostModel {
     String? communityId,
     String? communityName,
     String? voiceUrl,
+    List<String>? planParticipants,
     String? musicTrack,
     String? musicArtist,
     bool? isPinned,
@@ -172,6 +177,7 @@ class PostModel {
       communityId: communityId ?? this.communityId,
       communityName: communityName ?? this.communityName,
       voiceUrl: voiceUrl ?? this.voiceUrl,
+      planParticipants: planParticipants ?? this.planParticipants,
       musicTrack: musicTrack ?? this.musicTrack,
       musicArtist: musicArtist ?? this.musicArtist,
       isPinned: isPinned ?? this.isPinned,

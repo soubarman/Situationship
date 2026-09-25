@@ -265,7 +265,7 @@ class _EditPostScreenState extends ConsumerState<EditPostScreen> {
               style: TextStyle(color: isDark ? Colors.white60 : Colors.black54, fontSize: 12),
             ),
             trailing: isSelected
-                ? const Icon(Icons.check_circle, color: AppTheme.primaryBlue)
+                ? Icon(Icons.check_circle, color: AppTheme.primaryBlue)
                 : Icon(Icons.add_circle_outline, color: isDark ? Colors.white60 : Colors.black45),
             onTap: () {
               setState(() {
@@ -326,7 +326,7 @@ class _EditPostScreenState extends ConsumerState<EditPostScreen> {
         actions: [
           TextButton(
             onPressed: _saveChanges,
-            child: const Text(
+            child: Text(
               'Save',
               style: TextStyle(fontWeight: FontWeight.bold, color: AppTheme.primaryBlue, fontSize: 16),
             ),
@@ -398,7 +398,7 @@ class _EditPostScreenState extends ConsumerState<EditPostScreen> {
                   ),
                   focusedBorder: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(16),
-                    borderSide: const BorderSide(color: AppTheme.primaryBlue),
+                    borderSide: BorderSide(color: AppTheme.primaryBlue),
                   ),
                   filled: true,
                   fillColor: isDark ? AppTheme.darkSurface : Colors.white,
@@ -457,7 +457,7 @@ class _EditPostScreenState extends ConsumerState<EditPostScreen> {
                   label: const Text('Undo Remove Image'),
                   style: OutlinedButton.styleFrom(
                     foregroundColor: AppTheme.primaryBlue,
-                    side: const BorderSide(color: AppTheme.primaryBlue),
+                    side: BorderSide(color: AppTheme.primaryBlue),
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                   ),
                 ),
@@ -478,7 +478,7 @@ class _EditPostScreenState extends ConsumerState<EditPostScreen> {
                     const SizedBox(width: 4),
                     Text(
                       _selectedMood ?? 'None Set',
-                      style: const TextStyle(fontWeight: FontWeight.bold, color: AppTheme.primaryBlue),
+                      style: TextStyle(fontWeight: FontWeight.bold, color: AppTheme.primaryBlue),
                     ),
                     const Spacer(),
                     ElevatedButton(
@@ -509,7 +509,7 @@ class _EditPostScreenState extends ConsumerState<EditPostScreen> {
                   children: [
                     Row(
                       children: [
-                        const Icon(Icons.music_note, color: AppTheme.primaryBlue),
+                        Icon(Icons.music_note, color: AppTheme.primaryBlue),
                         const SizedBox(width: 8),
                         const Text('Post Music', style: TextStyle(fontWeight: FontWeight.bold)),
                         const Spacer(),
@@ -565,7 +565,7 @@ class _EditPostScreenState extends ConsumerState<EditPostScreen> {
                         label: Text(_musicTrack != null ? 'Change Music' : 'Add Music'),
                         style: OutlinedButton.styleFrom(
                           foregroundColor: AppTheme.primaryBlue,
-                          side: const BorderSide(color: AppTheme.primaryBlue),
+                          side: BorderSide(color: AppTheme.primaryBlue),
                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                           padding: const EdgeInsets.symmetric(vertical: 12),
                         ),

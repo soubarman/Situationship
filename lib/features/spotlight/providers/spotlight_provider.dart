@@ -123,7 +123,7 @@ class SpotlightNotifier {
     required int amount,
   }) async {
     final user = _ref.read(currentUserProvider);
-    if (user == null) return;
+    if (user.id.isEmpty) return;
 
     final resolvedSessionId = _sessionId ?? sessionId;
 
@@ -140,7 +140,7 @@ class SpotlightNotifier {
       
       final currentCoins = userDoc.data()?['coins'] as int? ?? 0;
       if (currentCoins < amount) {
-        throw Exception('Insufficient balance. You need ₹$amount to place this bid.');
+        throw Exception('Insufficient coins. You need $amount coins to place this bid.');
       }
 
       // Deduct coins from user
@@ -167,5 +167,42 @@ class SpotlightNotifier {
         'sessionId': resolvedSessionId,
       }, SetOptions(merge: true));
     });
+  }
+
+  Future<void> removeBid({required String sessionId}) async {
+    final user = _ref.read(currentUserProvider);
+    if (user.id.isEmpty) return;
+
+    final resolvedSessionId = _sessionId ?? sessionId;
+    final db = FirebaseFirestore.instanceFor(app: Firebase.app(), databaseId: 'default');
+
+    final sessionRef = db.collection('spotlight_sessions').doc(resolvedSessionId);
+    final bidRef = sessionRef.collection('bids').doc(user.id);
+    final userRef = db.collection('users').doc(user.id);
+
+    try {
+      await db.runTransaction((transaction) async {
+        final bidDoc = await transaction.get(bidRef);
+        if (!bidDoc.exists) return;
+
+        final bidAmount = (bidDoc.data()?['amount'] as num?)?.toInt() ?? 0;
+
+        // 1. Delete the bid document from session bids atomically
+        transaction.delete(bidRef);
+
+        // 2. Refund coins to user & decrement prize pool
+        if (bidAmount > 0) {
+          transaction.update(userRef, {
+            'coins': FieldValue.increment(bidAmount),
+          });
+
+          transaction.set(sessionRef, {
+            'prizePool': FieldValue.increment(-bidAmount),
+          }, SetOptions(merge: true));
+        }
+      });
+    } catch (e) {
+      debugPrint('[Spotlight] removeBid error: $e');
+    }
   }
 }

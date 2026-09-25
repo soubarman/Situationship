@@ -352,7 +352,7 @@ class _SwipeDeckState extends ConsumerState<SwipeDeck> with SingleTickerProvider
                   // 3. SUPER LIKE Button (Cyan Flower)
                   _buildFlowerActionButton(
                     icon: Icons.star_rounded,
-                    backgroundColor: const Color(0xFF3B82F6),
+                    backgroundColor: AppTheme.primaryBlue,
                     iconColor: Colors.white,
                     size: 54,
                     onTap: _triggerSuperLike,
@@ -487,7 +487,7 @@ class _SwipeDeckState extends ConsumerState<SwipeDeck> with SingleTickerProvider
               color: AppTheme.primaryBlue.withOpacity(0.1),
               shape: BoxShape.circle,
             ),
-            child: const Icon(
+            child: Icon(
               Icons.explore_rounded,
               color: AppTheme.primaryBlue,
               size: 48,
@@ -598,7 +598,7 @@ class _SwipeDeckState extends ConsumerState<SwipeDeck> with SingleTickerProvider
             const SizedBox(height: 24),
             Row(
               children: [
-                const Icon(Icons.lock_rounded, size: 20, color: AppTheme.accentPurple),
+                Icon(Icons.lock_rounded, size: 20, color: AppTheme.accentPurple),
                 const SizedBox(width: 8),
                 Text(
                   'Confess Anonymously to ${targetUser.name}',
@@ -775,7 +775,7 @@ class _SwipeDeckState extends ConsumerState<SwipeDeck> with SingleTickerProvider
                   color: AppTheme.accentPurple.withOpacity(0.1),
                   shape: BoxShape.circle,
                 ),
-                child: const Center(
+                child: Center(
                   child: Icon(Icons.lock_rounded, size: 36, color: AppTheme.accentPurple),
                 ),
               ),

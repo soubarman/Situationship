@@ -7,6 +7,7 @@ import 'package:firebase_storage/firebase_storage.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_core/firebase_core.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/theme/app_palette.dart';
 import '../../../core/providers/app_state_provider.dart';
 import '../../../core/providers/firebase_auth_provider.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
@@ -34,6 +35,8 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
   final _locationCtrl = TextEditingController();
   final _phoneCtrl = TextEditingController();
   String _gender = 'other';
+  String _interestedIn = 'female';
+  String _relationshipIntent = 'serious';
   bool _isPhonePublic = false;
   List<String> _selectedInterests = [];
 
@@ -55,6 +58,15 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
         _locationCtrl.text = user.location ?? '';
         _currentAvatarUrl = user.avatarUrl;
         _gender = user.gender;
+        final eff = user.effectiveInterestedIn;
+        if (eff.contains('male') && eff.contains('female')) {
+          _interestedIn = 'all';
+        } else if (eff.isNotEmpty) {
+          _interestedIn = eff.first;
+        } else {
+          _interestedIn = user.isMale ? 'female' : 'male';
+        }
+        _relationshipIntent = user.relationshipIntent ?? 'serious';
         _phoneCtrl.text = user.phoneNumber ?? '';
         _isPhonePublic = user.isPhonePublic;
         
@@ -140,6 +152,10 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
         // Use location as city for Boost scope — users just type their city naturally
         'currentCityId': cityId,
         'gender': _gender,
+        'interestedIn': _interestedIn == 'all'
+            ? ['male', 'female', 'other']
+            : [_interestedIn],
+        'relationshipIntent': _relationshipIntent,
         'phoneNumber': _phoneCtrl.text.trim().isEmpty ? null : _phoneCtrl.text.trim(),
         'isPhonePublic': _isPhonePublic,
         'phoneVisibilityVersion': newVersion,
@@ -191,7 +207,7 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
                     height: 20,
                     child: CircularProgressIndicator(strokeWidth: 2),
                   )
-                : const Text(
+                : Text(
                     'Save',
                     style: TextStyle(
                       color: AppTheme.primaryBlue,
@@ -286,9 +302,48 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
             _buildField(_locationCtrl, 'e.g. Jorhat, Guwahati, Delhi...', isDark),
             const SizedBox(height: 20),
             
-            _label('Gender'),
+            _label('My Gender'),
             const SizedBox(height: 8),
             _buildGenderSelector(isDark),
+            const SizedBox(height: 20),
+
+            _label('Interested In (Dating Preference)'),
+            const SizedBox(height: 4),
+            Text(
+              'Strictly controls who you discover and who can discover you.',
+              style: TextStyle(
+                fontSize: 12,
+                color: AppTheme.textSecondary,
+              ),
+            ),
+            const SizedBox(height: 8),
+            _buildInterestedInSelector(isDark),
+            const SizedBox(height: 20),
+
+            _label('Relationship Goals (Intent)'),
+            const SizedBox(height: 4),
+            Text(
+              'Powers our personality and compatibility matching engine.',
+              style: TextStyle(
+                fontSize: 12,
+                color: AppTheme.textSecondary,
+              ),
+            ),
+            const SizedBox(height: 8),
+            _buildRelationshipIntentSelector(isDark),
+            const SizedBox(height: 20),
+
+            _label('Theme Vibe'),
+            const SizedBox(height: 4),
+            Text(
+              'Auto matches your gender (Girl = Pink 🌸, Boy = Blue ⚡), or pick your favorite vibe.',
+              style: TextStyle(
+                fontSize: 12,
+                color: AppTheme.textSecondary,
+              ),
+            ),
+            const SizedBox(height: 8),
+            _buildThemeVibeSelector(isDark),
             const SizedBox(height: 20),
 
             _label('Phone Number'),
@@ -420,7 +475,7 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(16),
-          borderSide: const BorderSide(color: AppTheme.primaryBlue, width: 2),
+          borderSide: BorderSide(color: AppTheme.primaryBlue, width: 2),
         ),
         contentPadding: const EdgeInsets.all(16),
       ),
@@ -447,6 +502,103 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
           ],
           onChanged: (val) {
             if (val != null) setState(() => _gender = val);
+          },
+        ),
+      ),
+    );
+  }
+
+  Widget _buildInterestedInSelector(bool isDark) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+      decoration: BoxDecoration(
+        color: isDark ? AppTheme.darkCard : Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: isDark ? AppTheme.darkBorder : Colors.black12),
+      ),
+      child: DropdownButtonHideUnderline(
+        child: DropdownButton<String>(
+          value: _interestedIn,
+          isExpanded: true,
+          dropdownColor: isDark ? AppTheme.darkCard : Colors.white,
+          items: const [
+            DropdownMenuItem(value: 'female', child: Text('Women 🌸')),
+            DropdownMenuItem(value: 'male', child: Text('Men ⚡')),
+            DropdownMenuItem(value: 'all', child: Text('Everyone ✨')),
+            DropdownMenuItem(value: 'other', child: Text('Non-Binary 💜')),
+          ],
+          onChanged: (val) {
+            if (val != null) setState(() => _interestedIn = val);
+          },
+        ),
+      ),
+    );
+  }
+
+  Widget _buildRelationshipIntentSelector(bool isDark) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+      decoration: BoxDecoration(
+        color: isDark ? AppTheme.darkCard : Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: isDark ? AppTheme.darkBorder : Colors.black12),
+      ),
+      child: DropdownButtonHideUnderline(
+        child: DropdownButton<String>(
+          value: _relationshipIntent,
+          isExpanded: true,
+          dropdownColor: isDark ? AppTheme.darkCard : Colors.white,
+          items: const [
+            DropdownMenuItem(value: 'serious', child: Text('Serious / Long-term Connection 💍')),
+            DropdownMenuItem(value: 'casual', child: Text('Casual Dating / Situationship 🥂')),
+            DropdownMenuItem(value: 'open', child: Text('Open to explore / See where it goes 🌊')),
+            DropdownMenuItem(value: 'friendship', child: Text('New friends & Activity partners ☕')),
+          ],
+          onChanged: (val) {
+            if (val != null) setState(() => _relationshipIntent = val);
+          },
+        ),
+      ),
+    );
+  }
+
+  Widget _buildThemeVibeSelector(bool isDark) {
+    final currentVibe = ref.watch(themeVibeProvider);
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+      decoration: BoxDecoration(
+        color: isDark ? AppTheme.darkCard : Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: isDark ? AppTheme.darkBorder : Colors.black12),
+      ),
+      child: DropdownButtonHideUnderline(
+        child: DropdownButton<ThemeVibe>(
+          value: currentVibe,
+          isExpanded: true,
+          dropdownColor: isDark ? AppTheme.darkCard : Colors.white,
+          items: const [
+            DropdownMenuItem(
+              value: ThemeVibe.auto,
+              child: Text('Auto (Matches Gender)'),
+            ),
+            DropdownMenuItem(
+              value: ThemeVibe.female,
+              child: Text('🌸 Girl Mode (Hot Pink & White)'),
+            ),
+            DropdownMenuItem(
+              value: ThemeVibe.male,
+              child: Text('⚡ Boy Mode (Electric Blue & White)'),
+            ),
+            DropdownMenuItem(
+              value: ThemeVibe.cyber,
+              child: Text('🌿 Cyber Lime & Lilac'),
+            ),
+          ],
+          onChanged: (val) {
+            if (val != null) {
+              ref.read(themeVibeProvider.notifier).setVibe(val);
+            }
           },
         ),
       ),

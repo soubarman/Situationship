@@ -1107,7 +1107,7 @@ class _TakeScreenState extends ConsumerState<TakeScreen>
       if (!_nativeCameraReady || _camCtrl == null) {
         return Container(
           color: AppTheme.darkCard,
-          child: const Center(
+          child: Center(
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
@@ -1233,7 +1233,7 @@ class _TakeScreenState extends ConsumerState<TakeScreen>
     if (!_webCameraReady || _webViewType == null) {
       return Container(
         color: AppTheme.darkCard,
-        child: const Center(
+        child: Center(
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
@@ -1382,7 +1382,7 @@ class _TakeScreenState extends ConsumerState<TakeScreen>
             height: 8,
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(4),
-              gradient: const LinearGradient(colors: [AppTheme.primaryBlue, AppTheme.accentPurple]),
+              gradient: LinearGradient(colors: [AppTheme.primaryBlue, AppTheme.accentPurple]),
             ),
           ),
           const SizedBox(height: 24),

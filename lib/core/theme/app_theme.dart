@@ -1,23 +1,30 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'app_palette.dart';
 
 class AppTheme {
-  // ─── Brand Color Palette (Gen-Z Neon & Obsidian) ───────────────────────────
-  static const Color primaryPink   = Color(0xFFEC4899); // Electric Hot Pink
-  static const Color primaryPurple = Color(0xFF8B5CF6); // Vivid Violet
-  static const Color neonLime      = Color(0xFFA3E635); // Electric Lime / Chartreuse
-  static const Color neonGreen     = Color(0xFF4ADE80); // Live green accent
-  static const Color deepPlum      = Color(0xFF1E0A30);
+  static AppPalette _activePalette = AppPalette.male;
 
-  // Backward compatibility aliases mapped to new Gen-Z brand
-  static const Color primaryBlue  = Color(0xFFEC4899);
-  static const Color primaryGreen = Color(0xFFA3E635);
-  static const Color accentPurple = Color(0xFF8B5CF6);
-  static const Color accentPink   = Color(0xFFFF2D87);
+  static void setPalette(AppPalette palette) {
+    _activePalette = palette;
+  }
+  static AppPalette get activePalette => _activePalette;
+
+  // ─── Brand Color Palette (Gen-Z Neon & Obsidian) ───────────────────────────
+  static Color get primaryPink   => _activePalette.primary;
+  static Color get hotPink       => _activePalette.primary;
+  static Color get blushPink     => _activePalette.backgroundTint;
+  static const Color deepPlum    = Color(0xFF1E0A30);
+
+  // Backward compat aliases — all map dynamically to active palette
+  static Color get primaryBlue  => _activePalette.primary;
+  static Color get primaryGreen => _activePalette.secondary;
+  static Color get accentPurple => _activePalette.secondary;
+  static Color get accentPink   => _activePalette.accent;
 
   // ─── Dark Mode Surfaces (Midnight Obsidian) ─────────────────────────────────
-  static const Color darkBg      = Color(0xFF0B0715);
-  static const Color darkSurface = Color(0xFF130D24);
+  static Color get darkBg      => _activePalette.backgroundTint;
+  static Color get darkSurface => _activePalette.surfaceTint;
   static const Color darkCard    = Color(0xFF19112E);
   static const Color darkBorder  = Color(0x24FFFFFF);
   static const Color darkGlass   = Color(0x1AFFFFFF); // 10% white
@@ -34,22 +41,13 @@ class AppTheme {
   static const Color textTertiary  = Color(0xFF9CA3AF);
 
   // ─── Semantic ──────────────────────────────────────────────────────────────
-  static const Color success = Color(0xFF4ADE80);
+  static Color get success => _activePalette.primary;
   static const Color error   = Color(0xFFF87171);
   static const Color warning = Color(0xFFFBBF24);
 
   // ─── Gradients ─────────────────────────────────────────────────────────────
-  static const LinearGradient primaryGradient = LinearGradient(
-    begin: Alignment.topLeft,
-    end: Alignment.bottomRight,
-    colors: [Color(0xFFEC4899), Color(0xFF8B5CF6)],
-  );
-
-  static const LinearGradient vibeGradient = LinearGradient(
-    begin: Alignment.topLeft,
-    end: Alignment.bottomRight,
-    colors: [Color(0xFFEC4899), Color(0xFFD946EF)],
-  );
+  static LinearGradient get primaryGradient => _activePalette.primaryGradient;
+  static LinearGradient get vibeGradient => _activePalette.primaryGradient;
 
   static const LinearGradient darkGradient = LinearGradient(
     begin: Alignment.topCenter,
@@ -63,17 +61,8 @@ class AppTheme {
     colors: [Colors.transparent, Color(0xDD000000)],
   );
 
-  static const LinearGradient matchGradient = LinearGradient(
-    begin: Alignment.topLeft,
-    end: Alignment.bottomRight,
-    colors: [Color(0xFFEC4899), Color(0xFFA3E635)],
-  );
-
-  static const LinearGradient limeGradient = LinearGradient(
-    begin: Alignment.topLeft,
-    end: Alignment.bottomRight,
-    colors: [Color(0xFF84CC16), Color(0xFFA3E635)],
-  );
+  static LinearGradient get matchGradient => _activePalette.primaryGradient;
+  static LinearGradient get limeGradient => _activePalette.primaryGradient;
 
   // ─── Glassmorphism ─────────────────────────────────────────────────────────
 
@@ -133,14 +122,21 @@ class AppTheme {
   }
 
   // ─── Light Theme ───────────────────────────────────────────────────────────
-  static ThemeData get lightTheme {
+  // ─── Light Theme ───────────────────────────────────────────────────────────
+  static ThemeData get lightTheme => lightThemeWith(AppPalette.female);
+
+  static ThemeData lightThemeWith([AppPalette palette = AppPalette.female]) {
+    final primary = palette.primary;
+    final secondary = palette.secondary;
+    final accent = palette.accent;
+
     return ThemeData(
       useMaterial3: true,
       brightness: Brightness.light,
       colorScheme: ColorScheme.light(
-        primary: primaryBlue,
-        secondary: primaryGreen,
-        tertiary: accentPurple,
+        primary: primary,
+        secondary: secondary,
+        tertiary: accent,
         surface: lightSurface,
         surfaceContainerHighest: const Color(0xFFEDF0FF),
         onPrimary: Colors.white,
@@ -169,13 +165,13 @@ class AppTheme {
       ),
       chipTheme: ChipThemeData(
         backgroundColor: Colors.white.withOpacity(0.7),
-        selectedColor: primaryBlue.withOpacity(0.15),
+        selectedColor: primary.withOpacity(0.15),
         labelStyle: GoogleFonts.outfit(fontSize: 12, fontWeight: FontWeight.w600),
         shape: const StadiumBorder(),
         side: BorderSide(color: Colors.black.withOpacity(0.07)),
       ),
       inputDecorationTheme: _buildInputTheme(isDark: false),
-      elevatedButtonTheme: _buildElevatedButtonTheme(),
+      elevatedButtonTheme: _buildElevatedButtonTheme(primary),
       outlinedButtonTheme: _buildOutlinedButtonTheme(),
       navigationBarTheme: _buildNavBarTheme(isDark: false),
       dialogTheme: DialogThemeData(
@@ -198,21 +194,27 @@ class AppTheme {
   }
 
   // ─── Dark Theme ────────────────────────────────────────────────────────────
-  static ThemeData get darkTheme {
+  static ThemeData get darkTheme => darkThemeWith(AppPalette.female);
+
+  static ThemeData darkThemeWith([AppPalette palette = AppPalette.female]) {
+    final primary = palette.primary;
+    final secondary = palette.secondary;
+    final accent = palette.accent;
+
     return ThemeData(
       useMaterial3: true,
       brightness: Brightness.dark,
       colorScheme: ColorScheme.dark(
-        primary: primaryBlue,
-        secondary: primaryGreen,
-        tertiary: accentPurple,
+        primary: primary,
+        secondary: secondary,
+        tertiary: accent,
         surface: darkSurface,
         surfaceContainerHighest: darkCard,
         onPrimary: Colors.white,
         onSecondary: Colors.white,
         error: error,
       ),
-      scaffoldBackgroundColor: darkBg,
+      scaffoldBackgroundColor: palette.backgroundTint,
       textTheme: _buildTextTheme(isDark: true),
       appBarTheme: AppBarTheme(
         backgroundColor: Colors.transparent,
@@ -234,13 +236,13 @@ class AppTheme {
       ),
       chipTheme: ChipThemeData(
         backgroundColor: Colors.white.withOpacity(0.06),
-        selectedColor: primaryBlue.withOpacity(0.2),
+        selectedColor: primary.withOpacity(0.2),
         labelStyle: GoogleFonts.outfit(fontSize: 12, fontWeight: FontWeight.w600, color: Colors.white),
         shape: const StadiumBorder(),
         side: BorderSide(color: Colors.white.withOpacity(0.1)),
       ),
       inputDecorationTheme: _buildInputTheme(isDark: true),
-      elevatedButtonTheme: _buildElevatedButtonTheme(),
+      elevatedButtonTheme: _buildElevatedButtonTheme(primary),
       outlinedButtonTheme: _buildOutlinedButtonTheme(),
       navigationBarTheme: _buildNavBarTheme(isDark: true),
       dialogTheme: DialogThemeData(
@@ -302,7 +304,7 @@ class AppTheme {
       ),
       focusedBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(16),
-        borderSide: const BorderSide(color: primaryBlue, width: 1.8),
+        borderSide: BorderSide(color: primaryBlue, width: 1.8),
       ),
       contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
       hintStyle: GoogleFonts.outfit(
@@ -313,9 +315,11 @@ class AppTheme {
   }
 
   // ─── Button Themes ─────────────────────────────────────────────────────────
-  static ElevatedButtonThemeData _buildElevatedButtonTheme() {
+  static ElevatedButtonThemeData _buildElevatedButtonTheme([Color? primary]) {
     return ElevatedButtonThemeData(
       style: ElevatedButton.styleFrom(
+        backgroundColor: primary ?? primaryPink,
+        foregroundColor: Colors.white,
         padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 16),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(50)),
         elevation: 0,
@@ -329,7 +333,7 @@ class AppTheme {
       style: OutlinedButton.styleFrom(
         padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 16),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(50)),
-        side: const BorderSide(color: primaryBlue, width: 1.5),
+        side: BorderSide(color: primaryBlue, width: 1.5),
         textStyle: GoogleFonts.outfit(fontSize: 15, fontWeight: FontWeight.w600),
       ),
     );
@@ -349,7 +353,7 @@ class AppTheme {
       }),
       iconTheme: WidgetStateProperty.resolveWith((states) {
         if (states.contains(WidgetState.selected)) {
-          return const IconThemeData(color: primaryBlue, size: 24);
+          return IconThemeData(color: primaryBlue, size: 24);
         }
         return IconThemeData(color: isDark ? Colors.white38 : textTertiary, size: 24);
       }),

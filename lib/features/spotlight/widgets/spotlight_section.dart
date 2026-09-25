@@ -233,11 +233,11 @@ class _SpotlightSectionState extends ConsumerState<SpotlightSection> {
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
             decoration: BoxDecoration(
-              color: const Color(0xFFFF4B4B).withOpacity(0.1),
+              color: AppTheme.accentPurple.withOpacity(0.1),
               borderRadius: BorderRadius.circular(20),
-              border: Border.all(color: const Color(0xFFFF4B4B).withOpacity(0.3), width: 1),
+              border: Border.all(color: AppTheme.accentPurple.withOpacity(0.3), width: 1),
             ),
-            child: const Row(
+            child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
                 PulseDotWidget(),
@@ -245,7 +245,7 @@ class _SpotlightSectionState extends ConsumerState<SpotlightSection> {
                 Text(
                   'LIVE',
                   style: TextStyle(
-                    color: Color(0xFFFF4B4B),
+                    color: AppTheme.accentPurple,
                     fontWeight: FontWeight.bold,
                     fontSize: 10,
                     letterSpacing: 0.5,
@@ -267,8 +267,8 @@ class _SpotlightSectionState extends ConsumerState<SpotlightSection> {
               border: Border.all(color: AppTheme.primaryBlue.withOpacity(0.2)),
             ),
             child: Text(
-              'Prize Pool: ₹${session.prizePool}',
-              style: const TextStyle(
+              'Prize Pool: 🪙 ${session.prizePool} coins',
+              style: TextStyle(
                 color: AppTheme.primaryBlue,
                 fontWeight: FontWeight.bold,
                 fontSize: 11,
@@ -312,11 +312,11 @@ class _SpotlightSectionState extends ConsumerState<SpotlightSection> {
           const SizedBox(height: 16),
           ElevatedButton.icon(
             onPressed: () {
-              ref.read(spotlightNotifierProvider).createMockSession();
+              ref.invalidate(spotlightSessionProvider);
             },
-            icon: const Icon(Icons.play_arrow_rounded, color: Colors.black87),
+            icon: const Icon(Icons.refresh_rounded, color: Colors.black87),
             label: const Text(
-              'Start Mock Spotlight Session',
+              'Refresh Spotlight Session',
               style: TextStyle(color: Colors.black87, fontWeight: FontWeight.bold),
             ),
             style: ElevatedButton.styleFrom(
@@ -340,7 +340,7 @@ class _SpotlightSectionState extends ConsumerState<SpotlightSection> {
           color: isDark ? Colors.white.withOpacity(0.08) : Colors.black.withOpacity(0.04),
         ),
       ),
-      child: const Center(
+      child: Center(
         child: CircularProgressIndicator(color: AppTheme.primaryBlue),
       ),
     );
@@ -367,7 +367,7 @@ class _SpotlightSectionState extends ConsumerState<SpotlightSection> {
       id: 'placeholder_$rank',
       sessionId: sessionId,
       userId: '', // Denotes placeholder
-      username: 'Empty Slot',
+      username: 'Spot Open',
       profileImageUrl: '',
       isVerified: false,
       amount: minBid,
@@ -426,11 +426,11 @@ class _CountdownTimerWidgetState extends State<CountdownTimerWidget> {
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        const Icon(Icons.timer_outlined, color: AppTheme.accentPink, size: 14),
+        Icon(Icons.timer_outlined, color: AppTheme.accentPink, size: 14),
         const SizedBox(width: 4),
         Text(
           '$hours:$minutes:$seconds',
-          style: const TextStyle(
+          style: TextStyle(
             color: AppTheme.accentPink,
             fontWeight: FontWeight.bold,
             fontSize: 12,
@@ -478,10 +478,10 @@ class _PulseDotWidgetState extends State<PulseDotWidget> with SingleTickerProvid
           height: 8,
           decoration: BoxDecoration(
             shape: BoxShape.circle,
-            color: const Color(0xFFFF4B4B),
+            color: AppTheme.accentPurple,
             boxShadow: [
               BoxShadow(
-                color: const Color(0xFFFF4B4B).withOpacity(0.5 * _controller.value),
+                color: AppTheme.accentPurple.withOpacity(0.5 * _controller.value),
                 blurRadius: 6 * _controller.value,
                 spreadRadius: 2 * _controller.value,
               ),

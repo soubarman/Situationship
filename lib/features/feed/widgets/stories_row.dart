@@ -1,11 +1,13 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:video_player/video_player.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/theme/app_palette.dart';
 import '../../../core/providers/app_state_provider.dart';
 import '../../../core/models/user_model.dart';
 import '../screens/feed_screen.dart';
@@ -148,333 +150,167 @@ class StoriesRow extends ConsumerWidget {
   }
 
   Widget _buildAddStory(BuildContext context, bool isDark, UserModel user) {
-    return _AddStoryCard(isDark: isDark);
+    return _AddStoryCard(isDark: isDark, user: user);
   }
 }
 
-// ── Animated "Drop a Take" card ─────────────────────────────────────────────
-class _AddStoryCard extends StatefulWidget {
+// ── Modern "Drop a Moment" card ─────────────────────────────────────────────
+class _AddStoryCard extends ConsumerStatefulWidget {
   final bool isDark;
-  const _AddStoryCard({required this.isDark});
+  final UserModel user;
+  const _AddStoryCard({
+    required this.isDark,
+    required this.user,
+  });
 
   @override
-  State<_AddStoryCard> createState() => _AddStoryCardState();
+  ConsumerState<_AddStoryCard> createState() => _AddStoryCardState();
 }
 
-class _AddStoryCardState extends State<_AddStoryCard>
-    with TickerProviderStateMixin {
-  late final AnimationController _pulseCtrl;
-  late final AnimationController _recCtrl;
-  late final AnimationController _waveCtrl;
-  late final AnimationController _shimmerCtrl;
-
-  late final Animation<double> _pulseAnim;
-  late final Animation<double> _recAnim;
-  late final Animation<double> _shimmerAnim;
-
-  @override
-  void initState() {
-    super.initState();
-
-    // Pulsing ring border
-    _pulseCtrl = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 1800),
-    )..repeat(reverse: true);
-    _pulseAnim = Tween<double>(begin: 0.6, end: 1.0).animate(
-      CurvedAnimation(parent: _pulseCtrl, curve: Curves.easeInOut),
-    );
-
-    // Blinking REC dot
-    _recCtrl = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 700),
-    )..repeat(reverse: true);
-    _recAnim = Tween<double>(begin: 0.0, end: 1.0).animate(
-      CurvedAnimation(parent: _recCtrl, curve: Curves.easeInOut),
-    );
-
-    // Waveform bounce
-    _waveCtrl = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 600),
-    )..repeat(reverse: true);
-
-    // Shimmer on label text
-    _shimmerCtrl = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 2200),
-    )..repeat();
-    _shimmerAnim = Tween<double>(begin: -1.0, end: 2.0).animate(
-      CurvedAnimation(parent: _shimmerCtrl, curve: Curves.easeInOut),
-    );
-  }
-
-  @override
-  void dispose() {
-    _pulseCtrl.dispose();
-    _recCtrl.dispose();
-    _waveCtrl.dispose();
-    _shimmerCtrl.dispose();
-    super.dispose();
-  }
+class _AddStoryCardState extends ConsumerState<_AddStoryCard> {
+  bool _isPressed = false;
 
   @override
   Widget build(BuildContext context) {
+    final palette = ref.watch(appPaletteProvider);
+    final hasAvatar = widget.user.avatarUrl != null && widget.user.avatarUrl!.isNotEmpty;
+
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
-      child: GestureDetector(
-        onTap: () => context.push('/take/create'),
-        child: Column(
-          children: [
-            // ── Card ──────────────────────────────────────────────────────
-            AnimatedBuilder(
-              animation: Listenable.merge([_pulseCtrl, _recCtrl, _waveCtrl]),
-              builder: (context, _) {
-                return Stack(
-                  alignment: Alignment.center,
-                  children: [
-                    // Outer glow ring (pulsing)
-                    Container(
-                      width: 86,
-                      height: 106,
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(30),
-                        boxShadow: [
-                          BoxShadow(
-                            color: const Color(0xFFE84855)
-                                .withOpacity(0.35 * _pulseAnim.value),
-                            blurRadius: 18 * _pulseAnim.value,
-                            spreadRadius: 2 * _pulseAnim.value,
-                          ),
-                        ],
-                      ),
-                    ),
-                    // Gradient border ring
-                    Container(
-                      width: 82,
-                      height: 102,
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(28),
-                        gradient: LinearGradient(
-                          colors: [
-                            Color.lerp(
-                              const Color(0xFFE84855),
-                              const Color(0xFFFF6B9D),
-                              _pulseAnim.value,
-                            )!,
-                            Color.lerp(
-                              const Color(0xFFF9A03F),
-                              const Color(0xFFFFD700),
-                              _pulseAnim.value,
-                            )!,
-                          ],
-                          begin: Alignment.topLeft,
-                          end: Alignment.bottomRight,
-                        ),
-                      ),
-                    ),
-                    // Inner black card
-                    Container(
-                      width: 78,
-                      height: 98,
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(26),
-                        color: const Color(0xFF0D0D0D),
-                      ),
-                      clipBehavior: Clip.antiAlias,
-                      child: Stack(
-                        children: [
-                          // Video background
-                          const _LoopingVideoBackground(),
-                          // Dark overlay
-                          Container(
-                            decoration: BoxDecoration(
-                              gradient: LinearGradient(
-                                begin: Alignment.topCenter,
-                                end: Alignment.bottomCenter,
-                                colors: [
-                                  Colors.black.withOpacity(0.55),
-                                  Colors.black.withOpacity(0.25),
-                                  Colors.black.withOpacity(0.6),
-                                ],
-                              ),
-                            ),
-                          ),
-                          // ── REC indicator (blinking) ──────────────────
-                          Positioned(
-                            top: 8,
-                            left: 8,
-                            child: Row(
-                              children: [
-                                Container(
-                                  width: 6,
-                                  height: 6,
-                                  decoration: BoxDecoration(
-                                    shape: BoxShape.circle,
-                                    color: Color.lerp(
-                                      const Color(0xFFE84855),
-                                      Colors.transparent,
-                                      1 - _recAnim.value,
-                                    ),
-                                    boxShadow: [
-                                      BoxShadow(
-                                        color: const Color(0xFFE84855)
-                                            .withOpacity(_recAnim.value * 0.8),
-                                        blurRadius: 6,
-                                        spreadRadius: 1,
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                                const SizedBox(width: 4),
-                                Opacity(
-                                  opacity: _recAnim.value,
-                                  child: const Text(
-                                    'REC',
-                                    style: TextStyle(
-                                      color: Color(0xFFE84855),
-                                      fontSize: 8,
-                                      fontWeight: FontWeight.w900,
-                                      letterSpacing: 1.5,
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                          // ── Camera icon + plus badge ───────────────────
-                          Center(
-                            child: Stack(
-                              clipBehavior: Clip.none,
-                              children: [
-                                Container(
-                                  padding: const EdgeInsets.all(10),
-                                  decoration: BoxDecoration(
-                                    shape: BoxShape.circle,
-                                    color: Colors.white
-                                        .withOpacity(0.15 + 0.1 * _pulseAnim.value),
-                                    border: Border.all(
-                                      color: Colors.white
-                                          .withOpacity(0.3 * _pulseAnim.value),
-                                      width: 1.5,
-                                    ),
-                                  ),
-                                  child: const Icon(
-                                    Icons.videocam_rounded,
-                                    color: Colors.white,
-                                    size: 22,
-                                  ),
-                                ),
-                                Positioned(
-                                  right: -5,
-                                  bottom: -5,
-                                  child: Container(
-                                    padding: const EdgeInsets.all(2),
-                                    decoration: BoxDecoration(
-                                      shape: BoxShape.circle,
-                                      gradient: const LinearGradient(
-                                        colors: [Color(0xFFE84855), Color(0xFFF9A03F)],
-                                      ),
-                                      border: Border.all(
-                                        color: Colors.black,
-                                        width: 1.5,
-                                      ),
-                                    ),
-                                    child: const Icon(
-                                      Icons.add_rounded,
-                                      color: Colors.white,
-                                      size: 12,
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                          // ── Animated waveform bars ─────────────────────
-                          Positioned(
-                            bottom: 10,
-                            left: 0,
-                            right: 0,
-                            child: Row(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              crossAxisAlignment: CrossAxisAlignment.end,
-                              children: [
-                                _animBar(_waveCtrl, 0.0, 8, 18),
-                                const SizedBox(width: 3),
-                                _animBar(_waveCtrl, 0.15, 12, 6),
-                                const SizedBox(width: 3),
-                                _animBar(_waveCtrl, 0.3, 10, 20),
-                                const SizedBox(width: 3),
-                                _animBar(_waveCtrl, 0.45, 14, 8),
-                                const SizedBox(width: 3),
-                                _animBar(_waveCtrl, 0.6, 8, 16),
-                              ],
-                            ),
-                          ),
-                        ],
-                      ),
+      child: Column(
+        children: [
+          GestureDetector(
+            onTapDown: (_) => setState(() => _isPressed = true),
+            onTapUp: (_) => setState(() => _isPressed = false),
+            onTapCancel: () => setState(() => _isPressed = false),
+            onTap: () {
+              HapticFeedback.lightImpact();
+              context.push('/take/create');
+            },
+            child: AnimatedScale(
+              scale: _isPressed ? 0.95 : 1.0,
+              duration: const Duration(milliseconds: 140),
+              curve: Curves.easeOutCubic,
+              child: Container(
+                width: 78,
+                height: 98,
+                padding: const EdgeInsets.all(2),
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(28),
+                  gradient: palette.primaryGradient,
+                  boxShadow: [
+                    BoxShadow(
+                      color: palette.primary.withOpacity(0.28),
+                      blurRadius: 10,
+                      offset: const Offset(0, 3),
                     ),
                   ],
-                );
-              },
-            ),
-            const SizedBox(height: 8),
-            // ── Shimmer label ──────────────────────────────────────────────
-            AnimatedBuilder(
-              animation: _shimmerAnim,
-              builder: (context, _) {
-                return ShaderMask(
-                  shaderCallback: (bounds) => LinearGradient(
-                    colors: const [
-                      Color(0xFFF9A03F),
-                      Color(0xFFFFD700),
-                      Color(0xFFF9A03F),
-                    ],
-                    stops: [
-                      (_shimmerAnim.value - 0.4).clamp(0.0, 1.0),
-                      _shimmerAnim.value.clamp(0.0, 1.0),
-                      (_shimmerAnim.value + 0.4).clamp(0.0, 1.0),
-                    ],
-                  ).createShader(bounds),
-                  child: const Text(
-                    'Drop a Take',
-                    style: TextStyle(
-                      fontSize: 11,
-                      fontWeight: FontWeight.w800,
-                      color: Colors.white,
-                      letterSpacing: 0.2,
-                    ),
+                ),
+                child: Container(
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(26),
+                    color: widget.isDark ? const Color(0xFF141022) : Colors.white,
                   ),
-                );
-              },
+                  clipBehavior: Clip.antiAlias,
+                  child: Stack(
+                    fit: StackFit.expand,
+                    children: [
+                      // Video background or User Avatar
+                      if (hasAvatar)
+                        CachedNetworkImage(
+                          imageUrl: widget.user.avatarUrl!,
+                          fit: BoxFit.cover,
+                          errorWidget: (_, __, ___) => Container(
+                            color: widget.isDark ? const Color(0xFF1E1933) : const Color(0xFFECE7FA),
+                            child: Icon(Icons.person_rounded, color: palette.primary.withOpacity(0.5), size: 32),
+                          ),
+                        )
+                      else
+                        const _LoopingVideoBackground(),
+                      // Subtle dark gradient scrim for contrast
+                      Container(
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            begin: Alignment.topCenter,
+                            end: Alignment.bottomCenter,
+                            colors: [
+                              Colors.black.withOpacity(0.20),
+                              Colors.black.withOpacity(0.55),
+                            ],
+                          ),
+                        ),
+                      ),
+                      // Floating Center Glowing '+' Action Button
+                      Center(
+                        child: Container(
+                          width: 32,
+                          height: 32,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            gradient: palette.primaryGradient,
+                            border: Border.all(
+                              color: Colors.white,
+                              width: 1.8,
+                            ),
+                            boxShadow: [
+                              BoxShadow(
+                                color: palette.primary.withOpacity(0.45),
+                                blurRadius: 8,
+                                offset: const Offset(0, 2),
+                              ),
+                            ],
+                          ),
+                          child: const Icon(
+                            Icons.add_rounded,
+                            color: Colors.white,
+                            size: 20,
+                          ),
+                        ),
+                      ),
+                      // Chic top-right camera icon pill
+                      Positioned(
+                        top: 6,
+                        right: 6,
+                        child: Container(
+                          padding: const EdgeInsets.all(4),
+                          decoration: BoxDecoration(
+                            color: Colors.black.withOpacity(0.60),
+                            shape: BoxShape.circle,
+                            border: Border.all(
+                              color: Colors.white.withOpacity(0.2),
+                              width: 0.8,
+                            ),
+                          ),
+                          child: const Icon(
+                            Icons.videocam_rounded,
+                            size: 11,
+                            color: Colors.white,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
             ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  /// A single animated waveform bar with phase offset
-  Widget _animBar(
-    AnimationController ctrl,
-    double phase,
-    double minH,
-    double maxH,
-  ) {
-    // Use sin with phase offset to stagger bar heights
-    final t = ((ctrl.value + phase) % 1.0);
-    final h = minH + (maxH - minH) * (0.5 + 0.5 * sin(t * pi * 2));
-    return Container(
-      width: 3,
-      height: h,
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(2),
-        gradient: const LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: [Color(0xFFF9A03F), Color(0xFFE84855)],
-        ),
+          ),
+          const SizedBox(height: 12),
+          SizedBox(
+            width: 78,
+            child: Text(
+              'Drop a Moment',
+              textAlign: TextAlign.center,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontSize: 10.5,
+                fontWeight: FontWeight.w700,
+                color: widget.isDark ? Colors.white.withOpacity(0.9) : const Color(0xFF161226),
+                letterSpacing: 0.1,
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../core/theme/app_theme.dart';
+import '../../core/theme/app_palette.dart';
 
 import '../../features/boost/providers/boost_provider.dart';
 
@@ -28,6 +29,7 @@ class MainShell extends ConsumerWidget {
 
     final isDark    = Theme.of(context).brightness == Brightness.dark;
     final location  = GoRouterState.of(context).matchedLocation;
+    final palette   = ref.watch(appPaletteProvider);
 
     int currentIndex = 0;
     if (location.startsWith('/match'))   currentIndex = 1;
@@ -53,30 +55,29 @@ class MainShell extends ConsumerWidget {
           child: BackdropFilter(
             filter: ImageFilter.blur(sigmaX: 24, sigmaY: 24),
             child: Container(
-              height: 60,
+              height: 62,
               decoration: BoxDecoration(
                 color: isDark
-                    ? const Color(0xFF140D24).withValues(alpha: 0.88)
-                    : Colors.white.withValues(alpha: 0.88),
+                    ? const Color(0xFF120A20).withValues(alpha: 0.92)
+                    : Colors.white.withValues(alpha: 0.92),
                 borderRadius: BorderRadius.circular(32),
                 border: Border.all(
                   color: isDark
-                      ? Colors.white.withValues(alpha: 0.14)
+                      ? palette.primary.withValues(alpha: 0.20)
                       : Colors.black.withValues(alpha: 0.08),
                   width: 1.2,
                 ),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withValues(alpha: isDark ? 0.45 : 0.12),
-                    blurRadius: 28,
-                    offset: const Offset(0, 8),
+                    color: Colors.black.withValues(alpha: isDark ? 0.5 : 0.12),
+                    blurRadius: 30,
+                    offset: const Offset(0, 10),
                   ),
-                  if (isDark)
-                    BoxShadow(
-                      color: const Color(0xFFEC4899).withValues(alpha: 0.12),
-                      blurRadius: 20,
-                      offset: const Offset(0, 4),
-                    ),
+                  BoxShadow(
+                    color: palette.primary.withValues(alpha: isDark ? 0.18 : 0.08),
+                    blurRadius: 24,
+                    offset: const Offset(0, 4),
+                  ),
                 ],
               ),
               child: Padding(
@@ -89,6 +90,7 @@ class MainShell extends ConsumerWidget {
                       isSelected: currentIndex == i,
                       isDark: isDark,
                       hasDot: i == 2, // chat alert dot
+                      palette: palette,
                       onTap: () {
                         HapticFeedback.selectionClick();
                         context.go(_items[i].path);
@@ -119,6 +121,7 @@ class _NavBarItem extends StatefulWidget {
   final bool isSelected;
   final bool isDark;
   final bool hasDot;
+  final AppPalette palette;
   final VoidCallback onTap;
 
   const _NavBarItem({
@@ -126,6 +129,7 @@ class _NavBarItem extends StatefulWidget {
     required this.isSelected,
     required this.isDark,
     this.hasDot = false,
+    required this.palette,
     required this.onTap,
   });
 
@@ -178,19 +182,13 @@ class _NavBarItemState extends State<_NavBarItem>
             curve: Curves.easeOutBack,
             padding: EdgeInsets.symmetric(horizontal: sel ? 15 : 10, vertical: 8),
             decoration: BoxDecoration(
-              color: sel
-                  ? (widget.isDark ? Colors.white : const Color(0xFF1E0A30))
-                  : (_isHovered ? Colors.white.withValues(alpha: 0.08) : Colors.transparent),
+              gradient: sel ? widget.palette.navPillGradient : null,
+              color: sel ? null : (_isHovered ? Colors.white.withValues(alpha: 0.08) : Colors.transparent),
               borderRadius: BorderRadius.circular(24),
               boxShadow: sel ? [
                 BoxShadow(
-                  color: Colors.white.withValues(alpha: widget.isDark ? 0.45 : 0.15),
+                  color: widget.palette.primary.withValues(alpha: 0.5),
                   blurRadius: 16,
-                  offset: const Offset(0, 2),
-                ),
-                BoxShadow(
-                  color: const Color(0xFFEC4899).withValues(alpha: 0.35),
-                  blurRadius: 20,
                   offset: const Offset(0, 4),
                 ),
               ] : [],
@@ -205,7 +203,7 @@ class _NavBarItemState extends State<_NavBarItem>
                       sel ? widget.item.activeIcon : widget.item.icon,
                       size: 20,
                       color: sel
-                          ? const Color(0xFFEC4899)
+                          ? Colors.white
                           : (widget.isDark
                               ? (_isHovered ? Colors.white : Colors.white.withValues(alpha: 0.45))
                               : AppTheme.textTertiary),
@@ -218,11 +216,11 @@ class _NavBarItemState extends State<_NavBarItem>
                           width: 6.5,
                           height: 6.5,
                           decoration: BoxDecoration(
-                            color: const Color(0xFFC084FC),
+                            color: widget.palette.primary,
                             shape: BoxShape.circle,
                             boxShadow: [
                               BoxShadow(
-                                color: const Color(0xFFC084FC).withValues(alpha: 0.9),
+                                color: widget.palette.primary.withValues(alpha: 0.9),
                                 blurRadius: 6,
                               ),
                             ],
@@ -235,8 +233,8 @@ class _NavBarItemState extends State<_NavBarItem>
                   const SizedBox(width: 7),
                   Text(
                     widget.item.label.toLowerCase(),
-                    style: TextStyle(
-                      color: widget.isDark ? const Color(0xFF140D24) : Colors.white,
+                    style: const TextStyle(
+                      color: Colors.white,
                       fontSize: 13,
                       fontWeight: FontWeight.w900,
                       letterSpacing: -0.2,

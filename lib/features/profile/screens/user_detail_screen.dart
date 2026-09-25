@@ -19,6 +19,7 @@ import '../../wallet/widgets/coin_gate_sheet.dart';
 import '../../../core/providers/access_provider.dart';
 import '../../../core/providers/firestore_provider.dart';
 import '../../../shared/widgets/profile_choice_sheet.dart';
+import '../../../core/utils/heart_queue_engine.dart';
 
 class UserDetailScreen extends ConsumerStatefulWidget {
   final String userId;
@@ -547,7 +548,7 @@ class _UserDetailScreenState extends ConsumerState<UserDetailScreen>
                   color: AppTheme.accentPurple.withOpacity(0.1),
                   shape: BoxShape.circle,
                 ),
-                child: const Center(
+                child: Center(
                   child: Icon(Icons.lock_rounded, size: 36, color: AppTheme.accentPurple),
                 ),
               ),
@@ -588,8 +589,8 @@ class _UserDetailScreenState extends ConsumerState<UserDetailScreen>
   Widget _buildConfessSwipeBar(UserModel currentUser, UserModel targetUser, bool isDark) {
     final progress = _confessSwipeValue;
     final trackBg = isDark ? const Color(0xFF1A1033) : const Color(0xFFF0E6FF);
-    const glowColor = Color(0xFF9333EA);
-    final labelColor = isDark ? Colors.white.withOpacity(0.9) : const Color(0xFF5B21B6);
+    final glowColor = AppTheme.accentPurple;
+    final labelColor = isDark ? Colors.white.withOpacity(0.9) : AppTheme.primaryBlue;
     final isIdle = progress < 0.05;
 
     return AnimatedBuilder(
@@ -758,7 +759,7 @@ class _UserDetailScreenState extends ConsumerState<UserDetailScreen>
                 borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
                 boxShadow: [
                   BoxShadow(
-                    color: const Color(0xFF9333EA).withOpacity(0.25),
+                    color: AppTheme.accentPurple.withOpacity(0.25),
                     blurRadius: 40,
                     offset: const Offset(0, -8),
                   ),
@@ -801,15 +802,15 @@ class _UserDetailScreenState extends ConsumerState<UserDetailScreen>
                               width: 50,
                               height: 50,
                               decoration: BoxDecoration(
-                                gradient: const LinearGradient(
-                                  colors: [Color(0xFF9333EA), Color(0xFFC084FC)],
+                                gradient: LinearGradient(
+                                  colors: [AppTheme.primaryBlue, AppTheme.accentPink],
                                   begin: Alignment.topLeft,
                                   end: Alignment.bottomRight,
                                 ),
                                 shape: BoxShape.circle,
                                 boxShadow: [
                                   BoxShadow(
-                                    color: const Color(0xFF9333EA).withOpacity(0.4),
+                                    color: AppTheme.accentPurple.withOpacity(0.4),
                                     blurRadius: 12,
                                     offset: const Offset(0, 4),
                                   ),
@@ -837,7 +838,7 @@ class _UserDetailScreenState extends ConsumerState<UserDetailScreen>
                                     style: TextStyle(
                                       fontSize: 12.5,
                                       fontWeight: FontWeight.w600,
-                                      color: isDark ? const Color(0xFFC084FC) : const Color(0xFF7C3AED),
+                                      color: isDark ? AppTheme.accentPink : AppTheme.accentPurple,
                                     ),
                                   ),
                                 ],
@@ -951,8 +952,8 @@ class _UserDetailScreenState extends ConsumerState<UserDetailScreen>
                             decoration: BoxDecoration(
                               gradient: _isSendingConfession
                                   ? null
-                                  : const LinearGradient(
-                                      colors: [Color(0xFF7C3AED), Color(0xFFC084FC)],
+                                  : LinearGradient(
+                                      colors: [AppTheme.primaryBlue, AppTheme.accentPink],
                                       begin: Alignment.centerLeft,
                                       end: Alignment.centerRight,
                                     ),
@@ -964,7 +965,7 @@ class _UserDetailScreenState extends ConsumerState<UserDetailScreen>
                                   ? []
                                   : [
                                       BoxShadow(
-                                        color: const Color(0xFF9333EA).withOpacity(0.45),
+                                        color: AppTheme.accentPurple.withOpacity(0.45),
                                         blurRadius: 20,
                                         offset: const Offset(0, 8),
                                       ),
@@ -1070,7 +1071,7 @@ class _UserDetailScreenState extends ConsumerState<UserDetailScreen>
                 Container(
                   padding: const EdgeInsets.all(8),
                   decoration: BoxDecoration(
-                    color: const Color(0xFF10B981).withOpacity(0.12),
+                    color: AppTheme.accentPurple.withOpacity(0.12),
                     shape: BoxShape.circle,
                   ),
                   child: const Text('🔥', style: TextStyle(fontSize: 20)),
@@ -1083,7 +1084,7 @@ class _UserDetailScreenState extends ConsumerState<UserDetailScreen>
                       Text(
                         'CURRENT MOOD',
                         style: TextStyle(
-                          color: const Color(0xFF10B981),
+                          color: AppTheme.accentPurple,
                           fontSize: 11,
                           fontWeight: FontWeight.w900,
                           letterSpacing: 0.8,
@@ -1248,19 +1249,15 @@ class _UserDetailScreenState extends ConsumerState<UserDetailScreen>
     );
   }
 
+  final _detailEngine = HeartQueueEngine();
+
   int _calculateCompatibilityScore(UserModel currentUser, UserModel user) {
-    int baseScore = 55;
-    final u1Int = currentUser.interests.map((e) => e.toLowerCase()).toSet();
-    final u2Int = user.interests.map((e) => e.toLowerCase()).toSet();
-    final common = u1Int.intersection(u2Int).toList();
-    
-    // Hash determinism
-    int combinedHash = (currentUser.id.hashCode ^ user.id.hashCode).abs();
-    
-    baseScore += (combinedHash % 25);
-    baseScore += (common.length * 5);
-    if (baseScore > 98) baseScore = 98;
-    return baseScore;
+    return _detailEngine.scoreProfile(
+      currentUser: currentUser,
+      candidate: user,
+      deviceLat: _deviceLat,
+      deviceLon: _deviceLon,
+    ).displayScore;
   }
 
   // ─── HERO PHOTO (full bleed) ────────────────────────────────────────────────
@@ -1323,8 +1320,8 @@ class _UserDetailScreenState extends ConsumerState<UserDetailScreen>
                         child: Container(
                           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
                           decoration: BoxDecoration(
-                            gradient: const LinearGradient(
-                              colors: [Color(0xFF9333EA), Color(0xFFFF3CAC)],
+                            gradient: LinearGradient(
+                              colors: [AppTheme.accentPurple, AppTheme.primaryBlue],
                             ),
                             borderRadius: BorderRadius.circular(20),
                             border: Border.all(
@@ -1333,7 +1330,7 @@ class _UserDetailScreenState extends ConsumerState<UserDetailScreen>
                             ),
                             boxShadow: [
                               BoxShadow(
-                                color: const Color(0xFF9333EA).withOpacity(0.4),
+                                color: AppTheme.accentPurple.withOpacity(0.4),
                                 blurRadius: 12,
                                 offset: const Offset(0, 3),
                               ),
@@ -1380,7 +1377,7 @@ class _UserDetailScreenState extends ConsumerState<UserDetailScreen>
                             value: 'switch',
                             child: Row(
                               children: [
-                                const Icon(Icons.tune_rounded, size: 20, color: Color(0xFF9333EA)),
+                                Icon(Icons.tune_rounded, size: 20, color: AppTheme.accentPurple),
                                 const SizedBox(width: 12),
                                 Text('Profile Options', style: TextStyle(color: isDark ? Colors.white : Colors.black87, fontWeight: FontWeight.w700)),
                               ],
@@ -1442,10 +1439,10 @@ class _UserDetailScreenState extends ConsumerState<UserDetailScreen>
                         width: 9,
                         height: 9,
                         decoration: BoxDecoration(
-                          color: user.isOnline ? const Color(0xFF22C55E) : Colors.grey.shade500,
+                          color: user.isOnline ? AppTheme.accentPurple : Colors.grey.shade500,
                           shape: BoxShape.circle,
                           boxShadow: user.isOnline ? [
-                            BoxShadow(color: const Color(0xFF22C55E).withOpacity(0.7), blurRadius: 6, spreadRadius: 2),
+                            BoxShadow(color: AppTheme.accentPurple.withOpacity(0.7), blurRadius: 6, spreadRadius: 2),
                           ] : [],
                         ),
                       ),
@@ -1744,6 +1741,8 @@ class _UserDetailScreenState extends ConsumerState<UserDetailScreen>
             ),
 
           const SizedBox(height: 18),
+          _buildBottomActions(isDark),
+          const SizedBox(height: 18),
         ],
       ),
     );
@@ -1778,7 +1777,7 @@ class _UserDetailScreenState extends ConsumerState<UserDetailScreen>
               color: AppTheme.primaryBlue.withOpacity(isDark ? 0.18 : 0.1),
               shape: BoxShape.circle,
             ),
-            child: const Icon(Icons.phone_rounded, color: AppTheme.primaryBlue, size: 20),
+            child: Icon(Icons.phone_rounded, color: AppTheme.primaryBlue, size: 20),
           ),
           const SizedBox(width: 14),
           Expanded(
@@ -1819,7 +1818,7 @@ class _UserDetailScreenState extends ConsumerState<UserDetailScreen>
                   color: AppTheme.primaryBlue.withOpacity(0.12),
                   shape: BoxShape.circle,
                 ),
-                child: const Icon(Icons.copy_rounded, color: AppTheme.primaryBlue, size: 18),
+                child: Icon(Icons.copy_rounded, color: AppTheme.primaryBlue, size: 18),
               ),
             )
           else
@@ -1828,13 +1827,13 @@ class _UserDetailScreenState extends ConsumerState<UserDetailScreen>
               child: Container(
                 padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
                 decoration: BoxDecoration(
-                  gradient: const LinearGradient(
-                    colors: [Color(0xFF3B82F6), Color(0xFF6366F1)],
+                  gradient: LinearGradient(
+                    colors: [AppTheme.primaryBlue, AppTheme.accentPurple],
                   ),
                   borderRadius: BorderRadius.circular(12),
                   boxShadow: [
                     BoxShadow(
-                      color: const Color(0xFF3B82F6).withOpacity(0.35),
+                      color: AppTheme.primaryBlue.withOpacity(0.35),
                       blurRadius: 10,
                       offset: const Offset(0, 4),
                     ),
@@ -2588,9 +2587,9 @@ class _UserDetailScreenState extends ConsumerState<UserDetailScreen>
             ),
             child: Row(
               children: [
-                const Icon(Icons.favorite_rounded, color: AppTheme.accentPink, size: 20),
+                Icon(Icons.favorite_rounded, color: AppTheme.accentPink, size: 20),
                 const SizedBox(width: 12),
-                const Expanded(
+                Expanded(
                   child: Text(
                     'Long-term relationship open to short-term connection. Seeking someone to explore food spots, art galleries, and share playlist discoveries. ☕🎵',
                     style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, height: 1.4, color: AppTheme.accentPink),
@@ -2658,7 +2657,15 @@ class _UserDetailScreenState extends ConsumerState<UserDetailScreen>
       child: Row(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          _buildTextAction(Icons.share_rounded, 'Share Profile', isDark),
+          _buildTextAction(
+            Icons.share_rounded,
+            'Share Profile',
+            isDark,
+            onTap: () {
+              Clipboard.setData(ClipboardData(text: 'https://situatioship.netlify.app/profile/view/${widget.userId}'));
+              _showSuccess('Profile link copied to clipboard! 🔗');
+            },
+          ),
           const SizedBox(width: 24),
           Container(width: 1, height: 18, color: isDark ? Colors.white10 : Colors.black12),
           const SizedBox(width: 24),
@@ -2839,7 +2846,7 @@ class _UserDetailScreenState extends ConsumerState<UserDetailScreen>
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Icon(Icons.check_circle_rounded, color: AppTheme.success, size: 56),
+            Icon(Icons.check_circle_rounded, color: AppTheme.success, size: 56),
             const SizedBox(height: 16),
             const Text('Report Submitted', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
             const SizedBox(height: 8),
@@ -2891,15 +2898,15 @@ class _UserDetailScreenState extends ConsumerState<UserDetailScreen>
                         child: Container(
                           padding: const EdgeInsets.all(7),
                           decoration: BoxDecoration(
-                            gradient: const LinearGradient(
-                              colors: [Color(0xFFFF3CAC), Color(0xFFFF8C42)],
+                            gradient: LinearGradient(
+                              colors: [AppTheme.primaryBlue, AppTheme.accentPurple],
                               begin: Alignment.topLeft,
                               end: Alignment.bottomRight,
                             ),
                             borderRadius: BorderRadius.circular(10),
                             boxShadow: [
                               BoxShadow(
-                                color: const Color(0xFFFF3CAC).withOpacity(0.4),
+                                color: AppTheme.primaryBlue.withOpacity(0.4),
                                 blurRadius: 12,
                                 spreadRadius: 1,
                                 offset: const Offset(0, 3),
@@ -2924,8 +2931,8 @@ class _UserDetailScreenState extends ConsumerState<UserDetailScreen>
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 3),
                       decoration: BoxDecoration(
-                        gradient: const LinearGradient(
-                          colors: [Color(0xFFFF3CAC), Color(0xFFFF8C42)],
+                        gradient: LinearGradient(
+                          colors: [AppTheme.primaryBlue, AppTheme.accentPurple],
                         ),
                         borderRadius: BorderRadius.circular(20),
                       ),
@@ -3059,7 +3066,7 @@ class _UserDetailScreenState extends ConsumerState<UserDetailScreen>
                 ),
                 boxShadow: [
                   BoxShadow(
-                    color: const Color(0xFFFF3CAC).withOpacity(0.5),
+                    color: AppTheme.primaryBlue.withOpacity(0.5),
                     blurRadius: 12,
                     spreadRadius: 1,
                   ),
@@ -3133,7 +3140,7 @@ class _UserDetailScreenState extends ConsumerState<UserDetailScreen>
               gradient: LinearGradient(
                 colors: isDark
                     ? [const Color(0xFF3B0764), const Color(0xFF1E1B4B)]
-                    : [const Color(0xFFE9D5FF), const Color(0xFFC084FC)],
+                    : [const Color(0xFFFDE8F0), AppTheme.accentPink],
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
               ),
@@ -3194,12 +3201,12 @@ class _SpinningRingPainter extends CustomPainter {
     final gradient = SweepGradient(
       startAngle: angle,
       endAngle: angle + 3.14159 * 2,
-      colors: const [
-        Color(0xFFFF3CAC),
-        Color(0xFFFF8C42),
-        Color(0xFFFFE44D),
-        Color(0xFF7C3AED),
-        Color(0xFFFF3CAC),
+      colors: [
+        AppTheme.primaryBlue,
+        AppTheme.accentPurple,
+        const Color(0xFFFFE44D),
+        AppTheme.accentPurple,
+        AppTheme.primaryBlue,
       ],
       stops: const [0.0, 0.3, 0.55, 0.8, 1.0],
     );
@@ -3247,15 +3254,15 @@ class _CustomConfessThumbShape extends SliderComponentShape {
     
     // Drop shadow
     final shadowPaint = Paint()
-      ..color = const Color(0xFF9333EA).withOpacity(0.4)
+      ..color = AppTheme.accentPurple.withOpacity(0.4)
       ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 8);
     canvas.drawCircle(center + const Offset(0, 3), 22, shadowPaint);
 
     // Gradient circle background
     final rect = Rect.fromCircle(center: center, radius: 23);
     final gradientPaint = Paint()
-      ..shader = const LinearGradient(
-        colors: [Color(0xFF9333EA), Color(0xFFC084FC)],
+      ..shader = LinearGradient(
+        colors: [AppTheme.primaryBlue, AppTheme.accentPink],
         begin: Alignment.topLeft,
         end: Alignment.bottomRight,
       ).createShader(rect);
@@ -3275,7 +3282,7 @@ class _CustomConfessThumbShape extends SliderComponentShape {
         style: TextStyle(
           fontSize: 20,
           fontFamily: icon.fontFamily,
-          color: const Color(0xFF9333EA),
+          color: AppTheme.accentPurple,
         ),
       ),
       textDirection: TextDirection.ltr,

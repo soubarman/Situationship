@@ -321,7 +321,7 @@ class _MatchSuccessScreenState extends ConsumerState<MatchSuccessScreen>
                   ),
                 ],
               ),
-              child: const Center(
+              child: Center(
                 child: Icon(
                   Icons.favorite_rounded,
                   color: AppTheme.primaryBlue,

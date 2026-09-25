@@ -107,6 +107,7 @@ class _FemaleWallet extends StatelessWidget {
                   milestone: m,
                   claimed: claimed.contains(m.id),
                   unlocked: totalEarned >= m.threshold,
+                  userId: user.id,
                 )),
 
                 const SizedBox(height: 24),
@@ -195,10 +196,16 @@ class _MilestoneProgressCard extends StatelessWidget {
 }
 
 class _MilestoneRow extends StatelessWidget {
-  const _MilestoneRow({required this.milestone, required this.claimed, required this.unlocked});
+  const _MilestoneRow({
+    required this.milestone,
+    required this.claimed,
+    required this.unlocked,
+    required this.userId,
+  });
   final CoinMilestone milestone;
   final bool claimed;
   final bool unlocked;
+  final String userId;
 
   @override
   Widget build(BuildContext context) {
@@ -241,13 +248,45 @@ class _MilestoneRow extends StatelessWidget {
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
               decoration: BoxDecoration(color: AppTheme.success.withOpacity(0.15), borderRadius: BorderRadius.circular(20)),
-              child: const Text('Claimed', style: TextStyle(color: AppTheme.success, fontSize: 11, fontWeight: FontWeight.w700)),
+              child: Text('Claimed', style: TextStyle(color: AppTheme.success, fontSize: 11, fontWeight: FontWeight.w700)),
             )
           else if (unlocked)
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-              decoration: BoxDecoration(color: const Color(0xFFE91E63).withOpacity(0.15), borderRadius: BorderRadius.circular(20)),
-              child: const Text('Claim!', style: TextStyle(color: Color(0xFFFF80AB), fontSize: 11, fontWeight: FontWeight.w700)),
+            GestureDetector(
+              onTap: () async {
+                final success = await CoinService.claimMilestone(
+                  userId: userId,
+                  milestone: milestone,
+                );
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text(success
+                          ? '🎉 ₹${milestone.giftCardValueInr} Gift Card claimed! Check your rewards.'
+                          : 'Unable to claim milestone at this time.'),
+                      backgroundColor: success ? AppTheme.success : AppTheme.error,
+                      behavior: SnackBarBehavior.floating,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    ),
+                  );
+                }
+              },
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(
+                    colors: [Color(0xFFE91E63), Color(0xFFFF4081)],
+                  ),
+                  borderRadius: BorderRadius.circular(20),
+                  boxShadow: [
+                    BoxShadow(
+                      color: const Color(0xFFE91E63).withOpacity(0.4),
+                      blurRadius: 8,
+                      offset: const Offset(0, 2),
+                    ),
+                  ],
+                ),
+                child: const Text('Claim!', style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w800)),
+              ),
             )
           else
             Text('${milestone.threshold}', style: const TextStyle(color: Colors.white38, fontSize: 12)),
@@ -621,7 +660,7 @@ class _FeatureRow extends StatelessWidget {
     padding: const EdgeInsets.only(bottom: 8),
     child: Row(
       children: [
-        const Icon(Icons.check_circle_rounded, color: AppTheme.primaryBlue, size: 18),
+        Icon(Icons.check_circle_rounded, color: AppTheme.primaryBlue, size: 18),
         const SizedBox(width: 10),
         Text(text, style: const TextStyle(color: Colors.white70, fontSize: 13)),
       ],
@@ -657,7 +696,7 @@ class _SpendGuide extends StatelessWidget {
             Text(item[0], style: const TextStyle(fontSize: 20)),
             const SizedBox(width: 12),
             Expanded(child: Text(item[1], style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w600))),
-            Text(item[2], style: const TextStyle(color: AppTheme.primaryBlue, fontSize: 12, fontWeight: FontWeight.w700)),
+            Text(item[2], style: TextStyle(color: AppTheme.primaryBlue, fontSize: 12, fontWeight: FontWeight.w700)),
           ],
         ),
       )).toList(),

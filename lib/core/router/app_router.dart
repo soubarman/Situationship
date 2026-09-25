@@ -49,9 +49,21 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       }
 
       final isLoggedIn = authState.asData?.value != null;
-      final isProtected = ['/feed', '/match', '/chats', '/profile', '/communities', '/search', '/create-post', '/story'].any(
-        (r) => state.matchedLocation.startsWith(r),
-      );
+      final isProtected = [
+        '/feed',
+        '/match',
+        '/chats',
+        '/profile',
+        '/communities',
+        '/community',
+        '/search',
+        '/create-post',
+        '/story',
+        '/wallet',
+        '/spotlight',
+        '/verification',
+        '/take',
+      ].any((r) => state.matchedLocation.startsWith(r));
       final isCompletingProfile = state.matchedLocation == '/complete-profile';
 
       // 2. AUTHENTICATION GUARD

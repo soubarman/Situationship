@@ -678,7 +678,7 @@ class _ChatDetailScreenState extends ConsumerState<ChatDetailScreen>
                           color: isDark ? Colors.black.withOpacity(0.5) : Colors.white.withOpacity(0.5),
                           colorBlendMode: isDark ? BlendMode.darken : BlendMode.lighten,
                         ),
-                        const CircularProgressIndicator(color: AppTheme.primaryBlue),
+                        CircularProgressIndicator(color: AppTheme.primaryBlue),
                       ],
                     ),
                   ),
@@ -738,7 +738,7 @@ class _ChatDetailScreenState extends ConsumerState<ChatDetailScreen>
                   color: AppTheme.primaryBlue.withOpacity(0.1),
                   shape: BoxShape.circle,
                 ),
-                child: const Icon(Icons.camera_alt_rounded, color: AppTheme.primaryBlue),
+                child: Icon(Icons.camera_alt_rounded, color: AppTheme.primaryBlue),
               ),
               title: const Text('Take a Photo', style: TextStyle(fontWeight: FontWeight.w600)),
               onTap: () {
@@ -754,7 +754,7 @@ class _ChatDetailScreenState extends ConsumerState<ChatDetailScreen>
                   color: AppTheme.accentPurple.withOpacity(0.1),
                   shape: BoxShape.circle,
                 ),
-                child: const Icon(Icons.photo_library_rounded, color: AppTheme.accentPurple),
+                child: Icon(Icons.photo_library_rounded, color: AppTheme.accentPurple),
               ),
               title: const Text('Choose from Gallery', style: TextStyle(fontWeight: FontWeight.w600)),
               onTap: () {
@@ -967,7 +967,7 @@ class _ChatDetailScreenState extends ConsumerState<ChatDetailScreen>
                           children: [
                             Flexible(
                               child: ShaderMask(
-                                shaderCallback: (bounds) => const LinearGradient(
+                                shaderCallback: (bounds) => LinearGradient(
                                   colors: [AppTheme.primaryBlue, AppTheme.accentPurple],
                                 ).createShader(bounds),
                                 child: Text(
@@ -1166,11 +1166,11 @@ class _ChatDetailScreenState extends ConsumerState<ChatDetailScreen>
               ),
               child: Row(
                 children: [
-                  const Icon(Icons.timer_outlined, color: AppTheme.accentPurple, size: 18),
+                  Icon(Icons.timer_outlined, color: AppTheme.accentPurple, size: 18),
                   const SizedBox(width: 8),
                   Text(
                     'Time remaining: $remainingTimeStr',
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontWeight: FontWeight.bold,
                       color: AppTheme.accentPurple,
                       fontSize: 13,
@@ -1184,7 +1184,7 @@ class _ChatDetailScreenState extends ConsumerState<ChatDetailScreen>
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child: const Text('Got it! ✨', style: TextStyle(color: AppTheme.primaryBlue, fontWeight: FontWeight.bold)),
+            child: Text('Got it! ✨', style: TextStyle(color: AppTheme.primaryBlue, fontWeight: FontWeight.bold)),
           ),
         ],
       ),
@@ -1380,7 +1380,7 @@ class _ChatDetailScreenState extends ConsumerState<ChatDetailScreen>
         color: isDark ? const Color(0xFF2E1065) : const Color(0xFFF3E8FF),
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
-          color: isDark ? const Color(0xFF6B21A8).withOpacity(0.4) : const Color(0xFFE9D5FF),
+          color: isDark ? const Color(0xFF6B21A8).withOpacity(0.4) : const Color(0xFFFDE8F0),
           width: 1,
         ),
         boxShadow: [
@@ -1403,7 +1403,7 @@ class _ChatDetailScreenState extends ConsumerState<ChatDetailScreen>
                   style: TextStyle(
                     fontSize: 14,
                     fontWeight: FontWeight.w900,
-                    color: isDark ? const Color(0xFFE9D5FF) : const Color(0xFF5B21B6),
+                    color: isDark ? const Color(0xFFFDE8F0) : AppTheme.primaryBlue,
                   ),
                 ),
               ),
@@ -1415,7 +1415,7 @@ class _ChatDetailScreenState extends ConsumerState<ChatDetailScreen>
             style: TextStyle(
               fontSize: 12,
               height: 1.4,
-              color: isDark ? const Color(0xFFD8B4FE) : const Color(0xFF6D28D9),
+              color: isDark ? AppTheme.accentPink : AppTheme.accentPurple,
             ),
           ),
           const SizedBox(height: 12),
@@ -1434,7 +1434,7 @@ class _ChatDetailScreenState extends ConsumerState<ChatDetailScreen>
               ElevatedButton.icon(
                 onPressed: () => _handleRevealResponse(chatId, true),
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF7C3AED),
+                  backgroundColor: AppTheme.accentPurple,
                   foregroundColor: Colors.white,
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                   elevation: 0,
@@ -1634,7 +1634,7 @@ class _ChatDetailScreenState extends ConsumerState<ChatDetailScreen>
         child: Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            const SizedBox(
+            SizedBox(
               width: 16,
               height: 16,
               child: CircularProgressIndicator(strokeWidth: 2, color: AppTheme.primaryBlue),
@@ -1909,7 +1909,7 @@ class _ChatDetailScreenState extends ConsumerState<ChatDetailScreen>
                     onPressed: () {
                       openJsUrl('https://developers.giphy.com/dashboard/');
                     },
-                    child: const Text(
+                    child: Text(
                       'Get API Key (Free) ➔',
                       style: TextStyle(fontSize: 12, color: AppTheme.primaryBlue),
                     ),
@@ -2008,7 +2008,7 @@ class _ChatDetailScreenState extends ConsumerState<ChatDetailScreen>
         // Grid or Loading/Error/Empty States
         Expanded(
           child: _giphyLoading
-              ? const Center(child: CircularProgressIndicator(strokeWidth: 2, color: AppTheme.primaryBlue))
+              ? Center(child: CircularProgressIndicator(strokeWidth: 2, color: AppTheme.primaryBlue))
               : _giphyError != null
                   ? Container(
                       padding: const EdgeInsets.all(16),
@@ -2386,14 +2386,14 @@ class _MessageBubble extends StatelessWidget {
                   shape: BoxShape.circle,
                   gradient: LinearGradient(
                     colors: isDark
-                        ? [const Color(0xFF6B21A8), const Color(0xFF4C1D95)]
-                        : [const Color(0xFFC084FC), const Color(0xFF818CF8)],
+                        ? [const Color(0xFF6B21A8), AppTheme.primaryBlue]
+                        : [AppTheme.accentPink, const Color(0xFF818CF8)],
                     begin: Alignment.topLeft,
                     end: Alignment.bottomRight,
                   ),
                   boxShadow: [
                     BoxShadow(
-                      color: const Color(0xFF8B5CF6).withValues(alpha: 0.3),
+                      color: AppTheme.accentPurple.withValues(alpha: 0.3),
                       blurRadius: 8,
                     ),
                   ],
@@ -2601,8 +2601,8 @@ class _TypingIndicator extends StatelessWidget {
                 shape: BoxShape.circle,
                 gradient: LinearGradient(
                   colors: isDark
-                      ? [const Color(0xFF6B21A8), const Color(0xFF4C1D95)]
-                      : [const Color(0xFFC084FC), const Color(0xFF818CF8)],
+                      ? [const Color(0xFF6B21A8), AppTheme.primaryBlue]
+                      : [AppTheme.accentPink, const Color(0xFF818CF8)],
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
                 ),
@@ -3128,7 +3128,7 @@ class _ChatEmptyStateState extends State<_ChatEmptyState>
             ),
             const SizedBox(height: 24),
             ShaderMask(
-              shaderCallback: (bounds) => const LinearGradient(
+              shaderCallback: (bounds) => LinearGradient(
                 colors: [AppTheme.primaryBlue, AppTheme.accentPurple],
               ).createShader(bounds),
               child: Text(
@@ -3207,8 +3207,8 @@ class _ChatAppBarAvatarState extends State<_ChatAppBarAvatar>
               shape: BoxShape.circle,
               gradient: LinearGradient(
                 colors: widget.isDark
-                    ? [const Color(0xFF6B21A8), const Color(0xFF4C1D95)]
-                    : [const Color(0xFFC084FC), const Color(0xFF818CF8)],
+                    ? [const Color(0xFF6B21A8), AppTheme.primaryBlue]
+                    : [AppTheme.accentPink, const Color(0xFF818CF8)],
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
               ),

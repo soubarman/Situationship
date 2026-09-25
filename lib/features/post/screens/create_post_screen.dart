@@ -160,7 +160,7 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
                     height: 20,
                     child: CircularProgressIndicator(strokeWidth: 2),
                   )
-                : const Text(
+                : Text(
                     'Share',
                     style: TextStyle(
                       color: AppTheme.primaryBlue,
@@ -216,7 +216,7 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
                           Container(
                             padding: const EdgeInsets.all(20),
                             decoration: BoxDecoration(
-                              gradient: const LinearGradient(
+                              gradient: LinearGradient(
                                 colors: [AppTheme.primaryBlue, AppTheme.accentPurple],
                                 begin: Alignment.topLeft,
                                 end: Alignment.bottomRight,
@@ -375,7 +375,7 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(16),
-          borderSide: const BorderSide(color: AppTheme.primaryBlue, width: 2),
+          borderSide: BorderSide(color: AppTheme.primaryBlue, width: 2),
         ),
         contentPadding: const EdgeInsets.all(16),
       ),
@@ -420,7 +420,7 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
               const SizedBox(width: 10),
               Text(
                 _selectedMoodLabel!,
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 15,
                   fontWeight: FontWeight.w700,
                   color: AppTheme.primaryBlue,

@@ -7,6 +7,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 import '../../../core/models/user_model.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/providers/app_state_provider.dart';
+import '../../../core/utils/heart_queue_engine.dart';
 
 // ─── Vibe helpers ─────────────────────────────────────────────────────────────
 
@@ -32,14 +33,10 @@ String _vibeFor(UserModel u) =>
 Color _vibeColorFor(UserModel u) =>
     _vibeColors[u.id.hashCode.abs() % _vibeColors.length];
 
+final _nearlySoulsEngine = HeartQueueEngine();
+
 int _matchPercent(UserModel me, UserModel other) {
-  final mySet = me.interests.toSet();
-  final theirSet = other.interests.toSet();
-  final shared = mySet.intersection(theirSet).length;
-  final total = max(mySet.union(theirSet).length, 1);
-  final base = 55 + (other.id.hashCode.abs() % 25);
-  final bonus = ((shared / total) * 30).round();
-  return (base + bonus).clamp(55, 99);
+  return _nearlySoulsEngine.scoreProfile(currentUser: me, candidate: other).displayScore;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -201,7 +198,7 @@ class _NearlySoulsTabState extends ConsumerState<NearlySoulsTab> {
               color: AppTheme.primaryGreen.withValues(alpha: 0.12),
               shape: BoxShape.circle,
             ),
-            child: const Icon(Icons.people_alt_rounded,
+            child: Icon(Icons.people_alt_rounded,
                 color: AppTheme.primaryGreen, size: 48),
           ),
           const SizedBox(height: 20),
@@ -276,14 +273,14 @@ class _GridCardState extends State<_GridCard> {
               borderRadius: BorderRadius.circular(22),
               border: Border.all(
                 color: _isHovered
-                    ? const Color(0xFFEC4899)
+                    ? AppTheme.accentPurple
                     : Colors.white.withValues(alpha: 0.1),
                 width: _isHovered ? 1.8 : 1.0,
               ),
               boxShadow: [
                 BoxShadow(
                   color: _isHovered
-                      ? const Color(0xFFEC4899).withValues(alpha: 0.35)
+                      ? AppTheme.accentPurple.withValues(alpha: 0.35)
                       : Colors.black.withValues(alpha: 0.3),
                   blurRadius: _isHovered ? 20 : 16,
                   offset: const Offset(0, 8),
@@ -302,9 +299,9 @@ class _GridCardState extends State<_GridCard> {
                   memCacheWidth: 500,
                   placeholder: (_, __) => Container(
                     color: const Color(0xFF19112E),
-                    child: const Center(
+                    child: Center(
                       child: CircularProgressIndicator(
-                        color: Color(0xFFEC4899),
+                        color: AppTheme.accentPurple,
                         strokeWidth: 2,
                       ),
                     ),
@@ -344,7 +341,7 @@ class _GridCardState extends State<_GridCard> {
                       color: const Color(0xFF140D24).withValues(alpha: 0.75),
                       borderRadius: BorderRadius.circular(20),
                       border: Border.all(
-                        color: const Color(0xFFA3E635).withValues(alpha: 0.4),
+                        color: AppTheme.accentPurple.withValues(alpha: 0.4),
                         width: 0.8,
                       ),
                     ),
@@ -355,8 +352,8 @@ class _GridCardState extends State<_GridCard> {
                         const SizedBox(width: 2),
                         Text(
                           '${widget.matchPct}%',
-                          style: const TextStyle(
-                            color: Color(0xFFA3E635),
+                          style: TextStyle(
+                            color: AppTheme.accentPurple,
                             fontWeight: FontWeight.w900,
                             fontSize: 11,
                           ),
@@ -428,18 +425,18 @@ class _GridCardState extends State<_GridCard> {
                           decoration: BoxDecoration(
                             shape: BoxShape.circle,
                             color: widget.isLiked
-                                ? const Color(0xFFEC4899)
+                                ? AppTheme.accentPurple
                                 : Colors.white.withValues(alpha: 0.15),
                             border: Border.all(
                               color: widget.isLiked
-                                  ? const Color(0xFFEC4899)
+                                  ? AppTheme.accentPurple
                                   : Colors.white.withValues(alpha: 0.3),
                               width: 1.5,
                             ),
                             boxShadow: widget.isLiked
                                 ? [
                                     BoxShadow(
-                                      color: const Color(0xFFEC4899).withValues(alpha: 0.5),
+                                      color: AppTheme.accentPurple.withValues(alpha: 0.5),
                                       blurRadius: 10,
                                     ),
                                   ]

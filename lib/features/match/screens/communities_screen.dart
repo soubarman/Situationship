@@ -1,3 +1,4 @@
+import '../../../core/theme/app_theme.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -90,7 +91,7 @@ class _CommunitiesScreenState extends ConsumerState<CommunitiesScreen>
           ),
           duration: const Duration(milliseconds: 1400),
           behavior: SnackBarBehavior.floating,
-          backgroundColor: const Color(0xFF7C3AED),
+          backgroundColor: AppTheme.accentPurple,
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
         ),
       );
@@ -254,8 +255,8 @@ class _CommunitiesScreenState extends ConsumerState<CommunitiesScreen>
                               Container(
                                 width: 7,
                                 height: 7,
-                                decoration: const BoxDecoration(
-                                  color: Color(0xFF10B981),
+                                decoration: BoxDecoration(
+                                  color: AppTheme.accentPurple,
                                   shape: BoxShape.circle,
                                 ),
                               ),
@@ -293,10 +294,10 @@ class _CommunitiesScreenState extends ConsumerState<CommunitiesScreen>
                         const SizedBox(height: 4),
                         Text(
                           '$vibeLabel · $matchScore% match',
-                          style: const TextStyle(
+                          style: TextStyle(
                             fontSize: 13,
                             fontWeight: FontWeight.w600,
-                            color: Color(0xFF8B5CF6),
+                            color: AppTheme.accentPurple,
                           ),
                         ),
                         const SizedBox(height: 18),
@@ -304,23 +305,23 @@ class _CommunitiesScreenState extends ConsumerState<CommunitiesScreen>
                         // Buttons
                         Row(
                           children: [
-                            // Tap in button
+                            // Tap in button (opens user profile)
                             Expanded(
                               child: GestureDetector(
                                 onTap: () {
                                   Navigator.of(sheetCtx).pop();
-                                  _openChatWithUser(user, currentUser);
+                                  context.push('/profile/view/${user.id}');
                                 },
                                 child: Container(
                                   height: 48,
                                   decoration: BoxDecoration(
-                                    gradient: const LinearGradient(
-                                      colors: [Color(0xFF4F75FF), Color(0xFF8B5CF6)],
+                                    gradient: LinearGradient(
+                                      colors: [AppTheme.primaryBlue, AppTheme.accentPurple],
                                     ),
                                     borderRadius: BorderRadius.circular(24),
                                     boxShadow: [
                                       BoxShadow(
-                                        color: const Color(0xFF4F75FF).withOpacity(0.35),
+                                        color: AppTheme.primaryBlue.withOpacity(0.35),
                                         blurRadius: 14,
                                         offset: const Offset(0, 4),
                                       ),
@@ -495,7 +496,7 @@ class _CommunitiesScreenState extends ConsumerState<CommunitiesScreen>
                       color: isDark ? Colors.white38 : Colors.black38,
                       fontSize: 13,
                     ),
-                    prefixIcon: const Icon(Icons.search_rounded, size: 18, color: Color(0xFF8B5CF6)),
+                    prefixIcon: Icon(Icons.search_rounded, size: 18, color: AppTheme.accentPurple),
                     border: InputBorder.none,
                     contentPadding: const EdgeInsets.symmetric(vertical: 10),
                   ),
@@ -578,8 +579,8 @@ class _CommunitiesScreenState extends ConsumerState<CommunitiesScreen>
           padding: const EdgeInsets.symmetric(vertical: 9),
           decoration: BoxDecoration(
             gradient: isSelected
-                ? const LinearGradient(
-                    colors: [Color(0xFF4F75FF), Color(0xFF8B5CF6)],
+                ? LinearGradient(
+                    colors: [AppTheme.primaryBlue, AppTheme.accentPurple],
                     begin: Alignment.centerLeft,
                     end: Alignment.centerRight,
                   )
@@ -589,7 +590,7 @@ class _CommunitiesScreenState extends ConsumerState<CommunitiesScreen>
             boxShadow: isSelected
                 ? [
                     BoxShadow(
-                      color: const Color(0xFF4F75FF).withOpacity(0.35),
+                      color: AppTheme.primaryBlue.withOpacity(0.35),
                       blurRadius: 10,
                       offset: const Offset(0, 3),
                     ),
@@ -656,11 +657,11 @@ class _CommunitiesScreenState extends ConsumerState<CommunitiesScreen>
                       width: 8,
                       height: 8,
                       decoration: BoxDecoration(
-                        color: const Color(0xFF10B981),
+                        color: AppTheme.accentPurple,
                         shape: BoxShape.circle,
                         boxShadow: [
                           BoxShadow(
-                            color: const Color(0xFF10B981).withOpacity(0.6),
+                            color: AppTheme.accentPurple.withOpacity(0.6),
                             blurRadius: 8,
                             spreadRadius: 2,
                           ),
@@ -681,10 +682,10 @@ class _CommunitiesScreenState extends ConsumerState<CommunitiesScreen>
                 ),
                 Text(
                   '$countDisplay online · $_selectedRangeKm km',
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 12,
                     fontWeight: FontWeight.w700,
-                    color: Color(0xFF10B981),
+                    color: AppTheme.accentPurple,
                   ),
                 ),
               ],
@@ -748,7 +749,7 @@ class _CommunitiesScreenState extends ConsumerState<CommunitiesScreen>
                           height: 6,
                           decoration: BoxDecoration(
                             color: isActive
-                                ? const Color(0xFF4F75FF)
+                                ? AppTheme.primaryBlue
                                 : (isDark ? Colors.white24 : Colors.black12),
                             borderRadius: BorderRadius.circular(4),
                           ),
@@ -815,14 +816,14 @@ class _CommunitiesScreenState extends ConsumerState<CommunitiesScreen>
                       borderRadius: BorderRadius.circular(20),
                       border: Border.all(
                         color: _isLiveVisible
-                            ? const Color(0xFF10B981).withOpacity(isDark ? 0.4 : 0.5)
+                            ? AppTheme.accentPurple.withOpacity(isDark ? 0.4 : 0.5)
                             : (isDark ? Colors.white12 : Colors.black12),
                         width: 1.2,
                       ),
                       boxShadow: [
                         BoxShadow(
                           color: _isLiveVisible
-                              ? const Color(0xFF10B981).withOpacity(0.12)
+                              ? AppTheme.accentPurple.withOpacity(0.12)
                               : Colors.black.withOpacity(0.04),
                           blurRadius: 10,
                           offset: const Offset(0, 3),
@@ -835,7 +836,7 @@ class _CommunitiesScreenState extends ConsumerState<CommunitiesScreen>
                           width: 36,
                           height: 36,
                           decoration: BoxDecoration(
-                            color: const Color(0xFF10B981).withOpacity(isDark ? 0.25 : 0.15),
+                            color: AppTheme.accentPurple.withOpacity(isDark ? 0.25 : 0.15),
                             borderRadius: BorderRadius.circular(12),
                           ),
                           child: const Center(
@@ -891,12 +892,12 @@ class _CommunitiesScreenState extends ConsumerState<CommunitiesScreen>
                       color: isDark ? const Color(0xFF181432) : const Color(0xFFF5F3FF),
                       borderRadius: BorderRadius.circular(20),
                       border: Border.all(
-                        color: const Color(0xFF7C3AED).withOpacity(isDark ? 0.4 : 0.3),
+                        color: AppTheme.accentPurple.withOpacity(isDark ? 0.4 : 0.3),
                         width: 1.2,
                       ),
                       boxShadow: [
                         BoxShadow(
-                          color: const Color(0xFF7C3AED).withOpacity(0.12),
+                          color: AppTheme.accentPurple.withOpacity(0.12),
                           blurRadius: 10,
                           offset: const Offset(0, 3),
                         ),
@@ -908,8 +909,8 @@ class _CommunitiesScreenState extends ConsumerState<CommunitiesScreen>
                           width: 36,
                           height: 36,
                           decoration: BoxDecoration(
-                            gradient: const LinearGradient(
-                              colors: [Color(0xFF6366F1), Color(0xFF8B5CF6)],
+                            gradient: LinearGradient(
+                              colors: [AppTheme.primaryBlue, AppTheme.accentPurple],
                             ),
                             borderRadius: BorderRadius.circular(12),
                           ),
@@ -943,7 +944,7 @@ class _CommunitiesScreenState extends ConsumerState<CommunitiesScreen>
                                 'Within ${_selectedRangeKm}km',
                                 style: TextStyle(
                                   fontSize: 10.5,
-                                  color: isDark ? Colors.white60 : const Color(0xFF6D28D9),
+                                  color: isDark ? Colors.white60 : AppTheme.accentPurple,
                                   fontWeight: FontWeight.w500,
                                 ),
                                 maxLines: 1,
@@ -998,9 +999,9 @@ class _CommunitiesScreenState extends ConsumerState<CommunitiesScreen>
               )
             else
               Container(
-                decoration: const BoxDecoration(
+                decoration: BoxDecoration(
                   gradient: LinearGradient(
-                    colors: [Color(0xFF312E81), Color(0xFF4C1D95)],
+                    colors: [Color(0xFF312E81), AppTheme.primaryBlue],
                   ),
                 ),
                 child: Center(
@@ -1052,8 +1053,8 @@ class _CommunitiesScreenState extends ConsumerState<CommunitiesScreen>
                         Container(
                           width: 6,
                           height: 6,
-                          decoration: const BoxDecoration(
-                            color: Color(0xFF10B981),
+                          decoration: BoxDecoration(
+                            color: AppTheme.accentPurple,
                             shape: BoxShape.circle,
                           ),
                         ),
@@ -1123,19 +1124,19 @@ class _CommunitiesScreenState extends ConsumerState<CommunitiesScreen>
                   // Button Row: Tap in + View
                   Row(
                     children: [
-                      // Tap in button
+                      // Tap in button (opens user profile)
                       GestureDetector(
-                        onTap: () => _openChatWithUser(user, currentUser),
+                        onTap: () => context.push('/profile/view/${user.id}'),
                         child: Container(
                           padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 8),
                           decoration: BoxDecoration(
-                            gradient: const LinearGradient(
-                              colors: [Color(0xFF4F75FF), Color(0xFF8B5CF6)],
+                            gradient: LinearGradient(
+                              colors: [AppTheme.primaryBlue, AppTheme.accentPurple],
                             ),
                             borderRadius: BorderRadius.circular(18),
                             boxShadow: [
                               BoxShadow(
-                                color: const Color(0xFF4F75FF).withOpacity(0.35),
+                                color: AppTheme.primaryBlue.withOpacity(0.35),
                                 blurRadius: 10,
                                 offset: const Offset(0, 3),
                               ),
@@ -1189,9 +1190,9 @@ class _CommunitiesScreenState extends ConsumerState<CommunitiesScreen>
     final timeStr = times[user.id.hashCode.abs() % times.length];
 
     final avatarGrads = [
-      [const Color(0xFF3B82F6), const Color(0xFF8B5CF6)],
-      [const Color(0xFFEC4899), const Color(0xFF8B5CF6)],
-      [const Color(0xFF10B981), const Color(0xFF06B6D4)],
+      [AppTheme.primaryBlue, AppTheme.accentPurple],
+      [AppTheme.accentPurple, AppTheme.accentPurple],
+      [AppTheme.accentPurple, const Color(0xFF06B6D4)],
       [const Color(0xFFF59E0B), const Color(0xFFEF4444)],
     ];
     final grad = avatarGrads[user.id.hashCode.abs() % avatarGrads.length];
@@ -1208,7 +1209,7 @@ class _CommunitiesScreenState extends ConsumerState<CommunitiesScreen>
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
                   border: Border.all(
-                    color: const Color(0xFF8B5CF6).withOpacity(0.55),
+                    color: AppTheme.accentPurple.withOpacity(0.55),
                     width: 2,
                   ),
                 ),
@@ -1246,7 +1247,7 @@ class _CommunitiesScreenState extends ConsumerState<CommunitiesScreen>
                   width: 12,
                   height: 12,
                   decoration: BoxDecoration(
-                    color: const Color(0xFF10B981),
+                    color: AppTheme.accentPurple,
                     shape: BoxShape.circle,
                     border: Border.all(
                       color: isDark ? const Color(0xFF090C15) : Colors.white,
@@ -1306,17 +1307,17 @@ class _CommunitiesScreenState extends ConsumerState<CommunitiesScreen>
                 height: 72,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  color: const Color(0xFF8B5CF6).withOpacity(isDark ? 0.2 : 0.1),
+                  color: AppTheme.accentPurple.withOpacity(isDark ? 0.2 : 0.1),
                   border: Border.all(
-                    color: const Color(0xFF8B5CF6).withOpacity(0.3),
+                    color: AppTheme.accentPurple.withOpacity(0.3),
                     width: 1.5,
                   ),
                 ),
-                child: const Center(
+                child: Center(
                   child: Icon(
                     Icons.favorite_rounded,
                     size: 34,
-                    color: Color(0xFF8B5CF6),
+                    color: AppTheme.accentPurple,
                   ),
                 ),
               ),
@@ -1349,13 +1350,13 @@ class _CommunitiesScreenState extends ConsumerState<CommunitiesScreen>
                 child: Container(
                   padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
                   decoration: BoxDecoration(
-                    gradient: const LinearGradient(
-                      colors: [Color(0xFF4F75FF), Color(0xFF8B5CF6)],
+                    gradient: LinearGradient(
+                      colors: [AppTheme.primaryBlue, AppTheme.accentPurple],
                     ),
                     borderRadius: BorderRadius.circular(24),
                     boxShadow: [
                       BoxShadow(
-                        color: const Color(0xFF4F75FF).withOpacity(0.35),
+                        color: AppTheme.primaryBlue.withOpacity(0.35),
                         blurRadius: 12,
                         offset: const Offset(0, 4),
                       ),
@@ -1474,10 +1475,10 @@ class _CommunitiesScreenState extends ConsumerState<CommunitiesScreen>
                       const SizedBox(height: 2),
                       Text(
                         tag,
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontSize: 12,
                           fontWeight: FontWeight.w600,
-                          color: Color(0xFF3B82F6),
+                          color: AppTheme.primaryBlue,
                         ),
                       ),
                       const SizedBox(height: 2),
@@ -1609,7 +1610,7 @@ class _CommunitiesScreenState extends ConsumerState<CommunitiesScreen>
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  const Icon(Icons.add_rounded, size: 16, color: Color(0xFF8B5CF6)),
+                  Icon(Icons.add_rounded, size: 16, color: AppTheme.accentPurple),
                   const SizedBox(width: 6),
                   Text(
                     'Create a community',
@@ -1797,12 +1798,12 @@ class _CommunitiesScreenState extends ConsumerState<CommunitiesScreen>
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(24),
         border: Border.all(
-          color: const Color(0xFF8B5CF6).withOpacity(0.35),
+          color: AppTheme.accentPurple.withOpacity(0.35),
           width: 1,
         ),
         boxShadow: [
           BoxShadow(
-            color: const Color(0xFF8B5CF6).withOpacity(0.15),
+            color: AppTheme.accentPurple.withOpacity(0.15),
             blurRadius: 20,
             offset: const Offset(0, 6),
           ),
@@ -2003,9 +2004,9 @@ class _CommunitiesScreenState extends ConsumerState<CommunitiesScreen>
                         imageUrl: comm.imageUrl,
                         fit: BoxFit.cover,
                         errorWidget: (_, __, ___) => Container(
-                          decoration: const BoxDecoration(
+                          decoration: BoxDecoration(
                             gradient: LinearGradient(
-                              colors: [Color(0xFF312E81), Color(0xFF4C1D95)],
+                              colors: [Color(0xFF312E81), AppTheme.primaryBlue],
                             ),
                           ),
                           child: Center(
@@ -2018,9 +2019,9 @@ class _CommunitiesScreenState extends ConsumerState<CommunitiesScreen>
                       )
                     else
                       Container(
-                        decoration: const BoxDecoration(
+                        decoration: BoxDecoration(
                           gradient: LinearGradient(
-                            colors: [Color(0xFF312E81), Color(0xFF4C1D95)],
+                            colors: [Color(0xFF312E81), AppTheme.primaryBlue],
                           ),
                         ),
                         child: Center(
@@ -2258,8 +2259,8 @@ class _CommunitiesScreenState extends ConsumerState<CommunitiesScreen>
                             Container(
                               width: 6,
                               height: 6,
-                              decoration: const BoxDecoration(
-                                color: Color(0xFF10B981),
+                              decoration: BoxDecoration(
+                                color: AppTheme.accentPurple,
                                 shape: BoxShape.circle,
                               ),
                             ),

@@ -1,3 +1,4 @@
+import '../../../core/theme/app_theme.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -21,13 +22,13 @@ class SwipeCard extends ConsumerWidget {
   });
 
   // Dynamic Theme Gradients & Accent Colors based on user ID
-  static const List<List<Color>> _themeGradients = [
+  static List<List<Color>> _themeGradients = [
     // Theme 1: Electric Violet
-    [Color(0xFF6D28D9), Color(0xFF7C3AED), Color(0xFF5B21B6)],
+    [AppTheme.accentPurple, AppTheme.accentPurple, AppTheme.primaryBlue],
     // Theme 2: Acid Lime to Coral Sunset
     [Color(0xFFBEF264), Color(0xFFEAB308), Color(0xFFEA580C)],
     // Theme 3: Neon Magenta Violet
-    [Color(0xFFEC4899), Color(0xFF8B5CF6), Color(0xFF4C1D95)],
+    [AppTheme.accentPurple, AppTheme.accentPurple, AppTheme.primaryBlue],
     // Theme 4: Electric Cyan Cobalt
     [Color(0xFF06B6D4), Color(0xFF2563EB), Color(0xFF1E3A8A)],
   ];

@@ -3,12 +3,14 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'dart:ui';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:video_player/video_player.dart';
 import 'dart:io';
 import '../../../core/models/post_model.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/theme/app_palette.dart';
 import '../../verification/presentation/widgets/s_badge_widget.dart';
 import '../../../core/constants/app_constants.dart';
 import 'package:go_router/go_router.dart';
@@ -46,11 +48,96 @@ class _PostCardState extends ConsumerState<PostCard>
   bool _showHeart = false;
   bool _isExpanded = false;
   bool _isBookmarked = false;
+  bool? _localIsJoinedPlan;
+  List<String>? _localParticipants;
+
+  void _handleJoinPlan(String title, List<String> currentParticipants) {
+    final uid = _currentUserId;
+    if (uid.isEmpty) return;
+    HapticFeedback.mediumImpact();
+    final updated = [
+      ...currentParticipants.where((id) => id != uid),
+      uid,
+    ];
+    setState(() {
+      _localIsJoinedPlan = true;
+      _localParticipants = updated;
+    });
+    ref.read(postsProvider.notifier).joinPlan(widget.post.id, uid);
+    ScaffoldMessenger.of(context).hideCurrentSnackBar();
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text("You're in for $title! 🎉"),
+        duration: const Duration(seconds: 3),
+        behavior: SnackBarBehavior.floating,
+        backgroundColor: ref.read(appPaletteProvider).primary,
+        action: SnackBarAction(
+          label: "Who's In",
+          textColor: Colors.white,
+          onPressed: () {
+            _showPlanParticipantsSheet(
+              context,
+              Theme.of(context).brightness == Brightness.dark,
+              title,
+              updated,
+              true,
+            );
+          },
+        ),
+      ),
+    );
+  }
+
+  void _handleLeavePlan(String title, List<String> currentParticipants) {
+    final uid = _currentUserId;
+    if (uid.isEmpty) return;
+    HapticFeedback.lightImpact();
+    final updated = currentParticipants.where((id) => id != uid).toList();
+    setState(() {
+      _localIsJoinedPlan = false;
+      _localParticipants = updated;
+    });
+    ref.read(postsProvider.notifier).leavePlan(widget.post.id, uid);
+    ScaffoldMessenger.of(context).hideCurrentSnackBar();
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: const Text("Left the plan"),
+        duration: const Duration(seconds: 2),
+        behavior: SnackBarBehavior.floating,
+        backgroundColor: ref.read(appPaletteProvider).primary,
+      ),
+    );
+  }
   final GlobalKey<PopupMenuButtonState<String>> _reactKey = GlobalKey();
   OverlayEntry? _reactionOverlayEntry;
   VideoPlayerController? _voiceCtrl;
   bool _isVoicePlaying = false;
   bool _isVoiceLoading = false;
+
+  bool? _localIsFollowing;
+
+  Future<void> _handleFollowToggle(bool isCurrentlyFollowing) async {
+    final currentUser = ref.read(currentUserProvider);
+    if (currentUser.id == widget.post.userId) return;
+    HapticFeedback.lightImpact();
+    setState(() {
+      _localIsFollowing = !isCurrentlyFollowing;
+    });
+    try {
+      await ref.read(socialProvider.notifier).toggleFollow(
+        currentUserId: currentUser.id,
+        targetUserId: widget.post.userId,
+        isCurrentlyFollowing: isCurrentlyFollowing,
+      );
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _localIsFollowing = isCurrentlyFollowing;
+        });
+      }
+      debugPrint('Follow toggle error: $e');
+    }
+  }
 
   @override
   void initState() {
@@ -153,7 +240,9 @@ class _PostCardState extends ConsumerState<PostCard>
   }
 
   String get _currentUserId {
-    return ref.read(currentUserProvider).id;
+    final uid = ref.read(currentUserProvider).id;
+    if (uid.isNotEmpty) return uid;
+    return FirebaseAuth.instance.currentUser?.uid ?? '';
   }
 
   // Use liveReactions from Firestore stream; fall back to widget.post data while loading
@@ -177,6 +266,7 @@ class _PostCardState extends ConsumerState<PostCard>
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final palette = ref.watch(appPaletteProvider);
     final liveAuthor = ref.watch(otherUserProvider(widget.post.userId));
     final displayName = liveAuthor.asData?.value?.name ?? widget.post.userName;
     final displayAvatar = liveAuthor.asData?.value?.avatarUrl
@@ -190,50 +280,70 @@ class _PostCardState extends ConsumerState<PostCard>
     final isLiked = _isLikedFromLive(liveLikes, liveReactions);
     final myReaction = _myReactionFromLive(liveReactions);
 
+    // Watch live plan participants from Firestore
+    final liveParticipantsAsync = ref.watch(livePlanParticipantsProvider(widget.post.id));
+    final liveParticipants = liveParticipantsAsync.asData?.value ?? widget.post.planParticipants;
+    final effectiveParticipants = _localParticipants ?? liveParticipants;
+    final isJoinedPlan = _localIsJoinedPlan ?? effectiveParticipants.contains(_currentUserId);
+
+    final currentUser = ref.watch(currentUserProvider);
+    final isFollowing = _localIsFollowing ?? currentUser.following.contains(widget.post.userId);
+    final displayLocation = widget.post.location ??
+        (widget.post.caption.contains('Where:')
+            ? RegExp(r'Where:\s*(.+)').firstMatch(widget.post.caption)?.group(1)?.trim()
+            : null);
+    final hasPlan = widget.post.caption.contains('Plan:') ||
+        widget.post.caption.contains('🗓️ Plan');
+
     return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-        decoration: BoxDecoration(
-          color: isDark
-              ? const Color(0xFF1A1035).withOpacity(0.55)
-              : Colors.white.withOpacity(0.45),
-          borderRadius: BorderRadius.circular(24),
-          border: Border.all(
-            color: isDark
-                ? Colors.white.withOpacity(0.15)
-                : Colors.white.withOpacity(0.60),
-            width: 1.2,
+      margin: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+      decoration: BoxDecoration(
+        color: isDark ? palette.surfaceTint : Colors.white,
+        borderRadius: BorderRadius.circular(28),
+        border: Border.all(
+          color: isDark ? palette.primary.withOpacity(0.20) : const Color(0xFFE8E4F2),
+          width: 1.2,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(isDark ? 0.35 : 0.05),
+            blurRadius: 18,
+            offset: const Offset(0, 6),
           ),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(isDark ? 0.20 : 0.06),
-              blurRadius: 12,
-              offset: const Offset(0, 4),
-            ),
-          ],
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            _buildHeader(isDark, displayName, displayAvatar, liveAuthor.asData?.value?.isVerified ?? widget.post.isUserVerified),
-            if (widget.post.mood != null && widget.post.imageUrl != null)
-              _buildMoodBadge(isDark),
-            if (widget.post.caption.isNotEmpty &&
-                widget.post.caption != widget.post.mood)
-              _buildCaption(isDark),
-            if (widget.post.voiceUrl != null)
-              _buildVoicePlayer(isDark),
-            if (widget.post.imageUrl != null) _buildImage(),
-            if (widget.post.imageUrl == null &&
-                widget.post.mood != null &&
-                (widget.post.caption.isEmpty ||
-                    widget.post.caption == widget.post.mood))
-              _buildMoodHero(isDark),
-            _buildActions(isDark, isLiked, myReaction, liveLikes, liveReactions),
-            if (widget.post.commentCount > 0)
-              _buildRecentComment(isDark),
-          ],
-        ),
-      );
+          BoxShadow(
+            color: palette.primary.withOpacity(isDark ? 0.06 : 0.03),
+            blurRadius: 24,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _buildHeader(
+            isDark,
+            palette,
+            displayName,
+            displayAvatar,
+            liveAuthor.asData?.value?.isVerified ?? widget.post.isUserVerified,
+            isFollowing,
+            displayLocation,
+          ),
+          if (widget.post.mood != null && widget.post.imageUrl != null)
+            _buildMoodBadge(isDark, palette),
+          _buildCaptionAndPlan(isDark, palette, effectiveParticipants, isJoinedPlan),
+          if (!hasPlan && widget.post.imageUrl != null) _buildImage(),
+          if (widget.post.imageUrl == null &&
+              widget.post.mood != null &&
+              (widget.post.caption.isEmpty ||
+                  widget.post.caption == widget.post.mood))
+            _buildMoodHero(isDark, palette),
+          _buildActions(isDark, palette, isLiked, myReaction, liveLikes, liveReactions),
+          if (widget.post.voiceUrl != null && widget.post.voiceUrl!.trim().isNotEmpty)
+            _buildVoicePlayer(isDark, palette),
+        ],
+      ),
+    );
   }
 
   Future<void> _toggleVoicePlay() async {
@@ -286,71 +396,184 @@ class _PostCardState extends ConsumerState<PostCard>
     }
   }
 
-  Widget _buildVoicePlayer(bool isDark) {
+  Widget _buildVoicePlayer(bool isDark, AppPalette palette) {
     final currentPos = _voiceCtrl?.value.position.inMilliseconds.toDouble() ?? 0.0;
-    final totalDuration = _voiceCtrl?.value.duration.inMilliseconds.toDouble() ?? 100.0;
+    final totalDuration = _voiceCtrl?.value.duration.inMilliseconds.toDouble() ?? 45000.0;
     final progress = (totalDuration > 0) ? (currentPos / totalDuration).clamp(0.0, 1.0) : 0.0;
 
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 8),
-      child: Container(
-        padding: const EdgeInsets.all(12),
-        decoration: BoxDecoration(
-          color: isDark ? const Color(0xFF231E3D) : const Color(0xFFF3F2F8),
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(
-            color: isDark ? Colors.white12 : Colors.black12,
-          ),
+    String durationText = '0:45';
+    if (_voiceCtrl != null && _voiceCtrl!.value.isInitialized) {
+      final pos = _voiceCtrl!.value.position;
+      final dur = _voiceCtrl!.value.duration;
+      final displayTime = _isVoicePlaying ? pos : dur;
+      final m = displayTime.inMinutes.remainder(60).toString().padLeft(1, '0');
+      final s = displayTime.inSeconds.remainder(60).toString().padLeft(2, '0');
+      durationText = '$m:$s';
+    }
+
+    return Container(
+      margin: const EdgeInsets.fromLTRB(16, 4, 16, 16),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        color: isDark ? palette.backgroundTint.withOpacity(0.85) : const Color(0xFFF3F1FA),
+        borderRadius: BorderRadius.circular(26),
+        border: Border.all(
+          color: isDark ? palette.primary.withOpacity(0.25) : Colors.black12,
+          width: 1.2,
         ),
-        child: Row(
-          children: [
-            GestureDetector(
-              onTap: _toggleVoicePlay,
-              child: Container(
-                width: 40,
-                height: 40,
-                decoration: const BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: Color(0xFFD66B7C),
-                ),
-                child: _isVoiceLoading
-                    ? const Padding(
-                        padding: EdgeInsets.all(10.0),
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          color: Colors.white,
-                        ),
-                      )
-                    : Icon(
-                        _isVoicePlaying ? Icons.pause_rounded : Icons.play_arrow_rounded,
-                        color: Colors.white,
-                      ),
-              ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Voice Note',
-                    style: TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.bold,
-                      color: isDark ? Colors.white70 : Colors.black87,
-                    ),
-                  ),
-                  const SizedBox(height: 6),
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(2),
-                    child: LinearProgressIndicator(
-                      value: progress,
-                      backgroundColor: isDark ? Colors.white10 : Colors.black12,
-                      valueColor: const AlwaysStoppedAnimation<Color>(Color(0xFFD66B7C)),
-                      minHeight: 4,
-                    ),
+      ),
+      child: Row(
+        children: [
+          GestureDetector(
+            onTap: _toggleVoicePlay,
+            child: Container(
+              width: 38,
+              height: 38,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                gradient: palette.primaryGradient,
+                boxShadow: [
+                  BoxShadow(
+                    color: palette.primary.withOpacity(0.4),
+                    blurRadius: 8,
+                    offset: const Offset(0, 2),
                   ),
                 ],
+              ),
+              child: _isVoiceLoading
+                  ? const Padding(
+                      padding: EdgeInsets.all(10.0),
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: Colors.white,
+                      ),
+                    )
+                  : Icon(
+                      _isVoicePlaying ? Icons.pause_rounded : Icons.play_arrow_rounded,
+                      color: Colors.white,
+                      size: 22,
+                    ),
+            ),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                return _EqualizerWaveform(
+                  progress: progress,
+                  isDark: isDark,
+                  isPlaying: _isVoicePlaying,
+                  availableWidth: constraints.maxWidth,
+                  activeColor: palette.primary,
+                );
+              },
+            ),
+          ),
+          const SizedBox(width: 10),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                'Voice Note',
+                style: TextStyle(
+                  fontSize: 12.5,
+                  fontWeight: FontWeight.w700,
+                  color: isDark ? Colors.white : Colors.black87,
+                ),
+              ),
+              const SizedBox(height: 1),
+              Text(
+                durationText,
+                style: TextStyle(
+                  fontSize: 10.5,
+                  color: isDark ? const Color(0xFF9E9AB7) : Colors.black54,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(width: 6),
+          Container(
+            width: 30,
+            height: 30,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: isDark ? palette.surfaceTint : Colors.black.withOpacity(0.06),
+            ),
+            child: Icon(
+              Icons.more_horiz_rounded,
+              size: 16,
+              color: isDark ? Colors.white70 : Colors.black54,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildVerifiedBadge(AppPalette palette) {
+    return Container(
+      width: 17,
+      height: 17,
+      margin: const EdgeInsets.only(left: 6),
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        color: palette.verifiedBadgeBg,
+      ),
+      child: Center(
+        child: Icon(
+          palette.verifiedIcon,
+          color: palette.verifiedIconColor,
+          size: 11,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildFollowButton(bool isDark, bool isFollowing, AppPalette palette) {
+    if (widget.post.userId == _currentUserId) return const SizedBox.shrink();
+
+    return GestureDetector(
+      onTap: () => _handleFollowToggle(isFollowing),
+      child: Container(
+        margin: const EdgeInsets.only(left: 8),
+        padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 4),
+        decoration: BoxDecoration(
+          gradient: isFollowing ? null : palette.primaryGradient,
+          color: isFollowing
+              ? (isDark ? Colors.white.withOpacity(0.08) : Colors.black.withOpacity(0.05))
+              : null,
+          borderRadius: BorderRadius.circular(20),
+          boxShadow: isFollowing
+              ? null
+              : [
+                  BoxShadow(
+                    color: palette.primary.withOpacity(0.35),
+                    blurRadius: 8,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
+          border: isFollowing
+              ? Border.all(
+                  color: isDark ? Colors.white24 : Colors.black12,
+                  width: 1,
+                )
+              : null,
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (!isFollowing) ...[
+              const Icon(Icons.add_rounded, color: Colors.white, size: 13),
+              const SizedBox(width: 2),
+            ],
+            Text(
+              isFollowing ? 'Following' : 'Follow',
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 11.5,
+                fontWeight: FontWeight.w700,
               ),
             ),
           ],
@@ -359,36 +582,42 @@ class _PostCardState extends ConsumerState<PostCard>
     );
   }
 
-  Widget _buildHeader(bool isDark, String displayName, String displayAvatar, bool isVerified) {
+  Widget _buildHeader(
+    bool isDark,
+    AppPalette palette,
+    String displayName,
+    String displayAvatar,
+    bool isVerified,
+    bool isFollowing,
+    String? displayLocation,
+  ) {
     final boostStatus = ref.watch(contentBoostStatusProvider(widget.post.id));
     return Padding(
-      padding: const EdgeInsets.fromLTRB(18, 16, 18, 10),
+      padding: const EdgeInsets.fromLTRB(16, 14, 16, 10),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
           GestureDetector(
             onTap: () => ProfileChoiceSheet.navigateToProfile(context, ref, widget.post.userId),
             child: Container(
+              width: 44,
+              height: 44,
               decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(16),
+                shape: BoxShape.circle,
                 border: Border.all(
-                  color: isDark ? Colors.white24 : Colors.black12,
+                  color: isDark ? palette.primary.withOpacity(0.3) : Colors.black12,
                   width: 1.5,
                 ),
               ),
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(14),
+              child: ClipOval(
                 child: CachedNetworkImage(
                   imageUrl: displayAvatar,
-                  width: 44,
-                  height: 44,
                   fit: BoxFit.cover,
-                  memCacheWidth: 132, // 3x physical pixels
+                  memCacheWidth: 132,
                   memCacheHeight: 132,
                   errorWidget: (context, url, error) => Container(
-                    width: 44,
-                    height: 44,
                     color: isDark ? Colors.white10 : Colors.black12,
+                    child: const Icon(Icons.person, color: Colors.white54, size: 24),
                   ),
                 ),
               ),
@@ -401,90 +630,34 @@ class _PostCardState extends ConsumerState<PostCard>
               children: [
                 Row(
                   children: [
-                    Expanded(
-                      child: Row(
-                        children: [
-                          Flexible(
-                            child: GestureDetector(
-                              onTap: () => ProfileChoiceSheet.navigateToProfile(context, ref, widget.post.userId),
-                              child: Text(
-                                displayName,
-                                style: TextStyle(
-                                  fontWeight: FontWeight.w800,
-                                  fontSize: 15,
-                                  color: isDark ? Colors.white : const Color(0xFF1A1035),
-                                  letterSpacing: -0.2,
-                                ),
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ),
+                    Flexible(
+                      child: GestureDetector(
+                        onTap: () => ProfileChoiceSheet.navigateToProfile(context, ref, widget.post.userId),
+                        child: Text(
+                          displayName,
+                          style: TextStyle(
+                            fontWeight: FontWeight.w700,
+                            fontSize: 16,
+                            color: isDark ? Colors.white : const Color(0xFF131127),
+                            letterSpacing: -0.2,
                           ),
-                          if (isVerified) ...[
-                            const SizedBox(width: 4),
-                            const SBadgeWidget(size: 15, showTooltip: false),
-                          ],
-                          if (widget.post.isPinned) ...[
-                            const SizedBox(width: 8),
-                            Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                              decoration: BoxDecoration(
-                                gradient: AppTheme.primaryGradient,
-                                borderRadius: BorderRadius.circular(20),
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: AppTheme.primaryBlue.withOpacity(0.25),
-                                    blurRadius: 5,
-                                    offset: const Offset(0, 2),
-                                  ),
-                                ],
-                              ),
-                              child: const Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Icon(Icons.push_pin, size: 9, color: Colors.white),
-                                  SizedBox(width: 2),
-                                  Text(
-                                    'PINNED',
-                                    style: TextStyle(
-                                      color: Colors.white,
-                                      fontSize: 8,
-                                      fontWeight: FontWeight.w900,
-                                      letterSpacing: 0.5,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ],
-                          if (boostStatus != null) ...[
-                            const SizedBox(width: 8),
-                            BoostBadge(isPremium: boostStatus.boostTier == 'premium'),
-                          ],
-                        ],
-                      ),
-                    ),
-                    if (widget.post.communityId != null && widget.post.communityName != null) ...[
-                      const SizedBox(width: 6),
-                      Icon(Icons.play_arrow_rounded, size: 12, color: isDark ? Colors.white30 : Colors.black38),
-                      const SizedBox(width: 6),
-                      GestureDetector(
-                        onTap: () => context.push('/community/${widget.post.communityId}'),
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                          decoration: BoxDecoration(
-                            color: AppTheme.primaryBlue.withOpacity(0.12),
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          child: Text(
-                            widget.post.communityName!,
-                            style: const TextStyle(
-                              fontWeight: FontWeight.w800,
-                              fontSize: 11,
-                              color: AppTheme.primaryBlue,
-                            ),
-                          ),
+                          overflow: TextOverflow.ellipsis,
                         ),
                       ),
+                    ),
+                    if (isVerified) _buildVerifiedBadge(palette),
+                    _buildFollowButton(isDark, isFollowing, palette),
+                    if (widget.post.isPinned) ...[
+                      const SizedBox(width: 4),
+                      Icon(
+                        Icons.push_pin_rounded,
+                        size: 13,
+                        color: palette.primary,
+                      ),
+                    ],
+                    if (boostStatus != null) ...[
+                      const SizedBox(width: 6),
+                      BoostBadge(isPremium: boostStatus.boostTier == 'premium'),
                     ],
                   ],
                 ),
@@ -493,25 +666,72 @@ class _PostCardState extends ConsumerState<PostCard>
                   children: [
                     Text(
                       _formatTimeAgo(widget.post.createdAt),
-                      style: TextStyle(fontSize: 12, color: isDark ? Colors.white60 : Colors.black54, fontWeight: FontWeight.w500),
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: isDark ? const Color(0xFF9E9AB7) : Colors.black54,
+                        fontWeight: FontWeight.w500,
+                      ),
                     ),
                     const SizedBox(width: 5),
-                    Text('·', style: TextStyle(fontSize: 12, color: isDark ? Colors.white30 : Colors.black38)),
+                    Text('•', style: TextStyle(fontSize: 12, color: isDark ? const Color(0xFF6B658A) : Colors.black38)),
                     const SizedBox(width: 5),
                     Icon(
                       widget.post.privacy == 'private'
                           ? Icons.lock_outline_rounded
                           : (widget.post.privacy == 'connections' ? Icons.people_outline_rounded : Icons.public_rounded),
                       size: 13,
-                      color: isDark ? Colors.white60 : Colors.black54,
+                      color: isDark ? const Color(0xFF9E9AB7) : Colors.black54,
                     ),
+                    if (displayLocation != null && displayLocation.isNotEmpty) ...[
+                      const SizedBox(width: 5),
+                      Text('•', style: TextStyle(fontSize: 12, color: isDark ? const Color(0xFF6B658A) : Colors.black38)),
+                      const SizedBox(width: 5),
+                      Flexible(
+                        child: Text(
+                          displayLocation,
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: isDark ? const Color(0xFF9E9AB7) : Colors.black54,
+                            fontWeight: FontWeight.w500,
+                          ),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ],
                     if (widget.post.isEdited) ...[
                       const SizedBox(width: 5),
-                      Text('·', style: TextStyle(fontSize: 12, color: isDark ? Colors.white30 : Colors.black38)),
+                      Text('•', style: TextStyle(fontSize: 12, color: isDark ? const Color(0xFF6B658A) : Colors.black38)),
                       const SizedBox(width: 5),
                       Text(
                         'Edited',
-                        style: TextStyle(fontSize: 11, color: isDark ? Colors.white30 : Colors.black38, fontStyle: FontStyle.italic, fontWeight: FontWeight.w500),
+                        style: TextStyle(
+                          fontSize: 11,
+                          color: isDark ? const Color(0xFF6B658A) : Colors.black38,
+                          fontStyle: FontStyle.italic,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ],
+                    if (widget.post.communityId != null && widget.post.communityName != null) ...[
+                      const SizedBox(width: 6),
+                      GestureDetector(
+                        onTap: () => context.push('/community/${widget.post.communityId}'),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: palette.primary.withOpacity(0.14),
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(color: palette.primary.withOpacity(0.25), width: 0.8),
+                          ),
+                          child: Text(
+                            widget.post.communityName!,
+                            style: TextStyle(
+                              fontWeight: FontWeight.w700,
+                              fontSize: 9.5,
+                              color: palette.primary,
+                            ),
+                          ),
+                        ),
                       ),
                     ],
                   ],
@@ -522,13 +742,12 @@ class _PostCardState extends ConsumerState<PostCard>
           Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              // Quick boost button — tap to boost or see boost status
               if (widget.post.userId == _currentUserId)
                 GestureDetector(
                   onTap: () => BoostScreen.show(context, widget.post),
                   child: Container(
-                    margin: const EdgeInsets.only(right: 4),
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+                    margin: const EdgeInsets.only(right: 6),
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                     decoration: BoxDecoration(
                       gradient: const LinearGradient(
                         colors: [Color(0xFFF59E0B), Color(0xFFEF4444)],
@@ -536,35 +755,43 @@ class _PostCardState extends ConsumerState<PostCard>
                         end: Alignment.bottomRight,
                       ),
                       borderRadius: BorderRadius.circular(12),
-                      boxShadow: [
-                        BoxShadow(
-                          color: const Color(0xFFF59E0B).withOpacity(0.35),
-                          blurRadius: 6,
-                          offset: const Offset(0, 2),
-                        ),
-                      ],
                     ),
                     child: const Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Icon(Icons.bolt_rounded, color: Colors.white, size: 13),
-                        SizedBox(width: 3),
+                        Icon(Icons.bolt_rounded, color: Colors.white, size: 12),
+                        SizedBox(width: 2),
                         Text(
                           'Boost',
                           style: TextStyle(
                             color: Colors.white,
-                            fontSize: 11,
+                            fontSize: 10.5,
                             fontWeight: FontWeight.w900,
-                            letterSpacing: 0.3,
                           ),
                         ),
                       ],
                     ),
                   ),
                 ),
-              IconButton(
-                icon: Icon(Icons.more_horiz, color: isDark ? Colors.white70 : Colors.black54),
-                onPressed: () => _showPostOptionsSheet(context, isDark),
+              GestureDetector(
+                onTap: () => _showPostOptionsSheet(context, isDark, palette),
+                child: Container(
+                  width: 36,
+                  height: 36,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: isDark ? palette.backgroundTint.withOpacity(0.85) : Colors.black.withOpacity(0.05),
+                    border: Border.all(
+                      color: isDark ? palette.primary.withOpacity(0.18) : Colors.black.withOpacity(0.05),
+                      width: 1,
+                    ),
+                  ),
+                  child: Icon(
+                    Icons.more_horiz_rounded,
+                    color: isDark ? Colors.white.withOpacity(0.85) : Colors.black87,
+                    size: 19,
+                  ),
+                ),
               ),
             ],
           ),
@@ -692,6 +919,7 @@ class _PostCardState extends ConsumerState<PostCard>
 
   Widget _buildActions(
     bool isDark,
+    AppPalette palette,
     bool isLiked,
     String? myReaction,
     List<String> liveLikes,
@@ -702,200 +930,162 @@ class _PostCardState extends ConsumerState<PostCard>
       ...liveReactions.keys,
     };
     final int reactionCount = uniqueReactors.length;
+    final displayLikes = reactionCount > 0 ? reactionCount : widget.post.likes.length;
+    final displayComments = widget.post.commentCount;
 
-    return Column(
-      children: [
-        // Stats Row
-        if (reactionCount > 0 || widget.post.commentCount > 0 || widget.post.shareCount > 0)
-          Padding(
-            padding: const EdgeInsets.fromLTRB(20, 12, 20, 8),
-            child: Row(
-              children: [
-                if (reactionCount > 0)
-                  GestureDetector(
-                    onTap: () {
-                      showModalBottomSheet(
-                        context: context,
-                        useRootNavigator: true,
-                        isScrollControlled: true,
-                        backgroundColor: Colors.transparent,
-                        builder: (_) => _LikesSheet(post: widget.post),
-                      );
-                    },
-                    behavior: HitTestBehavior.opaque,
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: () {
-                            final Set<String> activeEmojis = {};
-                            if (liveLikes.isNotEmpty) {
-                              activeEmojis.add('🔥'); // legacy likes show as 🔥
-                            }
-                            activeEmojis.addAll(liveReactions.values);
-                            return activeEmojis.toList().take(3).map((emoji) {
-                              return Padding(
-                                padding: const EdgeInsets.only(right: 2.0),
-                                child: _buildEmojiImage(emoji, size: 16),
-                              );
-                            }).toList();
-                          }(),
-                        ),
-                        const SizedBox(width: 6),
-                        Text(
-                          _formatCount(reactionCount),
-                          style: TextStyle(fontSize: 13, color: isDark ? Colors.white60 : Colors.black54, fontWeight: FontWeight.bold),
-                        ),
-                      ],
-                    ),
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 12, 20, 10),
+      child: Row(
+        children: [
+          // React Button - directly opens animated reactions
+          Builder(
+            builder: (buttonContext) {
+              final hasReacted = myReaction != null;
+              final isLikedOnly = !hasReacted && isLiked;
+
+              return GestureDetector(
+                onTap: () {
+                  HapticFeedback.mediumImpact();
+                  _reactBtnController.forward(from: 0);
+                  _showReactionPopup(buttonContext, isDark);
+                },
+                behavior: HitTestBehavior.opaque,
+                child: AnimatedBuilder(
+                  animation: _reactBtnScale,
+                  builder: (_, child) => Transform.scale(
+                    scale: _reactBtnScale.value,
+                    child: child,
                   ),
-                const Spacer(),
-                if (widget.post.commentCount > 0)
-                  Text(
-                    '${_formatCount(widget.post.commentCount)} comments',
-                    style: TextStyle(fontSize: 13, color: isDark ? Colors.white60 : Colors.black54, fontWeight: FontWeight.w500),
-                  ),
-                if (widget.post.commentCount > 0 && widget.post.shareCount > 0)
-                  Text(' · ', style: TextStyle(fontSize: 13, color: isDark ? Colors.white60 : Colors.black54)),
-                if (widget.post.shareCount > 0)
-                  Text(
-                    '${_formatCount(widget.post.shareCount)} shares',
-                    style: TextStyle(fontSize: 13, color: isDark ? Colors.white60 : Colors.black54, fontWeight: FontWeight.w500),
-                  ),
-              ],
-            ),
-          ),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16),
-          child: Divider(
-            height: 1,
-            color: isDark
-                ? Colors.white.withOpacity(0.10)
-                : Colors.black.withOpacity(0.08),
-          ),
-        ),
-        // Buttons Row
-        Padding(
-          padding: const EdgeInsets.fromLTRB(16, 6, 16, 6),
-          child: Row(
-            children: [
-              Expanded(
-                child: Builder(
-                  builder: (buttonContext) {
-                    // Determine the displayed reaction emoji & label using LIVE data
-                    Widget reactionWidget;
-                    Color? reactionColor;
-                    String reactionLabel = 'React';
-
-                    const genZLabels = {
-                      '🔥': 'Fire',
-                      '💀': 'Dead 💀',
-                      '🫶': 'Luv',
-                      '😭': 'Crying',
-                      '🤩': 'Obsessed',
-                      '👀': 'No way',
-                      '👍': 'Vibe',
-                      '❤️': 'Luv',
-                    };
-
-                    if (myReaction != null) {
-                      reactionLabel = genZLabels[myReaction] ?? 'React';
-                      reactionColor = myReaction == '🔥'
-                          ? Colors.deepOrange
-                          : myReaction == '💀'
-                              ? Colors.grey[700]
-                              : myReaction == '🫶'
-                                  ? const Color(0xFFFF3CAC)
-                                  : myReaction == '😭'
-                                      ? const Color(0xFF5B9BD5)
-                                      : myReaction == '🤩'
-                                          ? Colors.amber[800]
-                                          : myReaction == '👀'
-                                              ? Colors.teal
-                                              : AppTheme.primaryBlue;
-                      reactionWidget = _buildEmojiImage(myReaction, size: 20);
-                    } else if (isLiked) {
-                      reactionLabel = 'Fire';
-                      reactionColor = Colors.deepOrange;
-                      reactionWidget = _buildEmojiImage('🔥', size: 20);
-                    } else {
-                      reactionWidget = const Text('🤍', style: TextStyle(fontSize: 20));
-                    }
-
-                    return GestureDetector(
-                      onTap: () {
-                        HapticFeedback.lightImpact();
-                        _reactBtnController.forward(from: 0);
-                        _showReactionPopup(buttonContext, isDark);
-                      },
-                      child: AnimatedBuilder(
-                        animation: _reactBtnScale,
-                        builder: (_, child) => Transform.scale(
-                          scale: _reactBtnScale.value,
-                          child: child,
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      if (hasReacted)
+                        _buildEmojiImage(myReaction!, size: 22)
+                      else if (isLikedOnly)
+                        Icon(
+                          Icons.favorite_rounded,
+                          color: palette.primary,
+                          size: 22,
+                        )
+                      else
+                        Icon(
+                          Icons.add_reaction_outlined,
+                          color: isDark ? Colors.white.withOpacity(0.75) : Colors.black54,
+                          size: 22,
                         ),
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(vertical: 10),
-                          child: Row(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              reactionWidget,
-                              const SizedBox(width: 6),
-                              Text(
-                                reactionLabel,
-                                style: TextStyle(
-                                  fontSize: 13.5,
-                                  fontWeight: FontWeight.w700,
-                                  color: reactionColor ?? (isDark ? Colors.white70 : Colors.black54),
-                                ),
-                              ),
-                            ],
+                      const SizedBox(width: 8),
+                      GestureDetector(
+                        onTap: () {
+                          if (displayLikes > 0) {
+                            showModalBottomSheet(
+                              context: context,
+                              useRootNavigator: true,
+                              isScrollControlled: true,
+                              backgroundColor: Colors.transparent,
+                              builder: (_) => _LikesSheet(post: widget.post),
+                            );
+                          } else {
+                            _showReactionPopup(buttonContext, isDark);
+                          }
+                        },
+                        behavior: HitTestBehavior.opaque,
+                        child: Text(
+                          displayLikes > 0 ? _formatCount(displayLikes) : 'React',
+                          style: TextStyle(
+                            fontSize: 13.5,
+                            fontWeight: FontWeight.w600,
+                            color: (hasReacted || isLikedOnly)
+                                ? (isDark ? Colors.white : palette.primary)
+                                : (isDark ? Colors.white.withOpacity(0.9) : Colors.black87),
                           ),
                         ),
                       ),
-                    );
-                  },
+                    ],
+                  ),
                 ),
-              ),
-              Expanded(
-                child: _FbActionButton(
-                  icon: Icons.chat_bubble_outline_rounded,
-                  label: 'Comment',
-                  isDark: isDark,
-                  onTap: () {
-                    showModalBottomSheet(
-                      context: context,
-                      useRootNavigator: true,
-                      isScrollControlled: true,
-                      backgroundColor: Colors.transparent,
-                      builder: (_) => CommentsSheet(
-                        postId: widget.post.id,
-                        postUserName: widget.post.userName,
-                      ),
-                    );
-                  },
-                ),
-              ),
-              Expanded(
-                child: _HypeItActionButton(
-                  isDark: isDark,
-                  onTap: () {
-                    HapticFeedback.mediumImpact();
-                    showModalBottomSheet(
-                      context: context,
-                      useRootNavigator: true,
-                      isScrollControlled: true,
-                      backgroundColor: Colors.transparent,
-                      builder: (_) => _HypeItSheet(post: widget.post),
-                    );
-                  },
-                ),
-              ),
-            ],
+              );
+            },
           ),
-        ),
-      ],
+
+          const SizedBox(width: 24),
+
+          // Comment Button
+          GestureDetector(
+            onTap: () {
+              showModalBottomSheet(
+                context: context,
+                useRootNavigator: true,
+                isScrollControlled: true,
+                backgroundColor: Colors.transparent,
+                builder: (_) => CommentsSheet(
+                  postId: widget.post.id,
+                  postUserName: widget.post.userName,
+                ),
+              );
+            },
+            behavior: HitTestBehavior.opaque,
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  Icons.chat_bubble_outline_rounded,
+                  color: isDark ? Colors.white.withOpacity(0.75) : Colors.black54,
+                  size: 20,
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  _formatCount(displayComments),
+                  style: TextStyle(
+                    fontSize: 13.5,
+                    fontWeight: FontWeight.w600,
+                    color: isDark ? Colors.white.withOpacity(0.9) : Colors.black87,
+                  ),
+                ),
+              ],
+            ),
+          ),
+
+          const SizedBox(width: 24),
+
+          // Share Button
+          GestureDetector(
+            onTap: () {
+              HapticFeedback.mediumImpact();
+              showModalBottomSheet(
+                context: context,
+                useRootNavigator: true,
+                isScrollControlled: true,
+                backgroundColor: Colors.transparent,
+                builder: (_) => _HypeItSheet(post: widget.post),
+              );
+            },
+            behavior: HitTestBehavior.opaque,
+            child: Transform.rotate(
+              angle: -0.3,
+              child: Icon(
+                Icons.send_rounded,
+                color: isDark ? Colors.white.withOpacity(0.75) : Colors.black54,
+                size: 21,
+              ),
+            ),
+          ),
+
+          const Spacer(),
+
+          // Bookmark Button
+          GestureDetector(
+            onTap: _toggleBookmark,
+            behavior: HitTestBehavior.opaque,
+            child: Icon(
+              _isBookmarked ? Icons.bookmark_rounded : Icons.bookmark_border_rounded,
+              color: _isBookmarked
+                  ? palette.primary
+                  : (isDark ? Colors.white.withOpacity(0.75) : Colors.black54),
+              size: 22,
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -1047,9 +1237,12 @@ class _PostCardState extends ConsumerState<PostCard>
     _reactionOverlayEntry = OverlayEntry(
       builder: (context) {
         final screenWidth = MediaQuery.of(buttonContext).size.width;
-        double leftPosition = offset.dx - (320 - size.width) / 2;
-        // Clamp to prevent overlay going off-screen
-        leftPosition = leftPosition.clamp(12.0, screenWidth - 332.0);
+        const popupWidth = 330.0;
+        double leftPosition = offset.dx - (popupWidth - size.width) / 2;
+        leftPosition = leftPosition.clamp(10.0, (screenWidth - (popupWidth + 10.0)).clamp(10.0, screenWidth));
+        final double topPosition = (offset.dy - 76 < 60)
+            ? offset.dy + size.height + 10
+            : offset.dy - 76;
 
         return Stack(
           children: [
@@ -1062,7 +1255,7 @@ class _PostCardState extends ConsumerState<PostCard>
             ),
             Positioned(
               left: leftPosition,
-              top: offset.dy - 80,
+              top: topPosition,
               child: Material(
                 color: Colors.transparent,
                 child: TweenAnimationBuilder<double>(
@@ -1094,7 +1287,7 @@ class _PostCardState extends ConsumerState<PostCard>
                           offset: const Offset(0, 6),
                         ),
                         BoxShadow(
-                          color: const Color(0xFFFF3CAC).withOpacity(0.12),
+                          color: AppTheme.primaryBlue.withOpacity(0.12),
                           blurRadius: 16,
                           offset: const Offset(0, 2),
                         ),
@@ -1108,13 +1301,13 @@ class _PostCardState extends ConsumerState<PostCard>
                     ),
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
-                      children: ['🔥', '💀', '🫶', '😭', '🤩', '👀'].asMap().entries.map((entry) {
+                      children: ['🔥', '❤️', '💀', '🫶', '😭', '🤩', '👀'].asMap().entries.map((entry) {
                         final i = entry.key;
                         final emoji = entry.value;
                         // Staggered entrance using delayed TweenAnimationBuilder
                         return TweenAnimationBuilder<double>(
                           tween: Tween(begin: 0.0, end: 1.0),
-                          duration: Duration(milliseconds: 200 + i * 40),
+                          duration: Duration(milliseconds: 180 + i * 35),
                           curve: Curves.easeOutBack,
                           builder: (context, v, child) => Transform.translate(
                             offset: Offset(0, 8 * (1 - v)),
@@ -1124,6 +1317,7 @@ class _PostCardState extends ConsumerState<PostCard>
                             emoji: emoji,
                             label: const {
                               '🔥': 'Fire',
+                              '❤️': 'Love',
                               '💀': 'Dead',
                               '🫶': 'Luv',
                               '😭': 'Crying',
@@ -1160,23 +1354,21 @@ class _PostCardState extends ConsumerState<PostCard>
     _reactionOverlayEntry = null;
   }
 
-  Widget _buildCaption(bool isDark) {
+  Widget _buildCaptionAndPlan(bool isDark, AppPalette palette, List<String> participants, bool isJoinedPlan) {
     final caption = widget.post.caption;
 
-    // ── Parse plan metadata from caption lines ─────────────────────────────
-    // Strategy: scan every line. Lines that contain "Plan:", "Time:", "Where:"
-    // are treated as plan metadata. All other non-empty lines form the user caption.
-    // This approach is intentionally emoji-agnostic and newline-variant-agnostic.
-    String? planTitle, planTime, planLocation;
+    String? planTitle, planTime, planLocation, planDescription;
     final captionLines = <String>[];
 
     for (final rawLine in caption.split(RegExp(r'\r?\n'))) {
       final stripped = rawLine.trim();
-      if (stripped.isEmpty) continue; // skip blank lines
+      if (stripped.isEmpty) continue;
 
       final planIdx   = stripped.indexOf('Plan:');
       final timeIdx   = stripped.indexOf('Time:');
       final whereIdx  = stripped.indexOf('Where:');
+      final descIdx   = stripped.indexOf('Desc:');
+      final aboutIdx  = stripped.indexOf('About:');
 
       if (planIdx != -1 && planTitle == null) {
         planTitle = stripped.substring(planIdx + 5).trim();
@@ -1184,24 +1376,35 @@ class _PostCardState extends ConsumerState<PostCard>
         planTime = stripped.substring(timeIdx + 5).trim();
       } else if (whereIdx != -1 && planLocation == null) {
         planLocation = stripped.substring(whereIdx + 6).trim();
+      } else if (descIdx != -1 && planDescription == null) {
+        planDescription = stripped.substring(descIdx + 5).trim();
+      } else if (aboutIdx != -1 && planDescription == null) {
+        planDescription = stripped.substring(aboutIdx + 6).trim();
       } else {
         captionLines.add(stripped);
       }
     }
 
-    final mainCaption = captionLines.join('\n');
-    final isLongCaption = mainCaption.length > 120;
-    final displayCaption =
-        isLongCaption && !_isExpanded ? '${mainCaption.substring(0, 120)}...' : mainCaption;
+    String mainCaption = '';
+    if (captionLines.isNotEmpty) {
+      mainCaption = captionLines.first;
+      if (captionLines.length > 1 && planDescription == null) {
+        planDescription = captionLines.sublist(1).join('\n');
+      }
+    }
 
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(18, 4, 18, 10),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // ── Regular caption text ─────────────────────────────────────────
-          if (mainCaption.isNotEmpty)
-            GestureDetector(
+    final isLongCaption = mainCaption.length > 120;
+    final displayCaption = isLongCaption && !_isExpanded
+        ? '${mainCaption.substring(0, 120)}...'
+        : mainCaption;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (mainCaption.isNotEmpty && mainCaption != widget.post.mood)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(18, 4, 18, 10),
+            child: GestureDetector(
               onTap: () {
                 if (isLongCaption) setState(() => _isExpanded = !_isExpanded);
               },
@@ -1211,18 +1414,19 @@ class _PostCardState extends ConsumerState<PostCard>
                     TextSpan(
                       text: displayCaption,
                       style: TextStyle(
-                        fontSize: 15,
+                        fontSize: 15.5,
                         fontWeight: FontWeight.w400,
-                        color: isDark ? Colors.white.withOpacity(0.9) : Colors.black87,
-                        height: 1.5,
+                        color: isDark ? Colors.white.withOpacity(0.95) : const Color(0xFF131127),
+                        height: 1.45,
+                        letterSpacing: 0.1,
                       ),
                     ),
                     if (isLongCaption)
                       TextSpan(
                         text: _isExpanded ? ' See less' : ' See more',
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontSize: 14.5,
-                          color: AppTheme.primaryBlue,
+                          color: palette.primary,
                           fontWeight: FontWeight.w700,
                         ),
                       ),
@@ -1230,212 +1434,451 @@ class _PostCardState extends ConsumerState<PostCard>
                 ),
               ),
             ),
-
-          // ── Plan Card ────────────────────────────────────────────────────
-          if (planTitle != null) ...[
-            if (mainCaption.isNotEmpty) const SizedBox(height: 12),
-            _buildPlanCard(isDark, planTitle, planTime, planLocation),
-          ],
-        ],
-      ),
+          ),
+        if (planTitle != null)
+          _buildPlanCard(isDark, palette, planTitle, planTime, planLocation, planDescription, participants, isJoinedPlan),
+      ],
     );
   }
 
   Widget _buildPlanCard(
     bool isDark,
+    AppPalette palette,
     String title,
     String? time,
     String? location,
+    String? description,
+    List<String> participants,
+    bool isJoinedPlan,
   ) {
+    final displayDesc = (description != null && description.isNotEmpty)
+        ? description
+        : "Let's watch the sky and talk about life.";
+    final displayTime = (time != null && time.isNotEmpty) ? time : 'Today 7:00 PM';
+    final displayLoc = (location != null && location.isNotEmpty)
+        ? location
+        : (widget.post.location ?? 'Earth');
+
     return Container(
-      width: double.infinity,
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(20),
         gradient: LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
           colors: isDark
               ? [
-                  const Color(0xFF1E2A4A),
-                  const Color(0xFF251E4A),
+                  Color.lerp(palette.surfaceTint, palette.primary, 0.14)!,
+                  Color.lerp(palette.backgroundTint, palette.secondary, 0.08)!,
                 ]
               : [
-                  const Color(0xFFEEF4FF),
-                  const Color(0xFFF3EEFF),
+                  Color.lerp(Colors.white, palette.primary, 0.06)!,
+                  Color.lerp(Colors.white, palette.secondary, 0.04)!,
                 ],
         ),
+        borderRadius: BorderRadius.circular(22),
         border: Border.all(
           color: isDark
-              ? AppTheme.primaryBlue.withOpacity(0.25)
-              : AppTheme.primaryBlue.withOpacity(0.20),
+              ? palette.primary.withOpacity(0.32)
+              : palette.primary.withOpacity(0.18),
           width: 1.2,
         ),
         boxShadow: [
           BoxShadow(
-            color: AppTheme.primaryBlue.withOpacity(isDark ? 0.12 : 0.08),
+            color: palette.primary.withOpacity(isDark ? 0.20 : 0.06),
             blurRadius: 16,
             offset: const Offset(0, 4),
           ),
         ],
       ),
-      child: Stack(
-        children: [
-          // Subtle shimmer circle in the top-right corner
-          Positioned(
-            top: -20,
-            right: -20,
-            child: Container(
-              width: 80,
-              height: 80,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                gradient: RadialGradient(
-                  colors: [
-                    AppTheme.accentPurple.withOpacity(isDark ? 0.18 : 0.12),
-                    Colors.transparent,
-                  ],
-                ),
-              ),
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.all(16),
-            child: Column(
+      child: Padding(
+        padding: const EdgeInsets.all(14),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Top row: Thumbnail + Details
+            Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Header row with icon + "Plan" label
-                Row(
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.all(8),
-                      decoration: BoxDecoration(
-                        gradient: const LinearGradient(
-                          colors: [AppTheme.primaryBlue, AppTheme.accentPurple],
-                          begin: Alignment.topLeft,
-                          end: Alignment.bottomRight,
+                _PlanThumbnail(
+                  imageUrl: widget.post.imageUrl,
+                  onTap: () {
+                    if (widget.post.imageUrl != null) {
+                      Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (_) => FullScreenImageViewer(
+                            imageUrl: widget.post.imageUrl!,
+                            heroTag: '${widget.post.id}_plan_thumb',
+                          ),
                         ),
-                        borderRadius: BorderRadius.circular(12),
-                        boxShadow: [
-                          BoxShadow(
-                            color: AppTheme.primaryBlue.withOpacity(0.30),
-                            blurRadius: 8,
-                            offset: const Offset(0, 3),
+                      );
+                    }
+                  },
+                ),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Icon(
+                            Icons.calendar_month_rounded,
+                            size: 15,
+                            color: palette.primary,
+                          ),
+                          const SizedBox(width: 6),
+                          Text(
+                            'PLAN',
+                            style: TextStyle(
+                              color: palette.primary,
+                              fontSize: 11.5,
+                              fontWeight: FontWeight.w900,
+                              letterSpacing: 1.3,
+                            ),
                           ),
                         ],
                       ),
-                      child: const Icon(
-                        Icons.calendar_today_rounded,
-                        size: 16,
-                        color: Colors.white,
+                      const SizedBox(height: 5),
+                      Text(
+                        title,
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.w800,
+                          color: isDark ? Colors.white : const Color(0xFF1A1035),
+                          letterSpacing: -0.2,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        displayDesc,
+                        style: TextStyle(
+                          fontSize: 12.5,
+                          color: isDark ? const Color(0xFF9E9AB7) : Colors.black54,
+                          height: 1.35,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+
+            const SizedBox(height: 14),
+
+            // Bottom row: Time, Location, I'm In button, Participants
+            Wrap(
+              spacing: 6,
+              runSpacing: 8,
+              alignment: WrapAlignment.spaceBetween,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              children: [
+                // Chips group (Time & Location)
+                Wrap(
+                  spacing: 6,
+                  runSpacing: 6,
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  children: [
+                    // Time chip
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+                      decoration: BoxDecoration(
+                        color: isDark
+                            ? palette.backgroundTint.withOpacity(0.85)
+                            : Colors.white.withOpacity(0.9),
+                        borderRadius: BorderRadius.circular(18),
+                        border: Border.all(
+                          color: isDark
+                              ? palette.primary.withOpacity(0.25)
+                              : palette.primary.withOpacity(0.18),
+                        ),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(2.5),
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              color: palette.accent.withOpacity(0.20),
+                            ),
+                            child: Icon(
+                              Icons.access_time_rounded,
+                              size: 13,
+                              color: palette.accent,
+                            ),
+                          ),
+                          const SizedBox(width: 5),
+                          Text(
+                            displayTime,
+                            style: TextStyle(
+                              color: isDark ? Colors.white : const Color(0xFF1A1035),
+                              fontSize: 11.5,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ],
                       ),
                     ),
-                    const SizedBox(width: 10),
-                    ShaderMask(
-                      shaderCallback: (b) =>
-                          AppTheme.primaryGradient.createShader(b),
-                      child: const Text(
-                        'PLAN',
-                        style: TextStyle(
-                          fontSize: 11,
-                          fontWeight: FontWeight.w900,
-                          letterSpacing: 1.8,
-                          color: Colors.white,
+
+                    // Location chip
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+                      decoration: BoxDecoration(
+                        color: isDark
+                            ? palette.backgroundTint.withOpacity(0.85)
+                            : Colors.white.withOpacity(0.9),
+                        borderRadius: BorderRadius.circular(18),
+                        border: Border.all(
+                          color: isDark
+                              ? palette.secondary.withOpacity(0.25)
+                              : palette.secondary.withOpacity(0.18),
                         ),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(2.5),
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              color: palette.secondary.withOpacity(0.20),
+                            ),
+                            child: Icon(
+                              Icons.location_on_rounded,
+                              size: 13,
+                              color: palette.secondary,
+                            ),
+                          ),
+                          const SizedBox(width: 5),
+                          ConstrainedBox(
+                            constraints: const BoxConstraints(maxWidth: 100),
+                            child: Text(
+                              displayLoc,
+                              style: TextStyle(
+                                color: isDark ? Colors.white : const Color(0xFF1A1035),
+                                fontSize: 11.5,
+                                fontWeight: FontWeight.w600,
+                              ),
+                              overflow: TextOverflow.ellipsis,
+                              maxLines: 1,
+                            ),
+                          ),
+                        ],
                       ),
                     ),
                   ],
                 ),
 
-                const SizedBox(height: 12),
+                // Right group: "I'm In" / "Joined ✓" button + Participants
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    GestureDetector(
+                      onTap: () {
+                        if (!isJoinedPlan) {
+                          _handleJoinPlan(title, participants);
+                        } else {
+                          // Already joined! Open sheet to see who is in
+                          HapticFeedback.lightImpact();
+                          _showPlanParticipantsSheet(
+                            context,
+                            isDark,
+                            title,
+                            participants,
+                            true,
+                          );
+                        }
+                      },
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 5.5),
+                        decoration: BoxDecoration(
+                          gradient: isJoinedPlan
+                              ? null
+                              : palette.primaryGradient,
+                          color: isJoinedPlan
+                              ? (isDark ? palette.primary.withOpacity(0.20) : palette.primary.withOpacity(0.12))
+                              : null,
+                          borderRadius: BorderRadius.circular(20),
+                          border: isJoinedPlan
+                              ? Border.all(color: palette.primary, width: 1.2)
+                              : null,
+                          boxShadow: isJoinedPlan
+                              ? null
+                              : [
+                                  BoxShadow(
+                                    color: palette.primary.withOpacity(0.35),
+                                    blurRadius: 8,
+                                    offset: const Offset(0, 2),
+                                  ),
+                                ],
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            if (isJoinedPlan) ...[
+                              Icon(Icons.check_rounded, size: 13, color: isDark ? Colors.white : palette.primary),
+                              const SizedBox(width: 3),
+                            ],
+                            Text(
+                              isJoinedPlan ? "Joined" : "I'm In",
+                              style: TextStyle(
+                                color: isJoinedPlan
+                                    ? (isDark ? Colors.white : palette.primary)
+                                    : Colors.white,
+                                fontSize: 11.5,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
 
-                // Plan title
-                Text(
-                  title,
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w800,
-                    color: isDark ? Colors.white : const Color(0xFF1A1035),
-                    letterSpacing: -0.3,
-                  ),
+                    // Real overlapping participant avatars & tap to see who's in
+                    _buildParticipantAvatars(isDark, palette, participants, title, isJoinedPlan),
+                  ],
                 ),
-
-                // Time & Location rows
-                if ((time != null && time.isNotEmpty) ||
-                    (location != null && location.isNotEmpty)) ...[
-                  const SizedBox(height: 12),
-                  Container(
-                    height: 0.8,
-                    color: isDark
-                        ? Colors.white.withOpacity(0.08)
-                        : Colors.black.withOpacity(0.06),
-                  ),
-                  const SizedBox(height: 12),
-                  Wrap(
-                    spacing: 16,
-                    runSpacing: 8,
-                    children: [
-                      if (time != null && time.isNotEmpty)
-                        _planDetail(
-                          isDark: isDark,
-                          icon: Icons.schedule_rounded,
-                          iconColor: const Color(0xFF6ECBF5),
-                          label: time,
-                        ),
-                      if (location != null && location.isNotEmpty)
-                        _planDetail(
-                          isDark: isDark,
-                          icon: Icons.location_on_rounded,
-                          iconColor: const Color(0xFFFF6B9D),
-                          label: location,
-                        ),
-                    ],
-                  ),
-                ],
               ],
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
 
-  Widget _planDetail({
-    required bool isDark,
-    required IconData icon,
-    required Color iconColor,
-    required String label,
-  }) {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Container(
-          padding: const EdgeInsets.all(5),
+  Widget _buildParticipantAvatars(
+    bool isDark,
+    AppPalette palette,
+    List<String> participants,
+    String planTitle,
+    bool isJoined,
+  ) {
+    if (participants.isEmpty) {
+      return GestureDetector(
+        onTap: () => _showPlanParticipantsSheet(
+          context,
+          isDark,
+          planTitle,
+          participants,
+          isJoined,
+        ),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4.5),
           decoration: BoxDecoration(
-            color: iconColor.withOpacity(0.12),
-            borderRadius: BorderRadius.circular(8),
-          ),
-          child: Icon(icon, size: 13, color: iconColor),
-        ),
-        const SizedBox(width: 6),
-        Flexible(
-          child: Text(
-            label,
-            style: TextStyle(
-              fontSize: 13,
-              fontWeight: FontWeight.w600,
-              color: isDark ? Colors.white70 : const Color(0xFF3D3D5C),
+            color: isDark ? Colors.white.withOpacity(0.06) : Colors.black.withOpacity(0.04),
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(
+              color: isDark ? palette.primary.withOpacity(0.25) : palette.primary.withOpacity(0.15),
+              width: 0.8,
             ),
-            overflow: TextOverflow.ellipsis,
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                Icons.people_outline_rounded,
+                size: 13,
+                color: isDark ? palette.accent : palette.primary,
+              ),
+              const SizedBox(width: 4),
+              Text(
+                '0 in • See list',
+                style: TextStyle(
+                  color: isDark ? Colors.white70 : palette.primary,
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
           ),
         ),
-      ],
+      );
+    }
+
+    final displayUserIds = participants.take(3).toList();
+    final stackWidth = 22.0 + (displayUserIds.length - 1) * 12.0;
+
+    return GestureDetector(
+      onTap: () => _showPlanParticipantsSheet(
+        context,
+        isDark,
+        planTitle,
+        participants,
+        isJoined,
+      ),
+      behavior: HitTestBehavior.opaque,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3.5),
+        decoration: BoxDecoration(
+          color: isDark ? Colors.white.withOpacity(0.06) : Colors.black.withOpacity(0.04),
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(
+            color: isDark ? Colors.white12 : Colors.black12,
+            width: 0.8,
+          ),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            SizedBox(
+              width: stackWidth,
+              height: 22,
+              child: Stack(
+                children: List.generate(displayUserIds.length, (idx) {
+                  return Positioned(
+                    left: idx * 12.0,
+                    child: _PlanParticipantAvatar(
+                      userId: displayUserIds[idx],
+                      isDark: isDark,
+                    ),
+                  );
+                }),
+              ),
+            ),
+            const SizedBox(width: 5),
+            Text(
+              '${participants.length} in',
+              style: TextStyle(
+                color: isDark ? Colors.white : const Color(0xFF131127),
+                fontSize: 11.5,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _showPlanParticipantsSheet(
+    BuildContext context,
+    bool isDark,
+    String planTitle,
+    List<String> participants,
+    bool isJoined,
+  ) {
+    showModalBottomSheet(
+      context: context,
+      useRootNavigator: true,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => _PlanParticipantsSheet(
+        postId: widget.post.id,
+        planTitle: planTitle,
+        initialParticipants: participants,
+        isDark: isDark,
+        initialIsJoined: isJoined,
+        onJoin: () => _handleJoinPlan(planTitle, participants),
+        onLeave: () => _handleLeavePlan(planTitle, participants),
+      ),
     );
   }
 
 
 
   // Mood-only posts get a gradient hero card instead of a blank image slot
-  Widget _buildMoodHero(bool isDark) {
+  Widget _buildMoodHero(bool isDark, AppPalette palette) {
     final mood = widget.post.mood!;
     final parts = mood.split(' ');
     final emoji = parts.first;
@@ -1450,8 +1893,8 @@ class _PostCardState extends ConsumerState<PostCard>
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
           colors: [
-            AppTheme.primaryBlue.withOpacity(isDark ? 0.22 : 0.1),
-            AppTheme.primaryGreen.withOpacity(isDark ? 0.22 : 0.1),
+            palette.primary.withOpacity(isDark ? 0.22 : 0.1),
+            palette.secondary.withOpacity(isDark ? 0.22 : 0.1),
           ],
         ),
       ),
@@ -1465,7 +1908,7 @@ class _PostCardState extends ConsumerState<PostCard>
             style: TextStyle(
               fontSize: 14,
               fontWeight: FontWeight.w900,
-              color: AppTheme.primaryBlue,
+              color: palette.primary,
               letterSpacing: 1.5,
             ),
           ),
@@ -1486,7 +1929,7 @@ class _PostCardState extends ConsumerState<PostCard>
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    const Icon(Icons.music_note_rounded, color: AppTheme.primaryBlue, size: 16),
+                    Icon(Icons.music_note_rounded, color: palette.primary, size: 16),
                     const SizedBox(width: 6),
                     Flexible(
                       child: Text(
@@ -1509,7 +1952,7 @@ class _PostCardState extends ConsumerState<PostCard>
     );
   }
 
-  Widget _buildMoodBadge(bool isDark) {
+  Widget _buildMoodBadge(bool isDark, AppPalette palette) {
     final mood = widget.post.mood!;
     final parts = mood.split(' ');
     final emoji = parts.first;
@@ -1519,10 +1962,10 @@ class _PostCardState extends ConsumerState<PostCard>
       child: Container(
         padding: const EdgeInsets.fromLTRB(10, 6, 14, 6),
         decoration: BoxDecoration(
-          color: AppTheme.primaryBlue.withOpacity(0.1),
+          color: palette.primary.withOpacity(0.12),
           borderRadius: BorderRadius.circular(50),
           border: Border.all(
-            color: AppTheme.primaryBlue.withOpacity(0.35),
+            color: palette.primary.withOpacity(0.35),
           ),
         ),
         child: Row(
@@ -1533,7 +1976,7 @@ class _PostCardState extends ConsumerState<PostCard>
             Text(
               label,
               style: TextStyle(
-                color: AppTheme.primaryBlue,
+                color: palette.primary,
                 fontWeight: FontWeight.w700,
                 fontSize: 11.5,
               ),
@@ -1551,7 +1994,7 @@ class _PostCardState extends ConsumerState<PostCard>
 
   // ─── Custom Premium Dialog & Bottom Sheet Flows ───────────────────────
 
-  void _showPostOptionsSheet(BuildContext context, bool isDark) {
+  void _showPostOptionsSheet(BuildContext context, bool isDark, AppPalette palette) {
     final isOwnPost = widget.post.userId == _currentUserId;
     // Plans always contain all three structured fields in the caption
     final caption = widget.post.caption;
@@ -1567,7 +2010,7 @@ class _PostCardState extends ConsumerState<PostCard>
         return Container(
           padding: const EdgeInsets.fromLTRB(0, 16, 0, 24),
           decoration: BoxDecoration(
-            color: isDark ? AppTheme.darkSurface : Colors.white,
+            color: isDark ? palette.surfaceTint : Colors.white,
             borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
           ),
           child: Column(
@@ -1594,7 +2037,7 @@ class _PostCardState extends ConsumerState<PostCard>
                     },
                   ),
                 ListTile(
-                  leading: const Icon(Icons.edit_outlined, color: AppTheme.primaryBlue),
+                  leading: Icon(Icons.edit_outlined, color: palette.primary),
                   title: const Text('Edit Post', style: TextStyle(fontWeight: FontWeight.w700)),
                   subtitle: const Text('Update caption, mood, music, or replace assets'),
                   onTap: () {
@@ -1617,7 +2060,7 @@ class _PostCardState extends ConsumerState<PostCard>
                       SnackBar(
                         content: Text(widget.post.isPinned ? 'Post unpinned successfully!' : 'Post pinned successfully!'),
                         behavior: SnackBarBehavior.floating,
-                        backgroundColor: AppTheme.primaryBlue,
+                        backgroundColor: palette.primary,
                       ),
                     );
                   },
@@ -1640,7 +2083,7 @@ class _PostCardState extends ConsumerState<PostCard>
                   subtitle: Text('Currently ${widget.post.privacy.toUpperCase()}'),
                   onTap: () {
                     Navigator.pop(context);
-                    _showPrivacySelectorSheet(context, isDark);
+                    _showPrivacySelectorSheet(context, isDark, palette);
                   },
                 ),
                 ListTile(
@@ -1665,12 +2108,12 @@ class _PostCardState extends ConsumerState<PostCard>
                 ),
               ] else ...[
                 ListTile(
-                  leading: const Icon(Icons.bookmark_outline, color: AppTheme.primaryBlue),
+                  leading: Icon(Icons.bookmark_outline, color: palette.primary),
                   title: const Text('Save Post', style: TextStyle(fontWeight: FontWeight.w700)),
                   subtitle: const Text('Save to folders (Reflective, Energetic, Chill)'),
                   onTap: () {
                     Navigator.pop(context);
-                    _showSaveToCategoryDialog(context, isDark);
+                    _showSaveToCategoryDialog(context, isDark, palette);
                   },
                 ),
                 ListTile(
@@ -1719,7 +2162,7 @@ class _PostCardState extends ConsumerState<PostCard>
     );
   }
 
-  void _showPrivacySelectorSheet(BuildContext context, bool isDark) {
+  void _showPrivacySelectorSheet(BuildContext context, bool isDark, AppPalette palette) {
     showModalBottomSheet(
       context: context,
       useRootNavigator: true,
@@ -1733,7 +2176,7 @@ class _PostCardState extends ConsumerState<PostCard>
             return Container(
               padding: const EdgeInsets.all(20),
               decoration: BoxDecoration(
-                color: isDark ? AppTheme.darkSurface : Colors.white,
+                color: isDark ? palette.surfaceTint : Colors.white,
                 borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
               ),
               child: Column(
@@ -1746,21 +2189,21 @@ class _PostCardState extends ConsumerState<PostCard>
                     title: const Text('Public (Everyone)'),
                     value: 'public',
                     groupValue: selected,
-                    activeColor: AppTheme.primaryBlue,
+                    activeColor: palette.primary,
                     onChanged: (val) => setModalState(() => selected = val!),
                   ),
                   RadioListTile<String>(
                     title: const Text('Connections Only'),
                     value: 'connections',
                     groupValue: selected,
-                    activeColor: AppTheme.primaryBlue,
+                    activeColor: palette.primary,
                     onChanged: (val) => setModalState(() => selected = val!),
                   ),
                   RadioListTile<String>(
                     title: const Text('Private (Only me)'),
                     value: 'private',
                     groupValue: selected,
-                    activeColor: AppTheme.primaryBlue,
+                    activeColor: palette.primary,
                     onChanged: (val) => setModalState(() => selected = val!),
                   ),
                   const SizedBox(height: 16),
@@ -1773,12 +2216,12 @@ class _PostCardState extends ConsumerState<PostCard>
                         ScaffoldMessenger.of(context).showSnackBar(
                           SnackBar(
                             content: Text('Privacy updated to: ${selected.toUpperCase()}'),
-                            backgroundColor: AppTheme.success,
+                            backgroundColor: palette.primary,
                           ),
                         );
                       },
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: AppTheme.primaryBlue,
+                        backgroundColor: palette.primary,
                         foregroundColor: Colors.white,
                         padding: const EdgeInsets.symmetric(vertical: 14),
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -1826,12 +2269,12 @@ class _PostCardState extends ConsumerState<PostCard>
     );
   }
 
-  void _showSaveToCategoryDialog(BuildContext context, bool isDark) {
+  void _showSaveToCategoryDialog(BuildContext context, bool isDark, AppPalette palette) {
     showDialog(
       context: context,
       builder: (context) {
         return AlertDialog(
-          backgroundColor: isDark ? AppTheme.darkSurface : Colors.white,
+          backgroundColor: isDark ? palette.surfaceTint : Colors.white,
           title: const Text('Save to Folder', style: TextStyle(fontWeight: FontWeight.bold)),
           content: Column(
             mainAxisSize: MainAxisSize.min,
@@ -1932,7 +2375,7 @@ class _PostCardState extends ConsumerState<PostCard>
                   debugPrint('Failed to send interest: $e');
                 }
               },
-              child: const Text('Send Interest', style: TextStyle(color: AppTheme.primaryBlue, fontWeight: FontWeight.bold)),
+              child: Text('Send Interest', style: TextStyle(color: AppTheme.primaryBlue, fontWeight: FontWeight.bold)),
             ),
           ],
         );
@@ -2096,7 +2539,7 @@ class _PostCardState extends ConsumerState<PostCard>
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Icon(Icons.check_circle, color: AppTheme.success, size: 54),
+              Icon(Icons.check_circle, color: AppTheme.success, size: 54),
               const SizedBox(height: 16),
               const Text('Report Submitted', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
               const SizedBox(height: 8),
@@ -2177,13 +2620,14 @@ class _GlassIconButton extends StatelessWidget {
   }
 }
 
-class _HypeItSheet extends StatelessWidget {
+class _HypeItSheet extends ConsumerWidget {
   final PostModel post;
   const _HypeItSheet({required this.post});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final palette = ref.watch(appPaletteProvider);
 
     Future<void> copyLink() async {
       final postUrl = 'https://situationship.app/post/${post.id}';
@@ -2200,14 +2644,14 @@ class _HypeItSheet extends StatelessWidget {
               ],
             ),
             behavior: SnackBarBehavior.floating,
-            backgroundColor: const Color(0xFFEF4444),
+            backgroundColor: palette.primary,
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
           ),
         );
       }
     }
 
-    final bgColor = isDark ? const Color(0xFF13111C) : Colors.white;
+    final bgColor = isDark ? palette.surfaceTint : Colors.white;
     final textColor = isDark ? Colors.white : const Color(0xFF1A1035);
     final subColor = isDark ? Colors.white60 : Colors.black54;
     final tileColor = isDark ? Colors.white.withOpacity(0.06) : const Color(0xFFF5F3FF);
@@ -2235,11 +2679,7 @@ class _HypeItSheet extends StatelessWidget {
               Container(
                 padding: const EdgeInsets.all(10),
                 decoration: BoxDecoration(
-                  gradient: const LinearGradient(
-                    colors: [Color(0xFFFF3CAC), Color(0xFFF59E0B)],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                  ),
+                  gradient: palette.primaryGradient,
                   borderRadius: BorderRadius.circular(14),
                 ),
                 child: _buildEmojiImage('🔥', size: 26),
@@ -2275,7 +2715,7 @@ class _HypeItSheet extends StatelessWidget {
                 SnackBar(
                   content: const Text('Pick your situationship 👀'),
                   behavior: SnackBarBehavior.floating,
-                  backgroundColor: const Color(0xFF7C3AED),
+                  backgroundColor: palette.primary,
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                 ),
               );
@@ -2328,7 +2768,7 @@ class _HypeItSheet extends StatelessWidget {
                 SnackBar(
                   content: const Text('Instagram link-up coming soon ✨'),
                   behavior: SnackBarBehavior.floating,
-                  backgroundColor: const Color(0xFFFF3CAC),
+                  backgroundColor: AppTheme.primaryBlue,
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                 ),
               );
@@ -2349,7 +2789,7 @@ class _HypeItSheet extends StatelessWidget {
                 SnackBar(
                   content: const Text('More share options comin fr 🔜'),
                   behavior: SnackBarBehavior.floating,
-                  backgroundColor: const Color(0xFF00C6FF),
+                  backgroundColor: AppTheme.primaryBlue,
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                 ),
               );
@@ -2514,8 +2954,8 @@ class _HypeItActionButtonState extends State<_HypeItActionButton>
             ),
             const SizedBox(width: 6),
             ShaderMask(
-              shaderCallback: (bounds) => const LinearGradient(
-                colors: [Color(0xFFFF3CAC), Color(0xFFF59E0B)],
+              shaderCallback: (bounds) => LinearGradient(
+                colors: [AppTheme.primaryBlue, Color(0xFFF59E0B)],
               ).createShader(bounds),
               child: Text(
                 'Hype It',
@@ -3029,3 +3469,609 @@ class _LikesSheetState extends ConsumerState<_LikesSheet> with SingleTickerProvi
     );
   }
 }
+
+class _EqualizerWaveform extends StatelessWidget {
+  final double progress;
+  final bool isDark;
+  final bool isPlaying;
+  final double? availableWidth;
+  final Color? activeColor;
+
+  const _EqualizerWaveform({
+    required this.progress,
+    required this.isDark,
+    required this.isPlaying,
+    this.availableWidth,
+    this.activeColor,
+  });
+
+  static const List<double> barHeights = [
+    5, 8, 14, 10, 16, 22, 18, 13, 8, 15, 21, 16, 11, 7, 13, 19, 15, 9, 17, 21, 14, 8, 4
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    int count = barHeights.length;
+    if (availableWidth != null && availableWidth! > 0) {
+      final maxBars = (availableWidth! / 4.6).floor();
+      if (maxBars < count && maxBars > 4) {
+        count = maxBars;
+      }
+    }
+
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: List.generate(count, (index) {
+        final barHeight = barHeights[index % barHeights.length];
+        final barProgress = (index + 1) / count;
+        final isFilled = progress >= barProgress;
+
+        return Container(
+          width: 2.2,
+          height: barHeight,
+          margin: const EdgeInsets.symmetric(horizontal: 1.1),
+          decoration: BoxDecoration(
+            color: isFilled
+                ? (activeColor ?? const Color(0xFFFF2A85))
+                : (isDark ? const Color(0xFF8B82B2) : const Color(0xFFB5ADC8)),
+            borderRadius: BorderRadius.circular(2),
+          ),
+        );
+      }),
+    );
+  }
+}
+
+class _PlanThumbnail extends StatelessWidget {
+  final String? imageUrl;
+  final VoidCallback? onTap;
+
+  const _PlanThumbnail({this.imageUrl, this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(16),
+        child: SizedBox(
+          width: 76,
+          height: 76,
+          child: (imageUrl != null && imageUrl!.startsWith('http'))
+              ? CachedNetworkImage(
+                  imageUrl: imageUrl!,
+                  fit: BoxFit.cover,
+                  errorWidget: (_, __, ___) => _buildSunsetArt(),
+                )
+              : _buildSunsetArt(),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSunsetArt() {
+    return Container(
+      width: 76,
+      height: 76,
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [
+            Color(0xFF6B1D76), // deep twilight purple
+            Color(0xFFB8236B), // rich magenta
+            Color(0xFFFF5252), // coral crimson
+            Color(0xFFFF9F43), // golden sunrise
+          ],
+        ),
+      ),
+      child: Stack(
+        alignment: Alignment.center,
+        children: [
+          // Soft ambient sun glow
+          Positioned(
+            bottom: 12,
+            child: Container(
+              width: 48,
+              height: 48,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                gradient: RadialGradient(
+                  colors: [
+                    const Color(0xFFFFEAA7).withOpacity(0.55),
+                    const Color(0xFFFF9F43).withOpacity(0.15),
+                    Colors.transparent,
+                  ],
+                ),
+              ),
+            ),
+          ),
+          // Setting sun
+          Positioned(
+            bottom: 16,
+            child: Container(
+              width: 22,
+              height: 22,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                gradient: const RadialGradient(
+                  colors: [
+                    Colors.white,
+                    Color(0xFFFFF7C2),
+                    Color(0xFFFFC048),
+                  ],
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: const Color(0xFFFFC048).withOpacity(0.65),
+                    blurRadius: 10,
+                    spreadRadius: 2,
+                  ),
+                ],
+              ),
+            ),
+          ),
+          // Silhouette mountain background
+          Positioned(
+            bottom: 0,
+            left: 0,
+            right: 0,
+            child: ClipPath(
+              clipper: _MountainClipper(),
+              child: Container(
+                height: 22,
+                color: const Color(0xFF1E1038),
+              ),
+            ),
+          ),
+          // Silhouette foreground hills
+          Positioned(
+            bottom: 0,
+            left: 0,
+            right: 0,
+            child: ClipPath(
+              clipper: _ForegroundRidgeClipper(),
+              child: Container(
+                height: 12,
+                color: const Color(0xFF110722),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _MountainClipper extends CustomClipper<Path> {
+  @override
+  Path getClip(Size size) {
+    final path = Path();
+    path.moveTo(0, size.height);
+    path.lineTo(0, size.height * 0.6);
+    path.quadraticBezierTo(size.width * 0.25, size.height * 0.1, size.width * 0.5, size.height * 0.55);
+    path.quadraticBezierTo(size.width * 0.75, size.height * 0.85, size.width, size.height * 0.3);
+    path.lineTo(size.width, size.height);
+    path.close();
+    return path;
+  }
+
+  @override
+  bool shouldReclip(covariant CustomClipper<Path> oldClipper) => false;
+}
+
+class _ForegroundRidgeClipper extends CustomClipper<Path> {
+  @override
+  Path getClip(Size size) {
+    final path = Path();
+    path.moveTo(0, size.height);
+    path.lineTo(0, size.height * 0.4);
+    path.quadraticBezierTo(size.width * 0.35, size.height * 0.7, size.width * 0.65, size.height * 0.2);
+    path.lineTo(size.width, size.height * 0.5);
+    path.lineTo(size.width, size.height);
+    path.close();
+    return path;
+  }
+
+  @override
+  bool shouldReclip(covariant CustomClipper<Path> oldClipper) => false;
+}
+
+class _PlanParticipantAvatar extends ConsumerWidget {
+  final String userId;
+  final bool isDark;
+
+  const _PlanParticipantAvatar({required this.userId, required this.isDark});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final palette = ref.watch(appPaletteProvider);
+    final currentUid = ref.watch(currentUserProvider).id.isNotEmpty
+        ? ref.watch(currentUserProvider).id
+        : (FirebaseAuth.instance.currentUser?.uid ?? '');
+    final userAsync = (userId == currentUid)
+        ? AsyncValue.data(ref.watch(currentUserProvider))
+        : ref.watch(otherUserProvider(userId));
+
+    final user = userAsync.valueOrNull;
+    final avatarUrl = user?.avatarUrl;
+    final name = user?.name ?? 'User';
+
+    return Container(
+      width: 22,
+      height: 22,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        border: Border.all(
+          color: isDark ? palette.surfaceTint : Colors.white,
+          width: 1.5,
+        ),
+      ),
+      child: ClipOval(
+        child: (avatarUrl != null && avatarUrl.isNotEmpty)
+            ? CachedNetworkImage(
+                imageUrl: avatarUrl,
+                fit: BoxFit.cover,
+                errorWidget: (_, __, ___) => _fallbackAvatar(name, palette),
+              )
+            : _fallbackAvatar(name, palette),
+      ),
+    );
+  }
+
+  Widget _fallbackAvatar(String name, AppPalette palette) {
+    final initial = name.isNotEmpty ? name[0].toUpperCase() : '?';
+    return Container(
+      color: palette.primary,
+      child: Center(
+        child: Text(
+          initial,
+          style: const TextStyle(
+            color: Colors.white,
+            fontSize: 10,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _PlanParticipantsSheet extends ConsumerWidget {
+  final String postId;
+  final String planTitle;
+  final List<String> initialParticipants;
+  final bool isDark;
+  final bool initialIsJoined;
+  final VoidCallback onJoin;
+  final VoidCallback onLeave;
+
+  const _PlanParticipantsSheet({
+    required this.postId,
+    required this.planTitle,
+    required this.initialParticipants,
+    required this.isDark,
+    required this.initialIsJoined,
+    required this.onJoin,
+    required this.onLeave,
+  });
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final palette = ref.watch(appPaletteProvider);
+    final currentUid = ref.watch(currentUserProvider).id.isNotEmpty
+        ? ref.watch(currentUserProvider).id
+        : (FirebaseAuth.instance.currentUser?.uid ?? '');
+
+    // Watch live participants from Firestore for instant real-time synchronization
+    final liveParticipantsAsync = ref.watch(livePlanParticipantsProvider(postId));
+    final liveList = liveParticipantsAsync.asData?.value;
+    final participants = (liveList != null && liveList.isNotEmpty)
+        ? liveList
+        : initialParticipants;
+    final isJoined = (currentUid.isNotEmpty && participants.contains(currentUid)) || initialIsJoined;
+
+    return Container(
+      constraints: BoxConstraints(
+        maxHeight: MediaQuery.of(context).size.height * 0.70,
+      ),
+      decoration: BoxDecoration(
+        color: isDark ? palette.surfaceTint : Colors.white,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+        border: Border.all(
+          color: isDark ? palette.primary.withOpacity(0.25) : const Color(0xFFE8E4F2),
+          width: 1,
+        ),
+      ),
+      child: SafeArea(
+        top: false,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Drag handle
+            Container(
+              width: 38,
+              height: 4,
+              margin: const EdgeInsets.symmetric(vertical: 12),
+              decoration: BoxDecoration(
+                color: isDark ? Colors.white24 : Colors.black12,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            // Header
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 6),
+              child: Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: palette.primary.withOpacity(0.15),
+                    ),
+                    child: Icon(
+                      Icons.celebration_rounded,
+                      color: palette.primary,
+                      size: 20,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Who\'s In for $planTitle',
+                          style: TextStyle(
+                            fontSize: 17,
+                            fontWeight: FontWeight.w800,
+                            color: isDark ? Colors.white : const Color(0xFF131127),
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          '${participants.length} ${participants.length == 1 ? 'person has' : 'people have'} joined',
+                          style: TextStyle(
+                            fontSize: 12.5,
+                            color: isDark ? const Color(0xFF9E9AB7) : Colors.black54,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  IconButton(
+                    onPressed: () => Navigator.pop(context),
+                    icon: Icon(
+                      Icons.close_rounded,
+                      color: isDark ? Colors.white54 : Colors.black45,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const Divider(height: 16),
+            // Participants list or empty state
+            if (participants.isEmpty)
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 36, horizontal: 24),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      Icons.groups_rounded,
+                      size: 46,
+                      color: isDark ? Colors.white24 : Colors.black26,
+                    ),
+                    const SizedBox(height: 12),
+                    Text(
+                      'No one has joined yet!',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w800,
+                        color: isDark ? Colors.white : const Color(0xFF131127),
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      'Be the first to join this plan and start the vibe.',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        fontSize: 13,
+                        color: isDark ? Colors.white60 : Colors.black54,
+                      ),
+                    ),
+                  ],
+                ),
+              )
+            else
+              Flexible(
+                child: ListView.separated(
+                  shrinkWrap: true,
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  itemCount: participants.length,
+                  separatorBuilder: (_, __) => const SizedBox(height: 6),
+                  itemBuilder: (context, index) {
+                    final userId = participants[index];
+                    final isMe = currentUid.isNotEmpty && userId == currentUid;
+                    final userAsync = isMe
+                        ? AsyncValue.data(ref.watch(currentUserProvider))
+                        : ref.watch(otherUserProvider(userId));
+
+                    final user = userAsync.valueOrNull;
+                    final rawName = user?.name.trim() ?? '';
+                    final name = isMe
+                        ? (rawName.isNotEmpty ? '$rawName (You)' : 'You (You)')
+                        : (rawName.isNotEmpty ? rawName : 'Member');
+                    final avatarUrl = user?.avatarUrl;
+                    final isVerified = user?.isVerified ?? false;
+
+                    return Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      decoration: BoxDecoration(
+                        color: isDark ? palette.backgroundTint : const Color(0xFFF7F5FC),
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                      child: Row(
+                        children: [
+                          GestureDetector(
+                            onTap: () {
+                              Navigator.pop(context);
+                              ProfileChoiceSheet.navigateToProfile(context, ref, userId);
+                            },
+                            child: CircleAvatar(
+                              radius: 20,
+                              backgroundColor: palette.primary,
+                              backgroundImage: (avatarUrl != null && avatarUrl.isNotEmpty)
+                                  ? CachedNetworkImageProvider(avatarUrl)
+                                  : null,
+                              child: (avatarUrl == null || avatarUrl.isEmpty)
+                                  ? Text(
+                                      name.isNotEmpty ? name[0].toUpperCase() : '?',
+                                      style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                                    )
+                                  : null,
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(
+                                  children: [
+                                    Flexible(
+                                      child: Text(
+                                        name,
+                                        style: TextStyle(
+                                          fontSize: 14.5,
+                                          fontWeight: FontWeight.w700,
+                                          color: isDark ? Colors.white : const Color(0xFF131127),
+                                        ),
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    ),
+                                    if (isVerified) ...[
+                                      const SizedBox(width: 4),
+                                      Icon(Icons.verified_rounded, size: 15, color: palette.primary),
+                                    ],
+                                  ],
+                                ),
+                                if (user?.bio != null && user!.bio!.isNotEmpty) ...[
+                                  const SizedBox(height: 2),
+                                  Text(
+                                    user.bio!,
+                                    style: TextStyle(
+                                      fontSize: 11.5,
+                                      color: isDark ? const Color(0xFF9E9AB7) : Colors.black54,
+                                    ),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ],
+                              ],
+                            ),
+                          ),
+                          TextButton(
+                            onPressed: () {
+                              Navigator.pop(context);
+                              ProfileChoiceSheet.navigateToProfile(context, ref, userId);
+                            },
+                            style: TextButton.styleFrom(
+                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                              backgroundColor: isDark ? Colors.white10 : Colors.black.withOpacity(0.05),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                            ),
+                            child: Text(
+                              isMe ? 'My Profile' : 'View',
+                              style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600,
+                                color: isDark ? Colors.white70 : Colors.black87,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    );
+                  },
+                ),
+              ),
+
+            // Bottom action: Join or Leave
+            if (isJoined)
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                decoration: BoxDecoration(
+                  color: isDark ? Colors.white.withOpacity(0.04) : Colors.black.withOpacity(0.03),
+                  border: Border(
+                    top: BorderSide(
+                      color: isDark ? Colors.white12 : Colors.black12,
+                      width: 0.8,
+                    ),
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    Icon(Icons.check_circle_rounded, color: palette.primary, size: 18),
+                    const SizedBox(width: 8),
+                    Text(
+                      "You're in for this plan",
+                      style: TextStyle(
+                        color: isDark ? Colors.white70 : Colors.black87,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const Spacer(),
+                    TextButton(
+                      onPressed: () {
+                        onLeave();
+                      },
+                      child: const Text(
+                        'Leave Plan',
+                        style: TextStyle(
+                          color: Colors.redAccent,
+                          fontSize: 13,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              )
+            else
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                child: SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton.icon(
+                    onPressed: () {
+                      onJoin();
+                    },
+                    icon: const Icon(Icons.celebration_rounded, color: Colors.white, size: 18),
+                    label: const Text(
+                      "I'm In! 🚀",
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 15,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    style: ElevatedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 13),
+                      backgroundColor: palette.primary,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
+                    ),
+                  ),
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+

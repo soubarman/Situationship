@@ -7,6 +7,7 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/theme/app_palette.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../core/providers/app_state_provider.dart';
 import '../../../core/widgets/empty_state_widget.dart';
@@ -90,6 +91,7 @@ class _FeedScreenState extends ConsumerState<FeedScreen> {
     final activeFilter= ref.watch(feedFilterProvider);
     final isDark      = Theme.of(context).brightness == Brightness.dark;
     final currentUser = ref.watch(currentUserProvider);
+    final palette     = ref.watch(appPaletteProvider);
 
     ref.listen(currentUserProvider, (prev, next) {
       if (!_genderPromptShown && next.id.isNotEmpty && (next.gender.isEmpty || next.gender == 'other')) {
@@ -109,12 +111,12 @@ class _FeedScreenState extends ConsumerState<FeedScreen> {
             onRefresh: () async {
               await ref.read(postsPaginationProvider.notifier).refresh();
             },
-            color: AppTheme.primaryBlue,
+            color: palette.primary,
             child: CustomScrollView(
               cacheExtent: 2000,
               physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
               slivers: [
-                _buildAppBar(context, isDark, currentUser, ref),
+                _buildAppBar(context, isDark, currentUser, ref, palette),
                 const SliverToBoxAdapter(child: SizedBox(height: 16)),
                 const SliverToBoxAdapter(child: StoriesRow()),
 
@@ -124,13 +126,13 @@ class _FeedScreenState extends ConsumerState<FeedScreen> {
                     padding: const EdgeInsets.fromLTRB(16, 10, 16, 6),
                     child: Row(
                       children: [
-                        Expanded(child: _TabChip(label: 'All',         isSelected: activeFilter == 'all',         onTap: () => ref.read(feedFilterProvider.notifier).state = 'all')),
+                        Expanded(child: _TabChip(label: 'All',         isSelected: activeFilter == 'all',         palette: palette, onTap: () => ref.read(feedFilterProvider.notifier).state = 'all')),
                         const SizedBox(width: 6),
-                        Expanded(child: _TabChip(label: 'Following',   isSelected: activeFilter == 'following',   onTap: () => ref.read(feedFilterProvider.notifier).state = 'following')),
+                        Expanded(child: _TabChip(label: 'Following',   isSelected: activeFilter == 'following',   palette: palette, onTap: () => ref.read(feedFilterProvider.notifier).state = 'following')),
                         const SizedBox(width: 6),
-                        Expanded(child: _TabChip(label: 'Trending',    isSelected: activeFilter == 'trending',    onTap: () => ref.read(feedFilterProvider.notifier).state = 'trending')),
+                        Expanded(child: _TabChip(label: 'Trending',    isSelected: activeFilter == 'trending',    palette: palette, onTap: () => ref.read(feedFilterProvider.notifier).state = 'trending')),
                         const SizedBox(width: 6),
-                        Expanded(child: _TabChip(label: 'Communities', isSelected: activeFilter == 'communities', onTap: () => ref.read(feedFilterProvider.notifier).state = 'communities')),
+                        Expanded(child: _TabChip(label: 'Communities', isSelected: activeFilter == 'communities', palette: palette, onTap: () => ref.read(feedFilterProvider.notifier).state = 'communities')),
                       ],
                     ),
                   ),
@@ -141,7 +143,7 @@ class _FeedScreenState extends ConsumerState<FeedScreen> {
                 ),
 
                 // spacing so spotlight and posts don't look merged
-                const SliverToBoxAdapter(child: SizedBox(height: 36)),
+                const SliverToBoxAdapter(child: SizedBox(height: 8)),
     
                 // ── Firestore error banner ─────────────────────────────────────
                 if (postsStream.hasError)
@@ -236,7 +238,7 @@ class _FeedScreenState extends ConsumerState<FeedScreen> {
               ),
             );
           },
-          backgroundColor: AppTheme.primaryBlue,
+          backgroundColor: palette.primary,
           child: const Icon(Icons.add_rounded, color: Colors.white, size: 28),
         ),
       ),
@@ -245,14 +247,14 @@ class _FeedScreenState extends ConsumerState<FeedScreen> {
 
   // ─── Glassmorphic App Bar ──────────────────────────────────────────────────
 
-  SliverAppBar _buildAppBar(BuildContext context, bool isDark, UserModel currentUser, WidgetRef ref) {
+  SliverAppBar _buildAppBar(BuildContext context, bool isDark, UserModel currentUser, WidgetRef ref, AppPalette palette) {
     return SliverAppBar(
       floating: true,
       snap: true,
       elevation: 0,
       scrolledUnderElevation: 0,
-      toolbarHeight: 64,
-      backgroundColor: isDark ? AppTheme.darkBg : const Color(0xFFF5F5F7),
+      toolbarHeight: 56,
+      backgroundColor: isDark ? palette.backgroundTint : const Color(0xFFF5F5F7),
       bottom: PreferredSize(
         preferredSize: const Size.fromHeight(1),
         child: Divider(
@@ -268,46 +270,37 @@ class _FeedScreenState extends ConsumerState<FeedScreen> {
           mainAxisSize: MainAxisSize.min,
           children: [
             ShaderMask(
-              shaderCallback: (bounds) => const LinearGradient(
-                colors: [
-                  Color(0xFFA3E635), // Neon lime
-                  Color(0xFFD9F99D), // Light lime
-                  Color(0xFFE9D5FF), // Soft lilac
-                  Color(0xFFE879F9), // Radiant lavender
-                  Color(0xFFD946EF), // Magenta
-                ],
-                stops: [0.0, 0.28, 0.55, 0.82, 1.0],
-              ).createShader(bounds),
+              shaderCallback: (bounds) => palette.logoGradient.createShader(bounds),
               child: const Text(
                 'situationship',
                 style: TextStyle(
-                  fontSize: 24,
+                  fontSize: 22,
                   fontWeight: FontWeight.w900,
                   fontStyle: FontStyle.italic,
                   color: Colors.white,
-                  letterSpacing: -0.6,
+                  letterSpacing: -0.5,
                 ),
               ),
             ),
-            const SizedBox(width: 8),
+            const SizedBox(width: 6),
             Container(
-              width: 23,
-              height: 23,
-              decoration: const BoxDecoration(
-                color: Color(0xFFA3E635),
+              width: 20,
+              height: 20,
+              decoration: BoxDecoration(
+                color: palette.verifiedBadgeBg,
                 shape: BoxShape.circle,
                 boxShadow: [
                   BoxShadow(
-                    color: Color(0x66A3E635),
-                    blurRadius: 8,
+                    color: palette.verifiedBadgeBg.withValues(alpha: 0.35),
+                    blurRadius: 6,
                   ),
                 ],
               ),
-              child: const Center(
+              child: Center(
                 child: Icon(
-                  Icons.verified_user_rounded,
-                  color: Color(0xFF140D24),
-                  size: 14,
+                  palette.verifiedIcon,
+                  color: palette.verifiedIconColor,
+                  size: 12,
                 ),
               ),
             ),
@@ -315,37 +308,16 @@ class _FeedScreenState extends ConsumerState<FeedScreen> {
         ),
       ),
       actions: [
-        _buildCoinBadge(currentUser.coins, isDark),
-        const SizedBox(width: 8),
-        // Shop Bag button (tote bag with handles)
-        GestureDetector(
-          onTap: () => context.push('/wallet'),
-          child: Container(
-            width: 38,
-            height: 38,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              color: isDark ? const Color(0xFF161026) : Colors.black.withValues(alpha: 0.04),
-              border: Border.all(
-                color: isDark ? Colors.white.withValues(alpha: 0.16) : Colors.black.withValues(alpha: 0.08),
-                width: 1.0,
-              ),
-            ),
-            child: Icon(
-              Icons.shopping_bag_outlined,
-              size: 19,
-              color: isDark ? Colors.white.withValues(alpha: 0.85) : Colors.black87,
-            ),
-          ),
-        ),
-        const SizedBox(width: 8),
-        // Bell with hot pink badge (count = 3)
+        _buildCoinBadge(currentUser.coins, isDark, palette),
+        const SizedBox(width: 6),
+        // Bell with notification badge
         Consumer(
           builder: (context, ref, child) {
             final notificationsAsync = ref.watch(notificationsStreamProvider);
             final notifications = notificationsAsync.asData?.value ?? [];
             final unreadCount = notifications.where((n) => !n.isRead).length;
-            final displayCount = unreadCount > 0 ? unreadCount : 3;
+            final hasUnread = unreadCount > 0;
+            final displayCount = unreadCount >= 10 ? '9+' : '$unreadCount';
 
             return Stack(
               clipBehavior: Clip.none,
@@ -353,123 +325,173 @@ class _FeedScreenState extends ConsumerState<FeedScreen> {
                 GestureDetector(
                   onTap: () => _showNotificationsSheet(context, currentUser, ref),
                   child: Container(
-                    width: 38,
-                    height: 38,
+                    width: 32,
+                    height: 32,
                     decoration: BoxDecoration(
                       shape: BoxShape.circle,
                       color: isDark ? const Color(0xFF161026) : Colors.black.withValues(alpha: 0.04),
                       border: Border.all(
-                        color: isDark ? Colors.white.withValues(alpha: 0.16) : Colors.black.withValues(alpha: 0.08),
+                        color: isDark ? Colors.white.withValues(alpha: 0.14) : Colors.black.withValues(alpha: 0.08),
                         width: 1.0,
                       ),
                     ),
                     child: Icon(
-                      Icons.notifications_none_rounded,
-                      size: 19,
+                      hasUnread ? Icons.notifications_rounded : Icons.notifications_none_rounded,
+                      size: 16,
                       color: isDark ? Colors.white.withValues(alpha: 0.85) : Colors.black87,
                     ),
                   ),
                 ),
-                Positioned(
-                  top: -2,
-                  right: -2,
-                  child: Container(
-                    width: 17,
-                    height: 17,
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFFF2D87),
-                      shape: BoxShape.circle,
-                      border: Border.all(color: const Color(0xFF0B0715), width: 1.5),
-                      boxShadow: [
-                        BoxShadow(
-                          color: const Color(0xFFFF2D87).withValues(alpha: 0.6),
-                          blurRadius: 6,
-                        ),
-                      ],
-                    ),
-                    child: Center(
-                      child: Text(
-                        '$displayCount',
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 9.5,
-                          fontWeight: FontWeight.w900,
+                if (hasUnread)
+                  Positioned(
+                    top: -2,
+                    right: -2,
+                    child: Container(
+                      width: 14,
+                      height: 14,
+                      decoration: BoxDecoration(
+                        color: palette.primary,
+                        shape: BoxShape.circle,
+                        border: Border.all(color: isDark ? const Color(0xFF0B0715) : Colors.white, width: 1.5),
+                        boxShadow: [
+                          BoxShadow(
+                            color: palette.primary.withValues(alpha: 0.6),
+                            blurRadius: 4,
+                          ),
+                        ],
+                      ),
+                      child: Center(
+                        child: Text(
+                          displayCount,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 8.5,
+                            fontWeight: FontWeight.w900,
+                          ),
                         ),
                       ),
                     ),
                   ),
-                ),
               ],
             );
           },
         ),
-        const SizedBox(width: 8),
+        const SizedBox(width: 6),
         // Search icon button
         GestureDetector(
           onTap: () => context.push('/search'),
           child: Container(
-            width: 38,
-            height: 38,
+            width: 32,
+            height: 32,
             decoration: BoxDecoration(
               shape: BoxShape.circle,
               color: isDark ? const Color(0xFF161026) : Colors.black.withValues(alpha: 0.04),
               border: Border.all(
-                color: isDark ? Colors.white.withValues(alpha: 0.16) : Colors.black.withValues(alpha: 0.08),
+                color: isDark ? Colors.white.withValues(alpha: 0.14) : Colors.black.withValues(alpha: 0.08),
                 width: 1.0,
               ),
             ),
             child: Icon(
               Icons.search_rounded,
-              size: 19,
+              size: 16,
               color: isDark ? Colors.white.withValues(alpha: 0.85) : Colors.black87,
             ),
           ),
         ),
-        const SizedBox(width: 16),
+        const SizedBox(width: 6),
+        // My Profile button on the far right
+        _buildProfileAvatar(currentUser, isDark, palette),
+        const SizedBox(width: 12),
       ],
+    );
+  }
+
+  // ─── Profile Avatar Button ─────────────────────────────────────────────────
+
+  Widget _buildProfileAvatar(UserModel currentUser, bool isDark, AppPalette palette) {
+    final avatarUrl = currentUser.avatarUrl;
+    return GestureDetector(
+      onTap: () => context.push('/profile'),
+      child: Container(
+        width: 32,
+        height: 32,
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          gradient: palette.primaryGradient,
+          boxShadow: [
+            BoxShadow(
+              color: palette.primary.withValues(alpha: 0.35),
+              blurRadius: 6,
+            ),
+          ],
+        ),
+        padding: const EdgeInsets.all(1.5),
+        child: ClipOval(
+          child: Container(
+            color: isDark ? const Color(0xFF161026) : Colors.white,
+            child: avatarUrl != null && avatarUrl.isNotEmpty
+                ? Image.network(
+                    avatarUrl,
+                    fit: BoxFit.cover,
+                    width: 29,
+                    height: 29,
+                    errorBuilder: (_, __, ___) => Icon(
+                      Icons.person_rounded,
+                      size: 16,
+                      color: isDark ? Colors.white70 : Colors.black87,
+                    ),
+                  )
+                : Icon(
+                    Icons.person_rounded,
+                    size: 16,
+                    color: isDark ? Colors.white70 : Colors.black87,
+                  ),
+          ),
+        ),
+      ),
     );
   }
 
   // ─── Flame Streak / Coin Badge ─────────────────────────────────────────────
 
-  Widget _buildCoinBadge(int coins, bool isDark) {
+  Widget _buildCoinBadge(int coins, bool isDark, AppPalette palette) {
     final displayStreak = coins > 0 ? coins : 3;
     return GestureDetector(
       onTap: () => context.push('/wallet'),
       child: Center(
         child: Container(
-          height: 38,
-          padding: const EdgeInsets.symmetric(horizontal: 11),
+          height: 30,
+          padding: const EdgeInsets.symmetric(horizontal: 9),
           decoration: BoxDecoration(
-            color: const Color(0xFF182613),
-            borderRadius: BorderRadius.circular(20),
+            color: palette.streakBg,
+            borderRadius: BorderRadius.circular(16),
             border: Border.all(
-              color: const Color(0xFFA3E635),
-              width: 1.5,
+              color: palette.streakBorder,
+              width: 1.0,
             ),
             boxShadow: [
               BoxShadow(
-                color: const Color(0xFFA3E635).withValues(alpha: 0.18),
-                blurRadius: 8,
-                offset: const Offset(0, 2),
+                color: palette.streakBorder.withValues(alpha: 0.18),
+                blurRadius: 6,
+                offset: const Offset(0, 1),
               ),
             ],
           ),
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Icon(
+              Icon(
                 Icons.local_fire_department_rounded,
-                color: Color(0xFFA3E635),
-                size: 18,
+                color: palette.streakContentColor,
+                size: 15,
               ),
-              const SizedBox(width: 5),
+              const SizedBox(width: 4),
               Text(
                 '$displayStreak',
-                style: const TextStyle(
-                  fontSize: 13.5,
-                  fontWeight: FontWeight.w900,
-                  color: Color(0xFFA3E635),
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w800,
+                  color: palette.streakContentColor,
                 ),
               ),
             ],
@@ -542,7 +564,7 @@ class _FeedScreenState extends ConsumerState<FeedScreen> {
                             ),
                             TextButton(
                               onPressed: () => Navigator.pop(context),
-                              child: const Text('Close',
+                              child: Text('Close',
                                   style: TextStyle(fontWeight: FontWeight.bold, color: AppTheme.primaryBlue)),
                             ),
                           ],
@@ -716,8 +738,14 @@ class _TabChip extends StatelessWidget {
   final String label;
   final bool isSelected;
   final VoidCallback onTap;
+  final AppPalette palette;
 
-  const _TabChip({required this.label, required this.isSelected, required this.onTap});
+  const _TabChip({
+    required this.label,
+    required this.isSelected,
+    required this.onTap,
+    required this.palette,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -730,13 +758,7 @@ class _TabChip extends StatelessWidget {
         alignment: Alignment.center,
         padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 8),
         decoration: BoxDecoration(
-          gradient: isSelected
-              ? const LinearGradient(
-                  colors: [Color(0xFF9333EA), Color(0xFFFF3CAC)],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                )
-              : null,
+          gradient: isSelected ? palette.primaryGradient : null,
           color: isSelected
               ? null
               : (isDark ? Colors.white.withOpacity(0.08) : Colors.white),
@@ -750,7 +772,7 @@ class _TabChip extends StatelessWidget {
           boxShadow: isSelected
               ? [
                   BoxShadow(
-                    color: const Color(0xFF9333EA).withOpacity(0.35),
+                    color: palette.primary.withOpacity(0.35),
                     blurRadius: 10,
                     offset: const Offset(0, 3),
                   ),

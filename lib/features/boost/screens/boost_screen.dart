@@ -228,7 +228,7 @@ class _BoostScreenState extends ConsumerState<BoostScreen> {
               ),
             ),
             if (isSelected)
-              const Icon(Icons.check_circle, color: AppTheme.primaryBlue),
+              Icon(Icons.check_circle, color: AppTheme.primaryBlue),
           ],
         ),
       ),
@@ -274,7 +274,7 @@ class _BoostScreenState extends ConsumerState<BoostScreen> {
               ],
             ),
             if (isSelected)
-              const Icon(Icons.check_circle, color: AppTheme.primaryBlue),
+              Icon(Icons.check_circle, color: AppTheme.primaryBlue),
           ],
         ),
       ),

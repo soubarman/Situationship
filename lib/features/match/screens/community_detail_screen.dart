@@ -105,7 +105,7 @@ class _CommunityDetailScreenState extends ConsumerState<CommunityDetailScreen> {
                     color: AppTheme.primaryBlue.withOpacity(0.15),
                     shape: BoxShape.circle,
                   ),
-                  child: const Icon(Icons.tag_rounded, color: AppTheme.primaryBlue, size: 18),
+                  child: Icon(Icons.tag_rounded, color: AppTheme.primaryBlue, size: 18),
                 ),
                 const SizedBox(width: 10),
                 Expanded(
@@ -691,7 +691,7 @@ class _CommunityDetailScreenState extends ConsumerState<CommunityDetailScreen> {
                         children: [
                           Row(
                             children: [
-                              const Icon(Icons.admin_panel_settings_rounded, color: AppTheme.primaryBlue, size: 22),
+                              Icon(Icons.admin_panel_settings_rounded, color: AppTheme.primaryBlue, size: 22),
                               const SizedBox(width: 8),
                               Text(
                                 'Pending Member Requests (${community.pendingApprovals.length})',
@@ -730,7 +730,7 @@ class _CommunityDetailScreenState extends ConsumerState<CommunityDetailScreen> {
                                       ),
                                       // Approve Button
                                       IconButton(
-                                        icon: const Icon(Icons.check_circle_rounded, color: AppTheme.primaryGreen, size: 26),
+                                        icon: Icon(Icons.check_circle_rounded, color: AppTheme.primaryGreen, size: 26),
                                         onPressed: () async {
                                           final batch = firestoreProvider.batch();
                                           batch.update(firestoreProvider.collection('communities').doc(widget.communityId), {

@@ -408,7 +408,7 @@ class _TakeViewerScreenState extends ConsumerState<TakeViewerScreen>
                     ),
                     const SizedBox(width: 8),
                     IconButton(
-                      icon: const Icon(Icons.send_rounded, color: AppTheme.accentPurple),
+                      icon: Icon(Icons.send_rounded, color: AppTheme.accentPurple),
                       onPressed: () async {
                         if (ctrl.text.trim().isEmpty) return;
                         final text = ctrl.text.trim();
@@ -753,7 +753,7 @@ class _TakeViewerScreenState extends ConsumerState<TakeViewerScreen>
       );
     } else {
       mediaContent = Container(
-        decoration: const BoxDecoration(
+        decoration: BoxDecoration(
           gradient: LinearGradient(
             colors: [AppTheme.primaryBlue, AppTheme.accentPurple],
             begin: Alignment.topLeft,

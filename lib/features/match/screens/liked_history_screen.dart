@@ -1166,7 +1166,7 @@ class _LikedUserCard extends ConsumerWidget {
                                           ),
                                           child: Text(
                                             interest,
-                                            style: const TextStyle(
+                                            style: TextStyle(
                                               fontSize: 10.5,
                                               color: AppTheme.primaryBlue,
                                               fontWeight: FontWeight.w700,

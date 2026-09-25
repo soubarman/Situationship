@@ -161,7 +161,7 @@ class _StoryViewScreenState extends ConsumerState<StoryViewScreen>
               )
             else
               Container(
-                decoration: const BoxDecoration(
+                decoration: BoxDecoration(
                   gradient: LinearGradient(
                     colors: [AppTheme.primaryBlue, AppTheme.accentPurple],
                     begin: Alignment.topLeft,

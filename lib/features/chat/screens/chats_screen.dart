@@ -113,7 +113,7 @@ class _ChatsScreenState extends ConsumerState<ChatsScreen>
               children: [
                 Expanded(
                   child: ShaderMask(
-                    shaderCallback: (bounds) => const LinearGradient(
+                    shaderCallback: (bounds) => LinearGradient(
                       colors: [AppTheme.primaryBlue, AppTheme.accentPurple, AppTheme.accentPink],
                     ).createShader(bounds),
                     child: const Text(
@@ -461,7 +461,7 @@ class _StoryRingAvatarState extends State<_StoryRingAvatar>
                   height: size + 8,
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
-                    gradient: const SweepGradient(
+                    gradient: SweepGradient(
                       colors: [
                         AppTheme.primaryBlue,
                         AppTheme.accentPurple,
@@ -738,14 +738,14 @@ class _ChatTileState extends ConsumerState<_ChatTile>
                             shape: BoxShape.circle,
                             gradient: LinearGradient(
                               colors: isDark
-                                  ? [const Color(0xFF6B21A8), const Color(0xFF4C1D95)]
-                                  : [const Color(0xFFC084FC), const Color(0xFF818CF8)],
+                                  ? [const Color(0xFF6B21A8), AppTheme.primaryBlue]
+                                  : [AppTheme.accentPink, const Color(0xFF818CF8)],
                               begin: Alignment.topLeft,
                               end: Alignment.bottomRight,
                             ),
                             boxShadow: [
                               BoxShadow(
-                                color: const Color(0xFF8B5CF6).withValues(alpha: 0.25),
+                                color: AppTheme.accentPurple.withValues(alpha: 0.25),
                                 blurRadius: 10,
                                 offset: const Offset(0, 3),
                               ),
@@ -1196,7 +1196,7 @@ class _AnimatedEmptyStateState extends State<_AnimatedEmptyState>
             ),
             const SizedBox(height: 24),
             ShaderMask(
-              shaderCallback: (bounds) => const LinearGradient(
+              shaderCallback: (bounds) => LinearGradient(
                 colors: [AppTheme.primaryBlue, AppTheme.accentPurple],
               ).createShader(bounds),
               child: Text(

@@ -6,6 +6,7 @@ import 'package:go_router/go_router.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/providers/app_state_provider.dart';
 import '../../../core/providers/firebase_auth_provider.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import '../../../shared/widgets/gradient_button.dart';
 
 class LoginScreen extends ConsumerStatefulWidget {
@@ -81,7 +82,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
   }
 
   void _forgotPassword() {
-    final emailCtrl = TextEditingController(text: _emailController.text);
+    final emailCtrl = TextEditingController(text: _emailController.text.trim());
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -109,16 +110,44 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
               backgroundColor: AppTheme.primaryBlue,
               foregroundColor: Colors.white,
             ),
-            onPressed: () {
+            onPressed: () async {
+              final email = emailCtrl.text.trim();
+              if (email.isEmpty || !email.contains('@')) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: const Text('Please enter a valid email address.'),
+                    backgroundColor: AppTheme.error,
+                    behavior: SnackBarBehavior.floating,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  ),
+                );
+                return;
+              }
               Navigator.pop(ctx);
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: const Text('✅ Reset link sent! Check your inbox.'),
-                  backgroundColor: AppTheme.success,
-                  behavior: SnackBarBehavior.floating,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                ),
-              );
+              try {
+                await FirebaseAuth.instance.sendPasswordResetEmail(email: email);
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: const Text('✅ Reset link sent! Check your inbox.'),
+                      backgroundColor: AppTheme.success,
+                      behavior: SnackBarBehavior.floating,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    ),
+                  );
+                }
+              } catch (e) {
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text('Failed to send reset link: ${e.toString().split(']').last.trim()}'),
+                      backgroundColor: AppTheme.error,
+                      behavior: SnackBarBehavior.floating,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    ),
+                  );
+                }
+              }
             },
             child: const Text('Send Link'),
           ),

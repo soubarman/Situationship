@@ -8,6 +8,7 @@ import '../../../core/models/user_model.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/providers/app_state_provider.dart';
 import '../../../core/providers/firestore_provider.dart';
+import '../../../core/utils/heart_queue_engine.dart';
 
 // ─── Vibe helpers (same as discover_tab) ─────────────────────────────────────
 
@@ -574,7 +575,7 @@ class SoulModeTabState extends ConsumerState<SoulModeTab>
             const SizedBox(height: 24),
             Row(
               children: [
-                const Icon(Icons.lock_rounded,
+                Icon(Icons.lock_rounded,
                     size: 20, color: AppTheme.accentPurple),
                 const SizedBox(width: 8),
                 Expanded(
@@ -749,7 +750,7 @@ class SoulModeTabState extends ConsumerState<SoulModeTab>
               color: AppTheme.accentPurple.withValues(alpha: 0.12),
               shape: BoxShape.circle,
             ),
-            child: const Icon(Icons.lock_open_rounded,
+            child: Icon(Icons.lock_open_rounded,
                 color: AppTheme.accentPurple, size: 48),
           ),
           const SizedBox(height: 20),
@@ -888,19 +889,13 @@ class _InterestChip extends StatelessWidget {
   }
 }
 
-// ─── Match % helper ────────────────────────────────────────────────────────────
+// ─── Match % & Quote helpers ──────────────────────────────────────────────────
+
+final _soulTabEngine = HeartQueueEngine();
 
 int _matchPercent(UserModel me, UserModel other) {
-  final mySet = me.interests.toSet();
-  final theirSet = other.interests.toSet();
-  final shared = mySet.intersection(theirSet).length;
-  final total = (mySet.union(theirSet).length).clamp(1, 999);
-  final base = 55 + (other.id.hashCode.abs() % 25);
-  final bonus = ((shared / total) * 30).round();
-  return (base + bonus).clamp(55, 99);
+  return _soulTabEngine.scoreProfile(currentUser: me, candidate: other).displayScore;
 }
-
-// ─── Bio quote helper ─────────────────────────────────────────────────────────
 
 String _quoteText(UserModel u) {
   final bio = u.bio?.trim();

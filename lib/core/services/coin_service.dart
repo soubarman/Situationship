@@ -196,6 +196,41 @@ class CoinService {
 
   // ── Milestone checking ────────────────────────────────────────────────────
 
+  static Future<bool> claimMilestone({
+    required String userId,
+    required CoinMilestone milestone,
+  }) async {
+    try {
+      final snap = await _db.collection('users').doc(userId).get();
+      if (!snap.exists) return false;
+      final data = snap.data()!;
+      final totalEarned = (data['totalEarnedCoins'] ?? 0) as int;
+      final claimed = List<String>.from(data['claimedMilestones'] ?? []);
+
+      if (claimed.contains(milestone.id)) return false;
+      if (totalEarned < milestone.threshold) return false;
+
+      final rewardRef = _db.collection('coin_milestones').doc('${userId}_${milestone.id}');
+      await rewardRef.set({
+        'userId': userId,
+        'milestoneId': milestone.id,
+        'milestoneName': milestone.name,
+        'giftCardValueInr': milestone.giftCardValueInr,
+        'status': 'pending', // → 'issued' once Xoxoday responds
+        'giftCode': null,    // filled by Cloud Function
+        'createdAt': FieldValue.serverTimestamp(),
+      });
+      await _db.collection('users').doc(userId).update({
+        'claimedMilestones': FieldValue.arrayUnion([milestone.id]),
+      });
+      debugPrint('[CoinService] Milestone ${milestone.name} claimed for $userId');
+      return true;
+    } catch (e) {
+      debugPrint('[CoinService.claimMilestone] error: $e');
+      return false;
+    }
+  }
+
   static Future<void> _checkMilestones(String userId) async {
     final snap = await _db.collection('users').doc(userId).get();
     if (!snap.exists) return;
@@ -206,22 +241,7 @@ class CoinService {
     for (final milestone in kFemaleMilestones) {
       if (claimed.contains(milestone.id)) continue;
       if (totalEarned >= milestone.threshold) {
-        // Create unclaimed reward document
-        final rewardRef = _db.collection('coin_milestones').doc('${userId}_${milestone.id}');
-        await rewardRef.set({
-          'userId': userId,
-          'milestoneId': milestone.id,
-          'milestoneName': milestone.name,
-          'giftCardValueInr': milestone.giftCardValueInr,
-          'status': 'pending', // → 'issued' once Xoxoday responds
-          'giftCode': null,    // filled by Cloud Function
-          'createdAt': FieldValue.serverTimestamp(),
-        });
-        // Mark milestone as claimed so it doesn't fire again
-        await _db.collection('users').doc(userId).update({
-          'claimedMilestones': FieldValue.arrayUnion([milestone.id]),
-        });
-        debugPrint('[CoinService] Milestone ${milestone.name} triggered for $userId');
+        await claimMilestone(userId: userId, milestone: milestone);
       }
     }
   }

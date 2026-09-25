@@ -305,7 +305,7 @@ class _QuickPostBoxState extends ConsumerState<QuickPostBox> {
         borderRadius: BorderRadius.circular(28),
         border: Border.all(
           color: _isFocused
-              ? const Color(0xFF8B5CF6).withOpacity(0.5)
+              ? AppTheme.accentPurple.withOpacity(0.5)
               : (isDark
                   ? Colors.white.withOpacity(0.1)
                   : Colors.black.withOpacity(0.06)),
@@ -314,7 +314,7 @@ class _QuickPostBoxState extends ConsumerState<QuickPostBox> {
         boxShadow: [
           BoxShadow(
             color: _isFocused
-                ? const Color(0xFF8B5CF6).withOpacity(0.15)
+                ? AppTheme.accentPurple.withOpacity(0.15)
                 : Colors.black.withOpacity(isDark ? 0.35 : 0.08),
             blurRadius: _isFocused ? 24 : 14,
             offset: const Offset(0, 4),
@@ -337,8 +337,8 @@ class _QuickPostBoxState extends ConsumerState<QuickPostBox> {
                     Container(
                       width: 7,
                       height: 7,
-                      decoration: const BoxDecoration(
-                        color: Color(0xFF10B981),
+                      decoration: BoxDecoration(
+                        color: AppTheme.accentPurple,
                         shape: BoxShape.circle,
                       ),
                     ),
@@ -718,7 +718,7 @@ class _QuickPostBoxState extends ConsumerState<QuickPostBox> {
                 _ToolBtn(
                   icon: Icons.image_rounded,
                   label: 'Photo',
-                  color: const Color(0xFF3B82F6),
+                  color: AppTheme.primaryBlue,
                   onTap: _pickPhoto,
                 ),
                 const SizedBox(width: 8),
@@ -739,14 +739,14 @@ class _QuickPostBoxState extends ConsumerState<QuickPostBox> {
                 _ToolBtn(
                   icon: Icons.calendar_today_rounded,
                   label: 'Plan',
-                  color: const Color(0xFF10B981),
+                  color: AppTheme.accentPurple,
                   onTap: _openPlanDialog,
                 ),
                 const SizedBox(width: 8),
                 _ToolBtn(
                   icon: Icons.mood_rounded,
                   label: 'Mood',
-                  color: const Color(0xFF8B5CF6),
+                  color: AppTheme.accentPurple,
                   onTap: _openMoodPicker,
                 ),
               ],
@@ -765,7 +765,7 @@ class _QuickPostBoxState extends ConsumerState<QuickPostBox> {
                 borderRadius: BorderRadius.circular(18),
                 border: Border.all(
                   color: _isPriority
-                      ? const Color(0xFF8B5CF6).withOpacity(0.5)
+                      ? AppTheme.accentPurple.withOpacity(0.5)
                       : (isDark ? Colors.white.withOpacity(0.06) : Colors.black.withOpacity(0.04)),
                 ),
               ),
@@ -810,8 +810,8 @@ class _QuickPostBoxState extends ConsumerState<QuickPostBox> {
                     scale: 0.85,
                     child: Switch(
                       value: _isPriority,
-                      activeColor: const Color(0xFF8B5CF6),
-                      activeTrackColor: const Color(0xFF8B5CF6).withOpacity(0.4),
+                      activeColor: AppTheme.accentPurple,
+                      activeTrackColor: AppTheme.accentPurple.withOpacity(0.4),
                       inactiveThumbColor: isDark ? Colors.white54 : Colors.grey[400],
                       inactiveTrackColor: isDark ? Colors.white12 : Colors.grey[200],
                       onChanged: (val) {
@@ -964,8 +964,8 @@ class _PostButtonState extends State<_PostButton> {
           decoration: BoxDecoration(
             gradient: widget.isSaving
                 ? null
-                : const LinearGradient(
-                    colors: [Color(0xFF4F75FF), Color(0xFF8B5CF6)],
+                : LinearGradient(
+                    colors: [AppTheme.primaryBlue, AppTheme.accentPurple],
                     begin: Alignment.centerLeft,
                     end: Alignment.centerRight,
                   ),
@@ -975,7 +975,7 @@ class _PostButtonState extends State<_PostButton> {
                 ? []
                 : [
                     BoxShadow(
-                      color: const Color(0xFF4F75FF).withOpacity(0.4),
+                      color: AppTheme.primaryBlue.withOpacity(0.4),
                       blurRadius: 12,
                       offset: const Offset(0, 4),
                     ),

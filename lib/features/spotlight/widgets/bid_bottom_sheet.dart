@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:situationship/core/theme/app_theme.dart';
 import 'package:situationship/core/providers/app_state_provider.dart';
 import '../models/spotlight_model.dart';
@@ -58,7 +59,7 @@ class _BidBottomSheetState extends ConsumerState<BidBottomSheet> {
 
   int _calculateMinBid() {
     if (widget.currentBids.isEmpty) {
-      return widget.session.minStartingBid; // ₹200
+      return widget.session.minStartingBid; // 200 coins
     }
     
     final highestBid = widget.currentBids.first.amount;
@@ -71,7 +72,7 @@ class _BidBottomSheetState extends ConsumerState<BidBottomSheet> {
 
   int _calculateMinToEnter() {
     if (widget.currentBids.length < 20) {
-      return widget.session.minStartingBid; // ₹200
+      return widget.session.minStartingBid; // 200 coins
     }
     
     // If board is full, must beat the 20th rank's bid
@@ -103,11 +104,14 @@ class _BidBottomSheetState extends ConsumerState<BidBottomSheet> {
     }
 
     final minToEnter = _calculateMinToEnter();
+    final currentUser = ref.read(currentUserProvider);
     
     setState(() {
       _bidAmount = amount;
       if (amount < minToEnter) {
-        _errorText = 'Minimum to enter leaderboard is ₹$minToEnter';
+        _errorText = 'Minimum to enter leaderboard is $minToEnter coins';
+      } else if (amount > currentUser.coins) {
+        _errorText = 'Not enough coins (Balance: ${currentUser.coins})';
       } else {
         _errorText = null;
       }
@@ -144,21 +148,21 @@ class _BidBottomSheetState extends ConsumerState<BidBottomSheet> {
   Future<void> _startPaymentFlow() async {
     if (_bidAmount <= 0 || _errorText != null) return;
     
+    final currentUser = ref.read(currentUserProvider);
+    if (currentUser.coins < _bidAmount) {
+      setState(() {
+        _errorText = 'Not enough coins. Need $_bidAmount (Balance: ${currentUser.coins})';
+      });
+      return;
+    }
+
     _focusNode.unfocus();
     setState(() {
       _paymentStep = 'processing';
-      _processingMessage = 'Connecting to secure payment gateway...';
+      _processingMessage = 'Using $_bidAmount coins...';
     });
 
-    // Step 1: Secure gateway connection simulation
-    await Future.delayed(const Duration(milliseconds: 1200));
-    if (!mounted) return;
-    setState(() {
-      _processingMessage = 'Authorizing transaction of ₹$_bidAmount...';
-    });
-
-    // Step 2: Payment confirmation/success simulation
-    await Future.delayed(const Duration(milliseconds: 1200));
+    await Future.delayed(const Duration(milliseconds: 600));
     if (!mounted) return;
     setState(() {
       _processingMessage = 'Securing Spotlight Position...';
@@ -201,7 +205,7 @@ class _BidBottomSheetState extends ConsumerState<BidBottomSheet> {
       if (!mounted) return;
       setState(() {
         _paymentStep = 'input';
-        _errorText = 'Payment failed. Please try again.';
+        _errorText = e.toString().replaceAll('Exception: ', '');
       });
     }
   }
@@ -276,7 +280,7 @@ class _BidBottomSheetState extends ConsumerState<BidBottomSheet> {
                   color: AppTheme.primaryBlue.withOpacity(0.15),
                   shape: BoxShape.circle,
                 ),
-                child: const Icon(
+                child: Icon(
                   Icons.electric_bolt_rounded,
                   color: AppTheme.primaryBlue,
                   size: 24,
@@ -311,6 +315,63 @@ class _BidBottomSheetState extends ConsumerState<BidBottomSheet> {
           ),
           const SizedBox(height: 24),
 
+          // User Coins Balance Banner
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+            decoration: BoxDecoration(
+              color: isDark ? Colors.white.withOpacity(0.06) : Colors.black.withOpacity(0.03),
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(
+                color: isDark ? Colors.white10 : Colors.black.withOpacity(0.06),
+              ),
+            ),
+            child: Row(
+              children: [
+                const Text('🪙', style: TextStyle(fontSize: 16)),
+                const SizedBox(width: 8),
+                Text(
+                  'Your Balance:',
+                  style: TextStyle(
+                    color: isDark ? Colors.white70 : Colors.black54,
+                    fontSize: 12.5,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const SizedBox(width: 6),
+                Text(
+                  '${ref.watch(currentUserProvider).coins} coins',
+                  style: const TextStyle(
+                    fontSize: 13.5,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                const Spacer(),
+                GestureDetector(
+                  onTap: () {
+                    Navigator.of(context).pop();
+                    context.push('/wallet');
+                  },
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: AppTheme.primaryBlue.withOpacity(0.15),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Text(
+                      '+ Get Coins',
+                      style: TextStyle(
+                        color: AppTheme.primaryBlue,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 16),
+
           // High-level stats panel (Current Rank 1 and Min required to enter)
           Container(
             padding: const EdgeInsets.all(16),
@@ -334,10 +395,10 @@ class _BidBottomSheetState extends ConsumerState<BidBottomSheet> {
                       const SizedBox(height: 4),
                       Text(
                         widget.currentBids.isNotEmpty
-                            ? '₹${widget.currentBids.first.amount}'
+                            ? '🪙 ${widget.currentBids.first.amount}'
                             : 'None',
                         style: TextStyle(
-                          fontSize: 20,
+                          fontSize: 18,
                           fontWeight: FontWeight.bold,
                           color: widget.currentBids.isNotEmpty
                               ? const Color(0xFFFFD700)
@@ -363,9 +424,9 @@ class _BidBottomSheetState extends ConsumerState<BidBottomSheet> {
                       ),
                       const SizedBox(height: 4),
                       Text(
-                        '₹$minToEnter',
-                        style: const TextStyle(
-                          fontSize: 20,
+                        '🪙 $minToEnter',
+                        style: TextStyle(
+                          fontSize: 18,
                           fontWeight: FontWeight.bold,
                           color: AppTheme.primaryBlue,
                         ),
@@ -394,13 +455,13 @@ class _BidBottomSheetState extends ConsumerState<BidBottomSheet> {
                   color: Colors.white,
                 ),
                 decoration: InputDecoration(
-                  prefixText: '₹ ',
+                  prefixText: '🪙 ',
                   prefixStyle: TextStyle(
-                    fontSize: 28,
+                    fontSize: 22,
                     fontWeight: FontWeight.w900,
                     color: isDark ? Colors.white70 : Colors.black87,
                   ),
-                  hintText: '0',
+                  hintText: 'Coins',
                   errorText: _errorText,
                   errorStyle: const TextStyle(color: AppTheme.error),
                   contentPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
@@ -455,7 +516,7 @@ class _BidBottomSheetState extends ConsumerState<BidBottomSheet> {
             child: Row(
               children: [
                 _PresetChip(
-                  label: 'Min to Enter (₹$minToEnter)',
+                  label: 'Min to Enter ($minToEnter coins)',
                   onTap: () {
                     _amountController.text = minToEnter.toString();
                   },
@@ -463,7 +524,7 @@ class _BidBottomSheetState extends ConsumerState<BidBottomSheet> {
                 ),
                 const SizedBox(width: 8),
                 _PresetChip(
-                  label: 'Rank #1 (₹$minToBeatRank1)',
+                  label: 'Rank #1 ($minToBeatRank1 coins)',
                   onTap: () {
                     _amountController.text = minToBeatRank1.toString();
                   },
@@ -471,17 +532,17 @@ class _BidBottomSheetState extends ConsumerState<BidBottomSheet> {
                 ),
                 const SizedBox(width: 8),
                 _PresetChip(
-                  label: '+₹100',
+                  label: '+100',
                   onTap: () => _adjustAmount(100),
                 ),
                 const SizedBox(width: 8),
                 _PresetChip(
-                  label: '+₹500',
+                  label: '+500',
                   onTap: () => _adjustAmount(500),
                 ),
                 const SizedBox(width: 8),
                 _PresetChip(
-                  label: '+₹1,000',
+                  label: '+1,000',
                   onTap: () => _adjustAmount(1000),
                 ),
               ],
@@ -514,8 +575,8 @@ class _BidBottomSheetState extends ConsumerState<BidBottomSheet> {
                 alignment: Alignment.center,
                 child: Text(
                   _estimatedRank <= 20
-                      ? 'Secure Rank #$_estimatedRank (Pay ₹$_bidAmount)'
-                      : 'Place Bid (₹$_bidAmount)',
+                      ? 'Secure Rank #$_estimatedRank (Use $_bidAmount coins)'
+                      : 'Place Bid ($_bidAmount coins)',
                   style: const TextStyle(
                     color: Colors.white,
                     fontWeight: FontWeight.bold,
@@ -537,7 +598,7 @@ class _BidBottomSheetState extends ConsumerState<BidBottomSheet> {
         mainAxisSize: MainAxisSize.min,
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          const SizedBox(
+          SizedBox(
             width: 72,
             height: 72,
             child: CircularProgressIndicator(
@@ -547,7 +608,7 @@ class _BidBottomSheetState extends ConsumerState<BidBottomSheet> {
           ),
           const SizedBox(height: 32),
           Text(
-            'Secure Mock Payment',
+            'Placing Spotlight Bid',
             style: Theme.of(context).textTheme.titleLarge?.copyWith(
                   fontWeight: FontWeight.bold,
                 ),
@@ -569,10 +630,10 @@ class _BidBottomSheetState extends ConsumerState<BidBottomSheet> {
           Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              const Icon(Icons.security_rounded, color: AppTheme.success, size: 16),
+              const Text('🪙', style: TextStyle(fontSize: 14)),
               const SizedBox(width: 6),
               Text(
-                '256-bit SSL encrypted simulation',
+                'Deducting coins from your wallet balance',
                 style: TextStyle(
                   color: isDark ? Colors.white30 : AppTheme.textTertiary,
                   fontSize: 11,
@@ -601,7 +662,7 @@ class _BidBottomSheetState extends ConsumerState<BidBottomSheet> {
             child: Container(
               width: 96,
               height: 96,
-              decoration: const BoxDecoration(
+              decoration: BoxDecoration(
                 color: AppTheme.success,
                 shape: BoxShape.circle,
                 boxShadow: [
@@ -621,7 +682,7 @@ class _BidBottomSheetState extends ConsumerState<BidBottomSheet> {
           ),
           const SizedBox(height: 32),
           const Text(
-            'Payment Successful!',
+            'Spotlight Bid Active!',
             style: TextStyle(
               fontSize: 24,
               fontWeight: FontWeight.bold,
@@ -630,7 +691,7 @@ class _BidBottomSheetState extends ConsumerState<BidBottomSheet> {
           ),
           const SizedBox(height: 12),
           Text(
-            'Your bid of ₹$_bidAmount is active.\nEstimated Spotlight Rank: #$_estimatedRank',
+            'Your bid of 🪙 $_bidAmount coins is active.\nEstimated Spotlight Rank: #$_estimatedRank',
             textAlign: TextAlign.center,
             style: TextStyle(
               color: isDark ? Colors.white70 : AppTheme.textSecondary,
@@ -645,7 +706,7 @@ class _BidBottomSheetState extends ConsumerState<BidBottomSheet> {
               color: AppTheme.primaryBlue.withOpacity(0.15),
               borderRadius: BorderRadius.circular(12),
             ),
-            child: const Text(
+            child: Text(
               '🎉 YOU ARE NOW IN THE SPOTLIGHT! 🎉',
               style: TextStyle(
                 color: AppTheme.primaryBlue,

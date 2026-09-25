@@ -308,7 +308,7 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
       children: [
         TextField(
           controller: _nameController,
-          decoration: const InputDecoration(
+          decoration: InputDecoration(
             hintText: 'Full name',
             prefixIcon: Icon(Icons.person_outline_rounded, color: AppTheme.primaryBlue, size: 20),
           ),
@@ -317,7 +317,7 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
         TextField(
           controller: _emailController,
           keyboardType: TextInputType.emailAddress,
-          decoration: const InputDecoration(
+          decoration: InputDecoration(
             hintText: 'Email address',
             prefixIcon: Icon(Icons.email_outlined, color: AppTheme.primaryBlue, size: 20),
           ),
@@ -328,7 +328,7 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
           obscureText: _obscurePassword,
           decoration: InputDecoration(
             hintText: 'Password (min. 6 chars)',
-            prefixIcon: const Icon(Icons.lock_outline_rounded, color: AppTheme.primaryBlue, size: 20),
+            prefixIcon: Icon(Icons.lock_outline_rounded, color: AppTheme.primaryBlue, size: 20),
             suffixIcon: IconButton(
               icon: Icon(
                 _obscurePassword ? Icons.visibility_off_outlined : Icons.visibility_outlined,
@@ -415,7 +415,7 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
           const SizedBox(height: 12),
           TextField(
             controller: _locationController,
-            decoration: const InputDecoration(
+            decoration: InputDecoration(
               hintText: 'City, Country',
               prefixIcon: Icon(Icons.location_on_outlined, color: AppTheme.primaryBlue, size: 20),
             ),
@@ -426,7 +426,7 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
           TextField(
             controller: _phoneController,
             keyboardType: TextInputType.phone,
-            decoration: const InputDecoration(
+            decoration: InputDecoration(
               hintText: '+1 234 567 8900',
               prefixIcon: Icon(Icons.phone_outlined, color: AppTheme.primaryBlue, size: 20),
             ),

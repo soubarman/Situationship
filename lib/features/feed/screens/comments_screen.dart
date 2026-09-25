@@ -1,12 +1,16 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/theme/app_palette.dart';
 import '../../../core/models/comment_model.dart';
 import '../../../core/models/user_model.dart';
 import '../../../core/providers/app_state_provider.dart';
 import '../../../core/widgets/full_screen_image_viewer.dart';
+import '../../../shared/widgets/profile_choice_sheet.dart';
 import 'package:intl/intl.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 
 class CommentsSheet extends ConsumerStatefulWidget {
   final String postId;
@@ -25,11 +29,27 @@ class CommentsSheet extends ConsumerStatefulWidget {
 class _CommentsSheetState extends ConsumerState<CommentsSheet> {
   final _commentController = TextEditingController();
   final _scrollController = ScrollController();
+  final _focusNode = FocusNode();
+  bool _hasText = false;
+
+  static const List<String> _quickEmojis = ['🔥', '❤️', '👏', '😂', '😍', '🙌', '💀', '✨'];
+
+  @override
+  void initState() {
+    super.initState();
+    _commentController.addListener(() {
+      final has = _commentController.text.trim().isNotEmpty;
+      if (has != _hasText) {
+        setState(() => _hasText = has);
+      }
+    });
+  }
 
   @override
   void dispose() {
     _commentController.dispose();
     _scrollController.dispose();
+    _focusNode.dispose();
     super.dispose();
   }
 
@@ -48,6 +68,7 @@ class _CommentsSheetState extends ConsumerState<CommentsSheet> {
       createdAt: DateTime.now(),
     );
 
+    HapticFeedback.lightImpact();
     ref.read(commentsProvider(widget.postId).notifier).addComment(comment);
     ref.read(postsProvider.notifier).incrementCommentCount(widget.postId);
     _commentController.clear();
@@ -67,6 +88,7 @@ class _CommentsSheetState extends ConsumerState<CommentsSheet> {
       createdAt: DateTime.now(),
     );
 
+    HapticFeedback.mediumImpact();
     ref.read(commentsProvider(widget.postId).notifier).addComment(comment);
     ref.read(postsProvider.notifier).incrementCommentCount(widget.postId);
 
@@ -74,12 +96,12 @@ class _CommentsSheetState extends ConsumerState<CommentsSheet> {
   }
 
   void _scrollToBottom() {
-    Future.delayed(const Duration(milliseconds: 100), () {
+    Future.delayed(const Duration(milliseconds: 120), () {
       if (_scrollController.hasClients) {
         _scrollController.animateTo(
           _scrollController.position.maxScrollExtent,
           duration: const Duration(milliseconds: 300),
-          curve: Curves.easeOut,
+          curve: Curves.easeOutCubic,
         );
       }
     });
@@ -102,82 +124,173 @@ class _CommentsSheetState extends ConsumerState<CommentsSheet> {
     );
   }
 
+  void _onQuickEmoji(String emoji) {
+    HapticFeedback.lightImpact();
+    final text = _commentController.text;
+    _commentController.text = text + emoji;
+    _commentController.selection = TextSelection.fromPosition(
+      TextPosition(offset: _commentController.text.length),
+    );
+    _focusNode.requestFocus();
+  }
+
+  void _onStarterChip(String prompt) {
+    HapticFeedback.lightImpact();
+    _commentController.text = prompt;
+    _commentController.selection = TextSelection.fromPosition(
+      TextPosition(offset: _commentController.text.length),
+    );
+    _focusNode.requestFocus();
+  }
+
+  void _onReplyTo(String userName) {
+    HapticFeedback.lightImpact();
+    _commentController.text = '@$userName ';
+    _commentController.selection = TextSelection.fromPosition(
+      TextPosition(offset: _commentController.text.length),
+    );
+    _focusNode.requestFocus();
+  }
+
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final palette = ref.watch(appPaletteProvider);
     final comments = ref.watch(commentsProvider(widget.postId));
     final currentUser = ref.watch(currentUserProvider);
 
     return Container(
-      height: MediaQuery.of(context).size.height * 0.78,
+      height: MediaQuery.of(context).size.height * 0.82,
       decoration: BoxDecoration(
-        color: isDark ? AppTheme.darkSurface : Colors.white,
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+        color: isDark ? const Color(0xFF13101E) : Colors.white,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(32)),
+        border: Border.all(
+          color: isDark ? palette.primary.withOpacity(0.20) : const Color(0xFFEAE6F4),
+          width: 1.2,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.4),
+            blurRadius: 32,
+            offset: const Offset(0, -6),
+          ),
+        ],
       ),
       child: Column(
         children: [
           // Drag Handle
           Container(
             margin: const EdgeInsets.only(top: 12, bottom: 8),
-            width: 40,
-            height: 4,
+            width: 38,
+            height: 4.5,
             decoration: BoxDecoration(
-              color: Colors.grey.withOpacity(0.3),
-              borderRadius: BorderRadius.circular(2),
+              color: isDark ? Colors.white24 : Colors.black12,
+              borderRadius: BorderRadius.circular(3),
             ),
           ),
+          // Top Header Bar
           Padding(
-            padding: const EdgeInsets.fromLTRB(20, 4, 20, 12),
+            padding: const EdgeInsets.fromLTRB(20, 6, 12, 12),
             child: Row(
               children: [
-                const Text('Comments', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
-                const Spacer(),
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  padding: const EdgeInsets.all(7.5),
                   decoration: BoxDecoration(
-                    color: AppTheme.primaryBlue.withOpacity(0.12),
-                    borderRadius: BorderRadius.circular(12),
+                    color: palette.primary.withOpacity(0.14),
+                    shape: BoxShape.circle,
                   ),
-                  child: Text(
-                    '${comments.length}',
-                    style: const TextStyle(
-                      color: AppTheme.primaryBlue,
-                      fontWeight: FontWeight.w800,
-                      fontSize: 14,
+                  child: Icon(
+                    Icons.chat_bubble_rounded,
+                    color: palette.primary,
+                    size: 17,
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Text(
+                          'Comments',
+                          style: TextStyle(
+                            fontSize: 17,
+                            fontWeight: FontWeight.w800,
+                            color: isDark ? Colors.white : const Color(0xFF131127),
+                            letterSpacing: -0.2,
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2.5),
+                          decoration: BoxDecoration(
+                            color: palette.primary.withOpacity(0.12),
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: Text(
+                            '${comments.length}',
+                            style: TextStyle(
+                              color: palette.primary,
+                              fontWeight: FontWeight.w800,
+                              fontSize: 12,
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
+                    if (widget.postUserName.isNotEmpty) ...[
+                      const SizedBox(height: 2),
+                      Text(
+                        'Replying to @${widget.postUserName}',
+                        style: TextStyle(
+                          fontSize: 11.5,
+                          color: isDark ? const Color(0xFF8E8AA7) : Colors.black45,
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+                const Spacer(),
+                IconButton(
+                  onPressed: () => Navigator.pop(context),
+                  icon: Icon(
+                    Icons.close_rounded,
+                    color: isDark ? Colors.white60 : Colors.black45,
+                    size: 22,
                   ),
+                  splashRadius: 20,
                 ),
               ],
             ),
           ),
-          const Divider(height: 1),
+          Divider(
+            height: 1,
+            color: isDark ? Colors.white.withOpacity(0.08) : Colors.black.withOpacity(0.06),
+          ),
+          // Comments Content / Empty State
           Expanded(
             child: comments.isEmpty
-                ? Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        const Text('💬', style: TextStyle(fontSize: 40)),
-                        const SizedBox(height: 8),
-                        Text('No comments yet. Be the first to vibe! 🚀',
-                            style: TextStyle(color: AppTheme.textSecondary, fontSize: 13.5)),
-                      ],
-                    ),
-                  )
-                : ListView.builder(
+                ? _buildEmptyState(isDark, palette)
+                : ListView.separated(
                     controller: _scrollController,
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    physics: const BouncingScrollPhysics(),
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                     itemCount: comments.length,
+                    separatorBuilder: (_, __) => const SizedBox(height: 10),
                     itemBuilder: (context, index) {
+                      final comment = comments[index];
                       return _CommentTile(
-                        comment: comments[index],
+                        comment: comment,
+                        postAuthorName: widget.postUserName,
                         currentUserId: currentUser.id,
+                        palette: palette,
                         onLike: () => ref
                             .read(commentsProvider(widget.postId).notifier)
-                            .toggleLike(comments[index].id, currentUser.id),
-                        onDelete: comments[index].userId == currentUser.id
+                            .toggleLike(comment.id, currentUser.id),
+                        onReply: (name) => _onReplyTo(name),
+                        onDelete: comment.userId == currentUser.id
                             ? () {
-                                ref.read(commentsProvider(widget.postId).notifier).deleteComment(comments[index].id);
+                                ref.read(commentsProvider(widget.postId).notifier).deleteComment(comment.id);
                                 ref.read(postsProvider.notifier).decrementCommentCount(widget.postId);
                               }
                             : null,
@@ -185,107 +298,303 @@ class _CommentsSheetState extends ConsumerState<CommentsSheet> {
                     },
                   ),
           ),
-          // Input Bar with GIF & Sticker triggers
-          Container(
-            padding: EdgeInsets.fromLTRB(
-              14,
-              10,
-              14,
-              10 + MediaQuery.of(context).viewInsets.bottom,
-            ),
-            decoration: BoxDecoration(
-              color: isDark ? AppTheme.darkSurface : Colors.white,
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.06),
-                  blurRadius: 12,
-                  offset: const Offset(0, -3),
+          // Modern Input Bar with Quick Emoji & Integrated Media buttons
+          _buildInputBar(isDark, palette, currentUser),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildEmptyState(bool isDark, AppPalette palette) {
+    return Center(
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 72,
+              height: 72,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                gradient: LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [
+                    palette.primary.withOpacity(0.20),
+                    palette.secondary.withOpacity(0.12),
+                  ],
                 ),
+                border: Border.all(
+                  color: palette.primary.withOpacity(0.3),
+                  width: 1.5,
+                ),
+              ),
+              child: Center(
+                child: Icon(
+                  Icons.chat_bubble_outline_rounded,
+                  size: 32,
+                  color: palette.primary,
+                ),
+              ),
+            ),
+            const SizedBox(height: 14),
+            Text(
+              'No vibes yet',
+              style: TextStyle(
+                fontSize: 17,
+                fontWeight: FontWeight.w800,
+                color: isDark ? Colors.white : const Color(0xFF131127),
+              ),
+            ),
+            const SizedBox(height: 5),
+            Text(
+              'Be the first to share your thoughts or kickstart the vibe with @${widget.postUserName}!',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 12.5,
+                color: isDark ? const Color(0xFF9E9AB7) : Colors.black54,
+                height: 1.35,
+              ),
+            ),
+            const SizedBox(height: 18),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              alignment: WrapAlignment.center,
+              children: [
+                _buildStarterPill('🔥 Fire post!', isDark, palette),
+                _buildStarterPill('✨ Total vibe', isDark, palette),
+                _buildStarterPill('🙌 Fully agree', isDark, palette),
+                _buildStarterPill('👀 Tell us more', isDark, palette),
               ],
             ),
-            child: SafeArea(
-              top: false,
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildStarterPill(String text, bool isDark, AppPalette palette) {
+    return GestureDetector(
+      onTap: () => _onStarterChip(text),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6.5),
+        decoration: BoxDecoration(
+          color: isDark ? Colors.white.withOpacity(0.06) : Colors.black.withOpacity(0.04),
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(
+            color: isDark ? palette.primary.withOpacity(0.25) : palette.primary.withOpacity(0.18),
+            width: 0.8,
+          ),
+        ),
+        child: Text(
+          text,
+          style: TextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.w600,
+            color: isDark ? Colors.white : const Color(0xFF1A1035),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildInputBar(bool isDark, AppPalette palette, UserModel currentUser) {
+    return Container(
+      decoration: BoxDecoration(
+        color: isDark ? const Color(0xFF161224) : Colors.white,
+        border: Border(
+          top: BorderSide(
+            color: isDark ? Colors.white10 : Colors.black.withOpacity(0.06),
+            width: 0.8,
+          ),
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(isDark ? 0.35 : 0.05),
+            blurRadius: 18,
+            offset: const Offset(0, -4),
+          ),
+        ],
+      ),
+      child: SafeArea(
+        top: false,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Quick emoji reaction bar
+            Container(
+              height: 38,
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+              child: ListView.separated(
+                scrollDirection: Axis.horizontal,
+                physics: const BouncingScrollPhysics(),
+                itemCount: _quickEmojis.length,
+                separatorBuilder: (_, __) => const SizedBox(width: 8),
+                itemBuilder: (context, index) {
+                  final emoji = _quickEmojis[index];
+                  return GestureDetector(
+                    onTap: () => _onQuickEmoji(emoji),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+                      decoration: BoxDecoration(
+                        color: isDark
+                            ? Colors.white.withOpacity(0.06)
+                            : Colors.black.withOpacity(0.04),
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(
+                          color: isDark ? Colors.white12 : Colors.black.withOpacity(0.06),
+                          width: 0.8,
+                        ),
+                      ),
+                      child: Center(
+                        child: Text(
+                          emoji,
+                          style: const TextStyle(fontSize: 16),
+                        ),
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ),
+            // Text field and actions row
+            Padding(
+              padding: EdgeInsets.fromLTRB(
+                12,
+                4,
+                12,
+                8 + MediaQuery.of(context).viewInsets.bottom,
+              ),
               child: Row(
+                crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
                   CircleAvatar(
                     radius: 17,
-                    backgroundImage: NetworkImage(
-                      currentUser.avatarUrl ?? 'https://ui-avatars.com/api/?name=${Uri.encodeComponent(currentUser.name)}&size=100&background=6ECBF5&color=fff&rounded=true',
-                    ),
+                    backgroundColor: palette.primary,
+                    backgroundImage: (currentUser.avatarUrl != null && currentUser.avatarUrl!.isNotEmpty)
+                        ? CachedNetworkImageProvider(currentUser.avatarUrl!)
+                        : null,
+                    child: (currentUser.avatarUrl == null || currentUser.avatarUrl!.isEmpty)
+                        ? Text(
+                            currentUser.name.isNotEmpty ? currentUser.name[0].toUpperCase() : '?',
+                            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
+                          )
+                        : null,
                   ),
-                  const SizedBox(width: 8),
-                  // Quick GIF picker button
-                  GestureDetector(
-                    onTap: () => _showMediaPicker(0), // 0 = GIFs
+                  const SizedBox(width: 10),
+                  Expanded(
                     child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                       decoration: BoxDecoration(
-                        color: isDark ? Colors.white.withOpacity(0.08) : Colors.black.withOpacity(0.05),
-                        borderRadius: BorderRadius.circular(10),
+                        color: isDark ? const Color(0xFF1E192D) : const Color(0xFFF3F1FA),
+                        borderRadius: BorderRadius.circular(22),
+                        border: Border.all(
+                          color: _focusNode.hasFocus
+                              ? palette.primary.withOpacity(0.55)
+                              : (isDark ? Colors.white12 : Colors.black.withOpacity(0.06)),
+                          width: 1,
+                        ),
                       ),
-                      child: const Row(
-                        mainAxisSize: MainAxisSize.min,
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.center,
                         children: [
-                          Text('🎬', style: TextStyle(fontSize: 16)),
-                          SizedBox(width: 3),
-                          Text('GIF', style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.w900)),
+                          Expanded(
+                            child: TextField(
+                              controller: _commentController,
+                              focusNode: _focusNode,
+                              maxLines: 4,
+                              minLines: 1,
+                              style: TextStyle(
+                                fontSize: 14,
+                                color: isDark ? Colors.white : const Color(0xFF131127),
+                              ),
+                              decoration: InputDecoration(
+                                hintText: widget.postUserName.isNotEmpty
+                                    ? 'Vibe with @${widget.postUserName}...'
+                                    : 'Add a comment...',
+                                hintStyle: TextStyle(
+                                  color: isDark ? const Color(0xFF7E7A97) : Colors.black38,
+                                  fontSize: 13.5,
+                                ),
+                                border: InputBorder.none,
+                                isDense: true,
+                                contentPadding: const EdgeInsets.symmetric(vertical: 8),
+                              ),
+                              onSubmitted: (_) => _submitComment(),
+                            ),
+                          ),
+                          // GIF button
+                          GestureDetector(
+                            onTap: () => _showMediaPicker(0),
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 6.5, vertical: 3),
+                              margin: const EdgeInsets.only(right: 6),
+                              decoration: BoxDecoration(
+                                color: palette.primary.withOpacity(0.14),
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: Text(
+                                'GIF',
+                                style: TextStyle(
+                                  fontSize: 10.5,
+                                  fontWeight: FontWeight.w900,
+                                  color: palette.primary,
+                                  letterSpacing: 0.5,
+                                ),
+                              ),
+                            ),
+                          ),
+                          // Sticker button
+                          GestureDetector(
+                            onTap: () => _showMediaPicker(1),
+                            child: Icon(
+                              Icons.sentiment_satisfied_alt_rounded,
+                              size: 20,
+                              color: isDark ? Colors.white60 : Colors.black45,
+                            ),
+                          ),
                         ],
                       ),
                     ),
                   ),
-                  const SizedBox(width: 6),
-                  // Quick Sticker picker button
-                  GestureDetector(
-                    onTap: () => _showMediaPicker(1), // 1 = Stickers
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                      decoration: BoxDecoration(
-                        color: isDark ? Colors.white.withOpacity(0.08) : Colors.black.withOpacity(0.05),
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      child: const Text('🏷️', style: TextStyle(fontSize: 16)),
-                    ),
-                  ),
                   const SizedBox(width: 8),
-                  Expanded(
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                      decoration: BoxDecoration(
-                        color: isDark ? AppTheme.darkCard : const Color(0xFFF0F4FF),
-                        borderRadius: BorderRadius.circular(24),
-                      ),
-                      child: TextField(
-                        controller: _commentController,
-                        style: const TextStyle(fontSize: 14),
-                        decoration: InputDecoration(
-                          hintText: 'Add a comment...',
-                          hintStyle: TextStyle(color: AppTheme.textTertiary, fontSize: 13.5),
-                          border: InputBorder.none,
-                          isDense: true,
-                          contentPadding: EdgeInsets.zero,
-                        ),
-                        onSubmitted: (_) => _submitComment(),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
+                  // Send button
                   GestureDetector(
                     onTap: _submitComment,
-                    child: Container(
-                      width: 36,
-                      height: 36,
-                      decoration: const BoxDecoration(
-                        gradient: AppTheme.primaryGradient,
+                    child: AnimatedContainer(
+                      duration: const Duration(milliseconds: 200),
+                      width: 38,
+                      height: 38,
+                      decoration: BoxDecoration(
+                        gradient: _hasText ? palette.primaryGradient : null,
+                        color: _hasText
+                            ? null
+                            : (isDark ? Colors.white10 : Colors.black.withOpacity(0.06)),
                         shape: BoxShape.circle,
+                        boxShadow: _hasText
+                            ? [
+                                BoxShadow(
+                                  color: palette.primary.withOpacity(0.4),
+                                  blurRadius: 8,
+                                  offset: const Offset(0, 2),
+                                ),
+                              ]
+                            : null,
                       ),
-                      child: const Icon(Icons.send_rounded, color: Colors.white, size: 16),
+                      child: Icon(
+                        Icons.arrow_upward_rounded,
+                        color: _hasText ? Colors.white : (isDark ? Colors.white30 : Colors.black26),
+                        size: 20,
+                      ),
                     ),
                   ),
                 ],
               ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -718,20 +1027,75 @@ class _MediaItemTileState extends State<_MediaItemTile> {
 class _CommentTile extends ConsumerWidget {
   final CommentModel comment;
   final String currentUserId;
+  final String postAuthorName;
+  final AppPalette palette;
   final VoidCallback onLike;
+  final ValueChanged<String> onReply;
   final VoidCallback? onDelete;
 
   const _CommentTile({
     required this.comment,
     required this.currentUserId,
+    required this.postAuthorName,
+    required this.palette,
     required this.onLike,
+    required this.onReply,
     this.onDelete,
   });
+
+  String _formatRelativeTime(DateTime dateTime) {
+    final diff = DateTime.now().difference(dateTime);
+    if (diff.inSeconds < 60) return 'Just now';
+    if (diff.inMinutes < 60) return '${diff.inMinutes}m ago';
+    if (diff.inHours < 24) return '${diff.inHours}h ago';
+    if (diff.inDays < 7) return '${diff.inDays}d ago';
+    return DateFormat('MMM d').format(dateTime);
+  }
+
+  Widget _buildTextWithMentions(String text, bool isDark) {
+    final words = text.split(' ');
+    final spans = <InlineSpan>[];
+
+    for (int i = 0; i < words.length; i++) {
+      final word = words[i];
+      final isLast = i == words.length - 1;
+      final spacing = isLast ? '' : ' ';
+
+      if (word.startsWith('@') && word.length > 1) {
+        spans.add(
+          TextSpan(
+            text: '$word$spacing',
+            style: TextStyle(
+              color: palette.primary,
+              fontWeight: FontWeight.w700,
+              fontSize: 13.5,
+            ),
+          ),
+        );
+      } else {
+        spans.add(
+          TextSpan(
+            text: '$word$spacing',
+            style: TextStyle(
+              color: isDark ? const Color(0xFFEBE7F5) : const Color(0xFF1E1B2E),
+              fontSize: 13.5,
+              height: 1.35,
+            ),
+          ),
+        );
+      }
+    }
+
+    return RichText(
+      text: TextSpan(children: spans),
+    );
+  }
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final isLiked = comment.likes.contains(currentUserId);
-    final timeStr = DateFormat('MMM d · h:mm a').format(comment.createdAt);
+    final timeStr = _formatRelativeTime(comment.createdAt);
+
     // Live-watch commenter's profile for up-to-date name/avatar.
     final liveAuthor = ref.watch(otherUserProvider(comment.userId));
     final displayName = liveAuthor.asData?.value?.name ?? comment.userName;
@@ -739,61 +1103,117 @@ class _CommentTile extends ConsumerWidget {
         ?? comment.userAvatar
         ?? 'https://ui-avatars.com/api/?name=${Uri.encodeComponent(comment.userName)}&size=100&background=6ECBF5&color=fff&rounded=true';
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final isAuthor = postAuthorName.isNotEmpty &&
+        displayName.trim().toLowerCase() == postAuthorName.trim().toLowerCase();
 
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8),
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: isDark
+            ? Colors.white.withOpacity(0.04)
+            : const Color(0xFFF9F8FC),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: isDark
+              ? Colors.white.withOpacity(0.06)
+              : Colors.black.withOpacity(0.04),
+          width: 0.8,
+        ),
+      ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          CircleAvatar(
-            radius: 18,
-            backgroundImage: NetworkImage(displayAvatar),
+          // User Avatar with click to profile
+          GestureDetector(
+            onTap: () {
+              HapticFeedback.lightImpact();
+              ProfileChoiceSheet.navigateToProfile(context, ref, comment.userId);
+            },
+            child: Container(
+              padding: const EdgeInsets.all(1.5),
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                gradient: isAuthor ? palette.primaryGradient : null,
+                border: !isAuthor
+                    ? Border.all(
+                        color: isDark ? Colors.white24 : Colors.black12,
+                        width: 1,
+                      )
+                    : null,
+              ),
+              child: CircleAvatar(
+                radius: 17,
+                backgroundColor: isDark ? const Color(0xFF251E3D) : const Color(0xFFE8E5F2),
+                backgroundImage: CachedNetworkImageProvider(displayAvatar),
+              ),
+            ),
           ),
           const SizedBox(width: 10),
+          // Comment Content
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                // Header: Name, Author Badge, Time
                 Row(
                   children: [
-                    Text(displayName, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13)),
-                    const SizedBox(width: 6),
-                    Text(timeStr, style: TextStyle(color: AppTheme.textTertiary, fontSize: 11)),
-                    if (onDelete != null) ...[
-                      const SizedBox(width: 8),
-                      GestureDetector(
+                    Flexible(
+                      child: GestureDetector(
                         onTap: () {
-                          showDialog(
-                            context: context,
-                            builder: (context) => AlertDialog(
-                              title: const Text('Delete Comment?'),
-                              content: const Text('Are you sure you want to delete this comment?'),
-                              actions: [
-                                TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
-                                TextButton(
-                                  onPressed: () {
-                                    Navigator.pop(context);
-                                    onDelete!();
-                                  },
-                                  child: const Text('Delete', style: TextStyle(color: Colors.red)),
-                                ),
-                              ],
-                            ),
-                          );
+                          HapticFeedback.lightImpact();
+                          ProfileChoiceSheet.navigateToProfile(context, ref, comment.userId);
                         },
                         child: Text(
-                          'Delete',
+                          displayName,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                           style: TextStyle(
-                            color: AppTheme.error,
-                            fontSize: 11,
-                            fontWeight: FontWeight.w600,
+                            fontWeight: FontWeight.w700,
+                            fontSize: 13,
+                            color: isDark ? Colors.white : const Color(0xFF151226),
                           ),
                         ),
                       ),
+                    ),
+                    if (isAuthor) ...[
+                      const SizedBox(width: 5),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
+                        decoration: BoxDecoration(
+                          color: palette.primary.withOpacity(0.16),
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(Icons.stars_rounded, size: 10, color: palette.primary),
+                            const SizedBox(width: 2.5),
+                            Text(
+                              'Author',
+                              style: TextStyle(
+                                color: palette.primary,
+                                fontSize: 9.5,
+                                fontWeight: FontWeight.w800,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
                     ],
+                    const SizedBox(width: 6),
+                    Text(
+                      '• $timeStr',
+                      style: TextStyle(
+                        color: isDark ? const Color(0xFF7E7998) : Colors.black38,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
                   ],
                 ),
-                const SizedBox(height: 4),
+                const SizedBox(height: 5),
+                // Comment Body: GIF/Sticker or Text
                 comment.text.startsWith('http')
                     ? GestureDetector(
                         onTap: () {
@@ -809,7 +1229,7 @@ class _CommentTile extends ConsumerWidget {
                         },
                         child: Container(
                           margin: const EdgeInsets.only(top: 4),
-                          constraints: const BoxConstraints(maxWidth: 160, maxHeight: 160),
+                          constraints: const BoxConstraints(maxWidth: 180, maxHeight: 180),
                           decoration: BoxDecoration(
                             borderRadius: BorderRadius.circular(16),
                             border: Border.all(
@@ -818,8 +1238,8 @@ class _CommentTile extends ConsumerWidget {
                             ),
                             boxShadow: [
                               BoxShadow(
-                                color: Colors.black.withOpacity(0.08),
-                                blurRadius: 8,
+                                color: Colors.black.withOpacity(0.12),
+                                blurRadius: 10,
                                 offset: const Offset(0, 3),
                               ),
                             ],
@@ -844,7 +1264,7 @@ class _CommentTile extends ConsumerWidget {
                                   },
                                   errorBuilder: (context, err, stack) => const Padding(
                                     padding: EdgeInsets.all(12),
-                                    child: Text('[Sticker/GIF Error]'),
+                                    child: Text('[Media preview error]'),
                                   ),
                                 ),
                               ),
@@ -854,7 +1274,7 @@ class _CommentTile extends ConsumerWidget {
                                 child: Container(
                                   padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                                   decoration: BoxDecoration(
-                                    color: Colors.black.withOpacity(0.65),
+                                    color: Colors.black.withOpacity(0.70),
                                     borderRadius: BorderRadius.circular(6),
                                   ),
                                   child: Text(
@@ -872,26 +1292,100 @@ class _CommentTile extends ConsumerWidget {
                           ),
                         ),
                       )
-                    : Text(comment.text, style: const TextStyle(fontSize: 14, height: 1.4)),
+                    : _buildTextWithMentions(comment.text, isDark),
+                const SizedBox(height: 6),
+                // Actions row: Reply & Delete
+                Row(
+                  children: [
+                    GestureDetector(
+                      onTap: () => onReply(displayName),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                        child: Text(
+                          'Reply',
+                          style: TextStyle(
+                            fontSize: 11.5,
+                            fontWeight: FontWeight.w700,
+                            color: isDark ? const Color(0xFF9E9AB7) : Colors.black54,
+                          ),
+                        ),
+                      ),
+                    ),
+                    if (onDelete != null) ...[
+                      const SizedBox(width: 12),
+                      GestureDetector(
+                        onTap: () {
+                          showDialog(
+                            context: context,
+                            builder: (context) => AlertDialog(
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                              title: const Text('Delete Comment?'),
+                              content: const Text('Are you sure you want to remove this vibe?'),
+                              actions: [
+                                TextButton(
+                                  onPressed: () => Navigator.pop(context),
+                                  child: const Text('Cancel'),
+                                ),
+                                TextButton(
+                                  onPressed: () {
+                                    Navigator.pop(context);
+                                    onDelete!();
+                                  },
+                                  child: const Text('Delete', style: TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold)),
+                                ),
+                              ],
+                            ),
+                          );
+                        },
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                          child: Text(
+                            'Delete',
+                            style: TextStyle(
+                              fontSize: 11.5,
+                              fontWeight: FontWeight.w600,
+                              color: AppTheme.error.withOpacity(0.85),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
               ],
             ),
           ),
+          // Like Action Column
           GestureDetector(
-            onTap: onLike,
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(8, 0, 0, 0),
+            onTap: () {
+              HapticFeedback.lightImpact();
+              onLike();
+            },
+            child: Container(
+              padding: const EdgeInsets.only(left: 6, top: 4),
               child: Column(
+                mainAxisSize: MainAxisSize.min,
                 children: [
-                  Icon(
-                    isLiked ? Icons.favorite_rounded : Icons.favorite_border_rounded,
-                    size: 16,
-                    color: isLiked ? AppTheme.error : AppTheme.textTertiary,
+                  AnimatedScale(
+                    scale: isLiked ? 1.15 : 1.0,
+                    duration: const Duration(milliseconds: 150),
+                    child: Icon(
+                      isLiked ? Icons.favorite_rounded : Icons.favorite_border_rounded,
+                      size: 16.5,
+                      color: isLiked ? const Color(0xFFFF2E63) : (isDark ? Colors.white38 : Colors.black26),
+                    ),
                   ),
-                  if (comment.likes.isNotEmpty)
+                  if (comment.likes.isNotEmpty) ...[
+                    const SizedBox(height: 2),
                     Text(
                       '${comment.likes.length}',
-                      style: TextStyle(fontSize: 11, color: AppTheme.textTertiary),
+                      style: TextStyle(
+                        fontSize: 10.5,
+                        fontWeight: FontWeight.w700,
+                        color: isLiked ? const Color(0xFFFF2E63) : (isDark ? Colors.white54 : Colors.black45),
+                      ),
                     ),
+                  ],
                 ],
               ),
             ),

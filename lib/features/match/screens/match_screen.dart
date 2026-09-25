@@ -168,37 +168,21 @@ class _MatchScreenState extends ConsumerState<MatchScreen>
     double maxAge,
     double maxDistance,
     bool matchIrrespective,
+    String interestedInPreference,
   ) {
-    final excluded = _effectiveExcludedIds;
-    // Also pull session-unliked IDs from provider so undoes are respected
-    final unlikedIds = ref.read(unlikedUserIdsProvider);
-    // dislikedUsers is persisted in Firestore — permanent across sessions
-    final dislikedUsers = currentUser.dislikedUsers.toSet();
-    return all.where((user) {
-      // Already followed / liked — never show again
-      if (currentUser.following.contains(user.id)) return false;
-      // Excluded by algorithm state (skipped, liked, pending, shuffle-pool)
-      if (excluded.contains(user.id)) return false;
-      // Excluded by session exclusion set (persists across builds)
-      if (_sessionExcludedIds.contains(user.id)) return false;
-      // Explicitly unliked this session
-      if (unlikedIds.contains(user.id)) return false;
-      // Permanently disliked (persisted in Firestore)
-      if (dislikedUsers.contains(user.id)) return false;
-      if (user.age < minAge || user.age > maxAge) return false;
-
-      final distance = LocationHelper.getDistanceKm(
-        lat1: _deviceLat,
-        lon1: _deviceLon,
-        loc1: currentUser.location,
-        loc2: user.location,
-        id1: currentUser.id,
-        id2: user.id,
-      );
-
-      if (matchIrrespective) return true;
-      return distance <= maxDistance;
-    }).toList();
+    return _engine.filterEligibleCandidates(
+      currentUser: currentUser,
+      candidates: all,
+      minAge: minAge,
+      maxAge: maxAge,
+      maxDistance: maxDistance,
+      matchIrrespective: matchIrrespective,
+      deviceLat: _deviceLat,
+      deviceLon: _deviceLon,
+      excludedIds: _effectiveExcludedIds,
+      unlikedIds: ref.read(unlikedUserIdsProvider),
+      overrideInterestedIn: interestedInPreference,
+    );
   }
 
   // ──────────────────────────────────────────────────────────────────────────
@@ -434,22 +418,25 @@ class _MatchScreenState extends ConsumerState<MatchScreen>
     final maxAge           = ref.watch(filterMaxAgeProvider);
     final maxDistance      = ref.watch(filterMaxDistanceProvider);
     final matchIrrespective = ref.watch(filterMatchIrrespectiveProvider);
+    final interestedInPref = ref.watch(filterInterestedInProvider);
 
-    // ── Step 1: Basic eligibility filter ───────────────────────────────────────
-    final filtered = _filteredUsers(
-        users, currentUser, minAge, maxAge, maxDistance, matchIrrespective);
-
-    // ── Step 2: HeartQueue™ smart ranking ────────────────────────────────────
-    // Engine scores by: mutual attraction, interests, proximity, age,
-    // profile completeness, vibe affinity (learned), online/verified bonuses.
-    final ranked = _engine.rankedUsers(
+    // ── Stage 1 & 2: HeartQueue™ Hard Filtering & Compatibility Ranking ──────
+    final rankedProfiles = _engine.rankProfiles(
       currentUser: currentUser,
-      candidates: filtered,
+      candidates: users,
       deviceLat: _deviceLat,
       deviceLon: _deviceLon,
+      minAge: minAge,
+      maxAge: maxAge,
+      maxDistance: maxDistance,
+      matchIrrespective: matchIrrespective,
+      excludedIds: _effectiveExcludedIds,
+      unlikedIds: ref.read(unlikedUserIdsProvider),
+      overrideInterestedIn: interestedInPref,
     );
+    final ranked = rankedProfiles.map((sp) => sp.user).toList();
 
-    // ── Step 3: Curate Discover pair (top-scored + contrasting vibe) ───────
+    // ── Stage 3: Curate Discover pair (top-scored + contrasting vibe) ────────
     final curatedPair = _engine.curateDiscoverPair(ranked);
     final discoverList = [
       ...curatedPair,
@@ -489,6 +476,22 @@ class _MatchScreenState extends ConsumerState<MatchScreen>
                               deviceLon: _deviceLon,
                               onLike: _onLike,
                               onSkip: _onSkip,
+                              onOpenFilters: _showFilters,
+                              onExpandRadius: () {
+                                ref.read(filterMatchIrrespectiveProvider.notifier).state = true;
+                                ref.read(filterMaxDistanceProvider.notifier).state = 500;
+                              },
+                              onResetSeen: () {
+                                setState(() {
+                                  _sessionExcludedIds.clear();
+                                  _permanentSkippedIds.clear();
+                                  _shuffleBackPool.clear();
+                                });
+                                ref.read(matchQueueProvider.notifier).reset();
+                              },
+                              onShowEveryone: () {
+                                ref.read(filterInterestedInProvider.notifier).state = 'all';
+                              },
                             ),
                             SoulModeTab(
                               key: _soulModeKey,
@@ -562,20 +565,19 @@ class _MatchScreenState extends ConsumerState<MatchScreen>
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          // Logo + Shield badge (exact match to image)
           Row(
             mainAxisSize: MainAxisSize.min,
             children: [
               ShaderMask(
-                shaderCallback: (bounds) => const LinearGradient(
+                shaderCallback: (bounds) => LinearGradient(
                   colors: [
-                    Color(0xFFA3E635), // Neon lime
-                    Color(0xFFD9F99D), // Light lime
-                    Color(0xFFE9D5FF), // Soft lilac
-                    Color(0xFFE879F9), // Radiant lavender
-                    Color(0xFFD946EF), // Magenta
+                    Colors.white,
+                    Color(0xFFFDE8F0), // Blush white
+                    Color(0xFFFF9EC8), // Light pink
+                    AppTheme.primaryBlue, // Hot pink
+                    AppTheme.accentPurple, // Brand pink
                   ],
-                  stops: [0.0, 0.28, 0.55, 0.82, 1.0],
+                  stops: [0.0, 0.25, 0.55, 0.82, 1.0],
                 ).createShader(bounds),
                 child: const Text(
                   'situationship',
@@ -592,14 +594,14 @@ class _MatchScreenState extends ConsumerState<MatchScreen>
               Container(
                 width: 22,
                 height: 22,
-                decoration: const BoxDecoration(
-                  color: Color(0xFFA3E635),
+                decoration: BoxDecoration(
+                  color: AppTheme.accentPurple,
                   shape: BoxShape.circle,
                 ),
                 child: const Center(
                   child: Icon(
                     Icons.verified_user_rounded,
-                    color: Color(0xFF140D24),
+                    color: Colors.white,
                     size: 13.5,
                   ),
                 ),
@@ -618,28 +620,28 @@ class _MatchScreenState extends ConsumerState<MatchScreen>
                   height: 35,
                   padding: const EdgeInsets.symmetric(horizontal: 10),
                   decoration: BoxDecoration(
-                    color: const Color(0xFF182613),
+                    color: AppTheme.accentPurple.withValues(alpha: 0.12),
                     borderRadius: BorderRadius.circular(18),
                     border: Border.all(
-                      color: const Color(0xFFA3E635),
+                      color: AppTheme.accentPurple,
                       width: 1.4,
                     ),
                   ),
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      const Icon(
+                      Icon(
                         Icons.local_fire_department_rounded,
-                        color: Color(0xFFA3E635),
+                        color: AppTheme.accentPurple,
                         size: 16,
                       ),
                       const SizedBox(width: 4),
                       Text(
                         '$displayStreak',
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontSize: 13,
                           fontWeight: FontWeight.w900,
-                          color: Color(0xFFA3E635),
+                          color: AppTheme.accentPurple,
                         ),
                       ),
                     ],
@@ -655,13 +657,20 @@ class _MatchScreenState extends ConsumerState<MatchScreen>
               ),
               const SizedBox(width: 7),
 
+              // Filter button 🎛️
+              _HeaderCircleButton(
+                icon: Icons.tune_rounded,
+                onTap: _showFilters,
+              ),
+              const SizedBox(width: 7),
+
               // Bell with hot pink badge (count = 3)
               Stack(
                 clipBehavior: Clip.none,
                 children: [
                   _HeaderCircleButton(
                     icon: Icons.notifications_none_rounded,
-                    onTap: _showFilters,
+                    onTap: () => context.push('/notifications'),
                   ),
                   Positioned(
                     top: -2,
@@ -670,12 +679,12 @@ class _MatchScreenState extends ConsumerState<MatchScreen>
                       width: 16,
                       height: 16,
                       decoration: BoxDecoration(
-                        color: const Color(0xFFFF2D87),
+                        color: AppTheme.primaryBlue,
                         shape: BoxShape.circle,
                         border: Border.all(color: const Color(0xFF0B0715), width: 1.5),
                         boxShadow: [
                           BoxShadow(
-                            color: const Color(0xFFFF2D87).withValues(alpha: 0.6),
+                            color: AppTheme.primaryBlue.withValues(alpha: 0.6),
                             blurRadius: 6,
                           ),
                         ],
@@ -749,8 +758,8 @@ class _MatchScreenState extends ConsumerState<MatchScreen>
         padding: const EdgeInsets.symmetric(vertical: 6.5),
         decoration: BoxDecoration(
           gradient: active
-              ? const LinearGradient(
-                  colors: [Color(0xFFEC4899), Color(0xFF8B5CF6)],
+              ? LinearGradient(
+                  colors: [AppTheme.primaryBlue, AppTheme.accentPurple],
                 )
               : null,
           color: active ? null : Colors.transparent,
@@ -790,8 +799,8 @@ class _MatchScreenState extends ConsumerState<MatchScreen>
         padding: const EdgeInsets.symmetric(vertical: 6.5),
         decoration: BoxDecoration(
           gradient: active
-              ? const LinearGradient(
-                  colors: [Color(0xFFEC4899), Color(0xFF8B5CF6)],
+              ? LinearGradient(
+                  colors: [AppTheme.primaryBlue, AppTheme.accentPurple],
                 )
               : null,
           color: active ? null : Colors.transparent,
@@ -821,7 +830,7 @@ class _MatchScreenState extends ConsumerState<MatchScreen>
                   decoration: BoxDecoration(
                     color: active
                         ? Colors.white.withValues(alpha: 0.25)
-                        : const Color(0xFF8B5CF6).withValues(alpha: 0.30),
+                        : AppTheme.accentPurple.withValues(alpha: 0.25),
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: Text(
@@ -894,6 +903,7 @@ class _MatchScreenState extends ConsumerState<MatchScreen>
     final currentMinAge = ref.read(filterMinAgeProvider);
     final currentMaxAge = ref.read(filterMaxAgeProvider);
     final currentMaxDistance = ref.read(filterMaxDistanceProvider);
+    final currentInterestedIn = ref.read(filterInterestedInProvider);
 
     showModalBottomSheet(
       context: context,
@@ -904,6 +914,7 @@ class _MatchScreenState extends ConsumerState<MatchScreen>
         double minAge = currentMinAge;
         double maxAge = currentMaxAge;
         double maxDistance = currentMaxDistance;
+        String selectedInterestedIn = currentInterestedIn;
 
         return StatefulBuilder(
           builder: (context, setModalState) {
@@ -935,6 +946,45 @@ class _MatchScreenState extends ConsumerState<MatchScreen>
                       color: isDark ? Colors.white : AppTheme.textPrimary,
                     ),
                   ),
+                  const SizedBox(height: 16),
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: Text(
+                      'Show Me (Dating Preference)',
+                      style: TextStyle(
+                        fontWeight: FontWeight.w600,
+                        color: isDark ? Colors.white70 : AppTheme.textSecondary,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      _buildGenderChoiceChip(
+                        label: 'Women 🌸',
+                        value: 'female',
+                        current: selectedInterestedIn,
+                        onTap: () => setModalState(() => selectedInterestedIn = 'female'),
+                        isDark: isDark,
+                      ),
+                      const SizedBox(width: 8),
+                      _buildGenderChoiceChip(
+                        label: 'Men ⚡',
+                        value: 'male',
+                        current: selectedInterestedIn,
+                        onTap: () => setModalState(() => selectedInterestedIn = 'male'),
+                        isDark: isDark,
+                      ),
+                      const SizedBox(width: 8),
+                      _buildGenderChoiceChip(
+                        label: 'Everyone ✨',
+                        value: 'all',
+                        current: selectedInterestedIn,
+                        onTap: () => setModalState(() => selectedInterestedIn = 'all'),
+                        isDark: isDark,
+                      ),
+                    ],
+                  ),
                   const SizedBox(height: 20),
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -944,7 +994,7 @@ class _MatchScreenState extends ConsumerState<MatchScreen>
                               fontWeight: FontWeight.w600,
                               color: isDark ? Colors.white70 : AppTheme.textSecondary)),
                       Text('${minAge.toInt()} - ${maxAge.toInt()}',
-                          style: const TextStyle(
+                          style: TextStyle(
                               color: AppTheme.primaryBlue,
                               fontWeight: FontWeight.w700)),
                     ],
@@ -973,7 +1023,7 @@ class _MatchScreenState extends ConsumerState<MatchScreen>
                               fontWeight: FontWeight.w600,
                               color: isDark ? Colors.white70 : AppTheme.textSecondary)),
                       Text('${maxDistance.toInt()} km',
-                          style: const TextStyle(
+                          style: TextStyle(
                               color: AppTheme.primaryBlue,
                               fontWeight: FontWeight.w700)),
                     ],
@@ -996,16 +1046,11 @@ class _MatchScreenState extends ConsumerState<MatchScreen>
                       Expanded(
                         child: OutlinedButton(
                           onPressed: () {
-                            ref.read(filterMinAgeProvider.notifier).state =
-                                18;
-                            ref.read(filterMaxAgeProvider.notifier).state =
-                                35;
-                            ref
-                                .read(filterMaxDistanceProvider.notifier)
-                                .state = 50;
-                            ref
-                                .read(matchQueueProvider.notifier)
-                                .applyFilters(
+                            ref.read(filterMinAgeProvider.notifier).state = 18;
+                            ref.read(filterMaxAgeProvider.notifier).state = 35;
+                            ref.read(filterMaxDistanceProvider.notifier).state = 50;
+                            ref.read(filterInterestedInProvider.notifier).state = 'auto';
+                            ref.read(matchQueueProvider.notifier).applyFilters(
                                   maxDistance: 50,
                                   minAge: 18,
                                   maxAge: 35,
@@ -1016,8 +1061,7 @@ class _MatchScreenState extends ConsumerState<MatchScreen>
                             foregroundColor: isDark ? Colors.white70 : AppTheme.textSecondary,
                             side: BorderSide(
                                 color: isDark ? Colors.white24 : Colors.black12, width: 1),
-                            padding:
-                                const EdgeInsets.symmetric(vertical: 14),
+                            padding: const EdgeInsets.symmetric(vertical: 14),
                             shape: RoundedRectangleBorder(
                                 borderRadius: BorderRadius.circular(16)),
                           ),
@@ -1029,16 +1073,22 @@ class _MatchScreenState extends ConsumerState<MatchScreen>
                         flex: 2,
                         child: ElevatedButton(
                           onPressed: () {
-                            ref.read(filterMinAgeProvider.notifier).state =
-                                minAge;
-                            ref.read(filterMaxAgeProvider.notifier).state =
-                                maxAge;
-                            ref
-                                .read(filterMaxDistanceProvider.notifier)
-                                .state = maxDistance;
-                            ref
-                                .read(matchQueueProvider.notifier)
-                                .applyFilters(
+                            ref.read(filterMinAgeProvider.notifier).state = minAge;
+                            ref.read(filterMaxAgeProvider.notifier).state = maxAge;
+                            ref.read(filterMaxDistanceProvider.notifier).state = maxDistance;
+                            ref.read(filterInterestedInProvider.notifier).state = selectedInterestedIn;
+                            
+                            // Persist to user profile if logged in
+                            final curUser = ref.read(currentUserProvider);
+                            if (curUser.id.isNotEmpty && selectedInterestedIn != 'auto') {
+                              FirebaseFirestore.instance.collection('users').doc(curUser.id).update({
+                                'interestedIn': selectedInterestedIn == 'all'
+                                    ? ['male', 'female', 'other']
+                                    : [selectedInterestedIn],
+                              }).catchError((_) {});
+                            }
+
+                            ref.read(matchQueueProvider.notifier).applyFilters(
                                   maxDistance: maxDistance,
                                   minAge: minAge,
                                   maxAge: maxAge,
@@ -1047,8 +1097,7 @@ class _MatchScreenState extends ConsumerState<MatchScreen>
                           },
                           style: ElevatedButton.styleFrom(
                             backgroundColor: AppTheme.primaryBlue,
-                            padding:
-                                const EdgeInsets.symmetric(vertical: 14),
+                            padding: const EdgeInsets.symmetric(vertical: 14),
                             shape: RoundedRectangleBorder(
                                 borderRadius: BorderRadius.circular(16)),
                           ),
@@ -1070,6 +1119,46 @@ class _MatchScreenState extends ConsumerState<MatchScreen>
           },
         );
       },
+    );
+  }
+
+  Widget _buildGenderChoiceChip({
+    required String label,
+    required String value,
+    required String current,
+    required VoidCallback onTap,
+    required bool isDark,
+  }) {
+    final isSelected = current == value;
+    return Expanded(
+      child: GestureDetector(
+        onTap: onTap,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 200),
+          padding: const EdgeInsets.symmetric(vertical: 10),
+          decoration: BoxDecoration(
+            color: isSelected
+                ? AppTheme.primaryBlue.withOpacity(isDark ? 0.35 : 0.15)
+                : (isDark ? Colors.white.withOpacity(0.06) : Colors.black.withOpacity(0.04)),
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(
+              color: isSelected ? AppTheme.primaryBlue : Colors.transparent,
+              width: 1.5,
+            ),
+          ),
+          alignment: Alignment.center,
+          child: Text(
+            label,
+            style: TextStyle(
+              fontSize: 12.5,
+              fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+              color: isSelected
+                  ? AppTheme.primaryBlue
+                  : (isDark ? Colors.white70 : AppTheme.textSecondary),
+            ),
+          ),
+        ),
+      ),
     );
   }
 }
@@ -1119,13 +1208,13 @@ class _SparksPillState extends State<_SparksPill>
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
         decoration: BoxDecoration(
-          color: const Color(0xFF14532D),
+          color: AppTheme.accentPurple.withValues(alpha: 0.12),
           borderRadius: BorderRadius.circular(20),
           border: Border.all(
-              color: const Color(0xFF22C55E).withValues(alpha: 0.5), width: 1.2),
+              color: AppTheme.accentPurple.withValues(alpha: 0.5), width: 1.2),
           boxShadow: [
             BoxShadow(
-                color: const Color(0xFF22C55E).withValues(alpha: 0.25),
+                color: AppTheme.accentPurple.withValues(alpha: 0.25),
                 blurRadius: 10)
           ],
         ),
@@ -1134,10 +1223,10 @@ class _SparksPillState extends State<_SparksPill>
           const SizedBox(width: 5),
           Text(
             '${widget.count}',
-            style: const TextStyle(
+            style: TextStyle(
               fontSize: 13,
               fontWeight: FontWeight.w900,
-              color: Color(0xFF4ADE80),
+              color: AppTheme.accentPurple,
             ),
           ),
         ]),
@@ -1183,14 +1272,14 @@ class _HeaderCircleButtonState extends State<_HeaderCircleButton> {
                 : const Color(0xFF161026),
             border: Border.all(
               color: _isHovered
-                  ? const Color(0xFF8B5CF6).withValues(alpha: 0.6)
+                  ? AppTheme.accentPurple.withValues(alpha: 0.7)
                   : Colors.white.withValues(alpha: 0.16),
               width: 1.0,
             ),
             boxShadow: _isHovered
                 ? [
                     BoxShadow(
-                      color: const Color(0xFF8B5CF6).withValues(alpha: 0.3),
+                      color: AppTheme.accentPurple.withValues(alpha: 0.35),
                       blurRadius: 10,
                     ),
                   ]
@@ -1243,7 +1332,7 @@ class _UndoLikeBar extends StatelessWidget {
           ),
           boxShadow: [
             BoxShadow(
-              color: const Color(0xFF8B5CF6).withValues(alpha: 0.25),
+              color: AppTheme.accentPurple.withValues(alpha: 0.25),
               blurRadius: 22,
               offset: const Offset(0, 6),
             ),
@@ -1262,10 +1351,10 @@ class _UndoLikeBar extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  const Text(
+                  Text(
                     'Liked!',
                     style: TextStyle(
-                      color: Color(0xFF8B5CF6),
+                      color: AppTheme.accentPurple,
                       fontWeight: FontWeight.w900,
                       fontSize: 12,
                       letterSpacing: 0.3,
@@ -1313,8 +1402,8 @@ class _UndoLikeBar extends StatelessWidget {
                     width: 32,
                     height: 32,
                     decoration: BoxDecoration(
-                      gradient: const LinearGradient(
-                        colors: [Color(0xFF4F75FF), Color(0xFF8B5CF6)],
+                      gradient: LinearGradient(
+                        colors: [AppTheme.primaryBlue, AppTheme.accentPurple],
                         begin: Alignment.topLeft,
                         end: Alignment.bottomRight,
                       ),
@@ -1433,8 +1522,8 @@ class _CountdownArcPainter extends CustomPainter {
       ..style = PaintingStyle.stroke
       ..strokeWidth = 2.5
       ..strokeCap = StrokeCap.round
-      ..shader = const LinearGradient(
-        colors: [Color(0xFF4F75FF), Color(0xFF8B5CF6)],
+      ..shader = LinearGradient(
+        colors: [AppTheme.primaryBlue, AppTheme.accentPurple],
       ).createShader(Rect.fromCircle(center: center, radius: radius));
 
     final sweepAngle = 2 * 3.14159265 * progress;

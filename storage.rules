@@ -44,11 +44,12 @@ service firebase.storage {
                    && request.resource.contentType.matches('image/.*');
     }
 
-    // Posts: images and voice notes
+    // Posts: images and videos
     match /posts/{fileName} {
       allow read: if isAuthenticated();
       allow create: if isAuthenticated()
-                    && request.resource.size < 50 * 1024 * 1024;
+                    && request.resource.size < 50 * 1024 * 1024
+                    && request.resource.contentType.matches('image/.*|video/.*');
       allow delete: if isAuthenticated();
     }
 
@@ -56,7 +57,8 @@ service firebase.storage {
     match /voice_notes/{fileName} {
       allow read: if isAuthenticated();
       allow create: if isAuthenticated()
-                    && request.resource.size < 20 * 1024 * 1024;
+                    && request.resource.size < 20 * 1024 * 1024
+                    && request.resource.contentType.matches('audio/.*|video/.*');
       allow delete: if isAuthenticated();
     }
 
@@ -72,7 +74,9 @@ service firebase.storage {
     match /chats/{chatId}/{fileName} {
       allow read: if isAuthenticated();
       allow create: if isAuthenticated()
-                    && request.resource.size < 50 * 1024 * 1024;
+                    && request.resource.size < 50 * 1024 * 1024
+                    && request.resource.contentType.matches('image/.*|video/.*|audio/.*');
+      allow delete: if isAuthenticated();
     }
 
     // Verification Videos: users upload their verification videos here

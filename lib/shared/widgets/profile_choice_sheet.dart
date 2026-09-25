@@ -1,3 +1,4 @@
+import '../../core/theme/app_theme.dart';
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -92,12 +93,12 @@ class ProfileChoiceSheet extends StatelessWidget {
                       height: 52,
                       decoration: BoxDecoration(
                         shape: BoxShape.circle,
-                        gradient: const LinearGradient(
-                          colors: [Color(0xFFFF3CAC), Color(0xFF7C3AED)],
+                        gradient: LinearGradient(
+                          colors: [AppTheme.primaryBlue, AppTheme.accentPurple],
                         ),
                         boxShadow: [
                           BoxShadow(
-                            color: const Color(0xFFFF3CAC).withOpacity(0.3),
+                            color: AppTheme.accentPurple.withOpacity(0.3),
                             blurRadius: 10,
                           ),
                         ],
@@ -148,7 +149,7 @@ class ProfileChoiceSheet extends StatelessWidget {
                   title: 'View as Visitor (Public View)',
                   subtitle: 'See how others view your photos, bio, Takes, traits & confession bar',
                   icon: Icons.remove_red_eye_rounded,
-                  iconGradient: const [Color(0xFF00C6FF), Color(0xFF0072FF)],
+                  iconGradient: [AppTheme.primaryBlue, AppTheme.accentPurple],
                   isPrimary: true,
                   onTap: () {
                     Navigator.pop(context);
@@ -164,7 +165,7 @@ class ProfileChoiceSheet extends StatelessWidget {
                   title: 'My Profile (Default Section)',
                   subtitle: 'Your main profile with stats, bio, posts grid, visitors & options',
                   icon: Icons.person_rounded,
-                  iconGradient: const [Color(0xFFFF3CAC), Color(0xFFFF8C42)],
+                  iconGradient: [const Color(0xFFFF9EC8), AppTheme.accentPurple],
                   isPrimary: false,
                   onTap: () {
                     Navigator.pop(context);
@@ -180,7 +181,7 @@ class ProfileChoiceSheet extends StatelessWidget {
                   title: 'Profile Visitors 👁️',
                   subtitle: 'See who recently viewed your profile and interacted with you',
                   icon: Icons.people_outline_rounded,
-                  iconGradient: const [Color(0xFFA855F7), Color(0xFF6366F1)],
+                  iconGradient: [const Color(0xFFFDE8F0), AppTheme.primaryBlue],
                   isPrimary: false,
                   onTap: () {
                     Navigator.pop(context);
@@ -207,11 +208,11 @@ class ProfileChoiceSheet extends StatelessWidget {
     required VoidCallback onTap,
   }) {
     final tileBg = isDark
-        ? (isPrimary ? const Color(0xFF2A1F40) : Colors.white.withOpacity(0.06))
-        : (isPrimary ? const Color(0xFFF3E8FF) : Colors.black.withOpacity(0.04));
+        ? (isPrimary ? const Color(0xFF2A1220) : Colors.white.withOpacity(0.06))
+        : (isPrimary ? const Color(0xFFFDE8F0) : Colors.black.withOpacity(0.04));
 
     final borderColor = isPrimary
-        ? const Color(0xFF9333EA).withOpacity(0.55)
+        ? AppTheme.accentPurple.withOpacity(0.55)
         : (isDark ? Colors.white.withOpacity(0.09) : Colors.black.withOpacity(0.06));
 
     return InkWell(
@@ -226,7 +227,7 @@ class ProfileChoiceSheet extends StatelessWidget {
           boxShadow: isPrimary
               ? [
                   BoxShadow(
-                    color: const Color(0xFF9333EA).withOpacity(0.18),
+                    color: AppTheme.accentPurple.withOpacity(0.18),
                     blurRadius: 14,
                     offset: const Offset(0, 4),
                   ),

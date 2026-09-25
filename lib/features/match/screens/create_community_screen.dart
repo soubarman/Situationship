@@ -1,3 +1,4 @@
+import '../../../core/theme/app_theme.dart';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -308,7 +309,7 @@ class _CreateCommunityScreenState extends ConsumerState<CreateCommunityScreen> {
                                         padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 5),
                                         decoration: BoxDecoration(
                                           color: isSelected
-                                              ? const Color(0xFF8B5CF6)
+                                              ? AppTheme.accentPurple
                                               : (isDark ? const Color(0xFF191D2C) : const Color(0xFFE2E8F0)),
                                           borderRadius: BorderRadius.circular(14),
                                           border: Border.all(
@@ -355,7 +356,7 @@ class _CreateCommunityScreenState extends ConsumerState<CreateCommunityScreen> {
                               title: 'Public Community',
                               subtitle: 'Anyone can discover, join instantly, and chat in the feed.',
                               icon: Icons.public_rounded,
-                              iconColor: const Color(0xFF10B981),
+                              iconColor: AppTheme.accentPurple,
                               isSelected: !_isOnlyAdminApproved,
                               onTap: () => setState(() => _isOnlyAdminApproved = false),
                               isDark: isDark,
@@ -380,15 +381,15 @@ class _CreateCommunityScreenState extends ConsumerState<CreateCommunityScreen> {
                                 height: 54,
                                 width: double.infinity,
                                 decoration: BoxDecoration(
-                                  gradient: const LinearGradient(
-                                    colors: [Color(0xFF4F75FF), Color(0xFF8B5CF6)],
+                                  gradient: LinearGradient(
+                                    colors: [AppTheme.primaryBlue, AppTheme.accentPurple],
                                     begin: Alignment.centerLeft,
                                     end: Alignment.centerRight,
                                   ),
                                   borderRadius: BorderRadius.circular(22),
                                   boxShadow: [
                                     BoxShadow(
-                                      color: const Color(0xFF4F75FF).withOpacity(0.4),
+                                      color: AppTheme.primaryBlue.withOpacity(0.4),
                                       blurRadius: 16,
                                       offset: const Offset(0, 5),
                                     ),
@@ -452,7 +453,7 @@ class _CreateCommunityScreenState extends ConsumerState<CreateCommunityScreen> {
               borderRadius: BorderRadius.circular(24),
               color: isDark ? const Color(0xFF141724) : Colors.white,
               border: Border.all(
-                color: const Color(0xFF8B5CF6).withOpacity(isDark ? 0.35 : 0.25),
+                color: AppTheme.accentPurple.withOpacity(isDark ? 0.35 : 0.25),
                 width: 1.5,
               ),
               boxShadow: [
@@ -493,7 +494,7 @@ class _CreateCommunityScreenState extends ConsumerState<CreateCommunityScreen> {
                             width: 48,
                             height: 48,
                             decoration: BoxDecoration(
-                              color: const Color(0xFF8B5CF6).withOpacity(0.2),
+                              color: AppTheme.accentPurple.withOpacity(0.2),
                               shape: BoxShape.circle,
                             ),
                             child: const Icon(
@@ -598,7 +599,7 @@ class _CreateCommunityScreenState extends ConsumerState<CreateCommunityScreen> {
                       borderRadius: BorderRadius.circular(14),
                       border: Border.all(
                         color: isSelected
-                            ? const Color(0xFF8B5CF6)
+                            ? AppTheme.accentPurple
                             : (isDark ? Colors.white12 : Colors.black12),
                         width: isSelected ? 2 : 1,
                       ),
@@ -637,8 +638,8 @@ class _CreateCommunityScreenState extends ConsumerState<CreateCommunityScreen> {
                             ),
                           ),
                           if (isSelected)
-                            const Center(
-                              child: Icon(Icons.check_circle_rounded, color: Color(0xFF8B5CF6), size: 18),
+                            Center(
+                              child: Icon(Icons.check_circle_rounded, color: AppTheme.accentPurple, size: 18),
                             ),
                         ],
                       ),
@@ -721,7 +722,7 @@ class _CreateCommunityScreenState extends ConsumerState<CreateCommunityScreen> {
             fontWeight: FontWeight.normal,
           ),
           prefixIcon: prefixIcon != null
-              ? Icon(prefixIcon, size: 18, color: const Color(0xFF8B5CF6))
+              ? Icon(prefixIcon, size: 18, color: AppTheme.accentPurple)
               : null,
           border: InputBorder.none,
           counterText: '',
@@ -757,14 +758,14 @@ class _CreateCommunityScreenState extends ConsumerState<CreateCommunityScreen> {
           borderRadius: BorderRadius.circular(20),
           border: Border.all(
             color: isSelected
-                ? const Color(0xFF6366F1)
+                ? AppTheme.primaryBlue
                 : (isDark ? Colors.white.withOpacity(0.08) : Colors.black.withOpacity(0.06)),
             width: isSelected ? 1.5 : 1,
           ),
           boxShadow: isSelected
               ? [
                   BoxShadow(
-                    color: const Color(0xFF6366F1).withOpacity(0.15),
+                    color: AppTheme.primaryBlue.withOpacity(0.15),
                     blurRadius: 10,
                     offset: const Offset(0, 3),
                   ),
@@ -814,10 +815,10 @@ class _CreateCommunityScreenState extends ConsumerState<CreateCommunityScreen> {
               height: 22,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                color: isSelected ? const Color(0xFF6366F1) : Colors.transparent,
+                color: isSelected ? AppTheme.primaryBlue : Colors.transparent,
                 border: Border.all(
                   color: isSelected
-                      ? const Color(0xFF6366F1)
+                      ? AppTheme.primaryBlue
                       : (isDark ? Colors.white24 : Colors.black26),
                   width: 2,
                 ),

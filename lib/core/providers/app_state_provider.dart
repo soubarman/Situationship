@@ -256,6 +256,65 @@ class PostsNotifier extends StateNotifier<List<PostModel>> {
     }
   }
 
+  void joinPlan(String postId, String userId) async {
+    if (userId.isEmpty) return;
+    // Optimistic update
+    state = state.map((p) {
+      if (p.id == postId) {
+        final participants = List<String>.from(p.planParticipants);
+        if (!participants.contains(userId)) {
+          participants.add(userId);
+        }
+        return p.copyWith(planParticipants: participants);
+      }
+      return p;
+    }).toList();
+
+    // Persist to Firestore atomically
+    try {
+      final docRef = firestoreProvider.collection('posts').doc(postId);
+      await docRef.update({
+        'planParticipants': FieldValue.arrayUnion([userId]),
+      });
+    } catch (e) {
+      debugPrint('Error joining plan: $e');
+    }
+  }
+
+  void leavePlan(String postId, String userId) async {
+    if (userId.isEmpty) return;
+    // Optimistic update
+    state = state.map((p) {
+      if (p.id == postId) {
+        final participants = List<String>.from(p.planParticipants);
+        participants.remove(userId);
+        return p.copyWith(planParticipants: participants);
+      }
+      return p;
+    }).toList();
+
+    // Persist to Firestore atomically
+    try {
+      final docRef = firestoreProvider.collection('posts').doc(postId);
+      await docRef.update({
+        'planParticipants': FieldValue.arrayRemove([userId]),
+      });
+    } catch (e) {
+      debugPrint('Error leaving plan: $e');
+    }
+  }
+
+  void toggleJoinPlan(String postId, String userId) async {
+    if (userId.isEmpty) return;
+    // Check current state in memory
+    final currentPost = state.where((p) => p.id == postId).firstOrNull;
+    if (currentPost != null && currentPost.planParticipants.contains(userId)) {
+      leavePlan(postId, userId);
+    } else {
+      joinPlan(postId, userId);
+    }
+  }
+
   void reactToPost(String postId, String userId, String emoji) async {
     // Optimistic update
     state = state.map((p) {
@@ -410,7 +469,7 @@ final livePostReactionsProvider = StreamProvider.family<
     ({List<String> likes, Map<String, String> reactions}), String>((ref, postId) {
   final authState = ref.watch(authStateChangesProvider);
   if (authState.value == null) {
-    return Stream.value((likes: <String>[], reactions: <String, String>{}));
+    return const Stream.empty();
   }
   return firestoreProvider
       .collection('posts')
@@ -423,6 +482,24 @@ final livePostReactionsProvider = StreamProvider.family<
       likes: List<String>.from(data['likes'] ?? []),
       reactions: Map<String, String>.from(data['reactions'] ?? {}),
     );
+  });
+});
+
+/// Streams live plan participants for a single post from Firestore.
+final livePlanParticipantsProvider = StreamProvider.family<List<String>, String>((ref, postId) {
+  final authState = ref.watch(authStateChangesProvider);
+  if (authState.value == null) {
+    return const Stream.empty();
+  }
+  return firestoreProvider
+      .collection('posts')
+      .doc(postId)
+      .snapshots()
+      .map((doc) {
+    if (!doc.exists) return <String>[];
+    final data = doc.data();
+    if (data == null) return <String>[];
+    return List<String>.from(data['planParticipants'] ?? []);
   });
 });
 
@@ -543,7 +620,7 @@ final storiesPaginationProvider =
 
 // ─── Discovery (Match Queue) ────────────────────────────────────────────────
 
-const int _discoveryPageSize = 30;
+const int _discoveryPageSize = 50;
 
 // Paginated discovery provider
 class DiscoveryNotifier extends StateNotifier<AsyncValue<List<UserModel>>> {
@@ -1209,6 +1286,8 @@ final filterMinAgeProvider = StateProvider<double>((ref) => 18);
 final filterMaxAgeProvider = StateProvider<double>((ref) => 35);
 final filterMaxDistanceProvider = StateProvider<double>((ref) => 50);
 final filterMatchIrrespectiveProvider = StateProvider<bool>((ref) => false);
+/// 'auto' (follow profile), 'female', 'male', or 'all'
+final filterInterestedInProvider = StateProvider<String>((ref) => 'auto');
 
 // ─── Communities Provider ────────────────────────────────────────────────────
 
