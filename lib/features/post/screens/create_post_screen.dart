@@ -343,7 +343,7 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
   Widget _label(String text) => Text(
         text,
         style: const TextStyle(
-            fontSize: 14, fontWeight: FontWeight.w700, color: AppTheme.textPrimary),
+            fontSize: 14, fontWeight: FontWeight.w700, color: Colors.white),
       );
 
   Widget _buildField(
@@ -356,22 +356,24 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
     return TextField(
       controller: ctrl,
       maxLines: maxLines,
+      style: const TextStyle(fontSize: 15, color: Colors.white),
       decoration: InputDecoration(
         hintText: hint,
+        hintStyle: const TextStyle(color: Colors.white38, fontSize: 15),
         filled: true,
-        fillColor: isDark ? AppTheme.darkCard : Colors.white,
+        fillColor: isDark ? AppTheme.darkCard : const Color(0xFF19112E),
         prefixIcon: prefixIcon != null
             ? Icon(prefixIcon, color: AppTheme.primaryBlue, size: 20)
             : null,
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(16),
           borderSide: BorderSide(
-              color: isDark ? AppTheme.darkBorder : Colors.black12),
+              color: isDark ? AppTheme.darkBorder : const Color(0x24FFFFFF)),
         ),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(16),
           borderSide: BorderSide(
-              color: isDark ? AppTheme.darkBorder : Colors.black12),
+              color: isDark ? AppTheme.darkBorder : const Color(0x24FFFFFF)),
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(16),

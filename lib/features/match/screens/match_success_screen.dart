@@ -170,9 +170,9 @@ class _MatchSuccessScreenState extends ConsumerState<MatchSuccessScreen>
                           Text(
                             'You and $matchedName have 36 Hours\nto make the first move',
                             textAlign: TextAlign.center,
-                            style: TextStyle(
+                            style: const TextStyle(
                               fontSize: 15,
-                              color: AppTheme.textSecondary,
+                              color: Color(0xFF475569),
                               height: 1.5,
                             ),
                           ),
@@ -232,10 +232,10 @@ class _MatchSuccessScreenState extends ConsumerState<MatchSuccessScreen>
                     opacity: _fadeIn,
                     child: Text(
                       'Start Chat',
-                      style: TextStyle(
+                      style: const TextStyle(
                         fontSize: 14,
                         fontWeight: FontWeight.w600,
-                        color: AppTheme.textSecondary,
+                        color: Color(0xFF475569),
                       ),
                     ),
                   ),

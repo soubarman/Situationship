@@ -1,11 +1,8 @@
-import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import '../../../core/theme/app_theme.dart';
 import '../../../core/theme/app_palette.dart';
-import '../../../core/providers/app_state_provider.dart';
 
 /// Exactly matches the dark, premium "Upgrade to see who likes you" banner
 /// with golden crown badge, sky-blue title, and glowing "Go Premium >" pill button.
@@ -21,10 +18,10 @@ class UpgradeLikesBanner extends ConsumerWidget {
       },
       behavior: HitTestBehavior.opaque,
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
         decoration: BoxDecoration(
           color: const Color(0xFF0C1322),
-          borderRadius: BorderRadius.circular(24),
+          borderRadius: BorderRadius.circular(20),
           border: Border.all(
             color: const Color(0xFF1E2D4A).withOpacity(0.75),
             width: 1.2,
@@ -32,12 +29,12 @@ class UpgradeLikesBanner extends ConsumerWidget {
           boxShadow: [
             BoxShadow(
               color: Colors.black.withOpacity(0.55),
-              blurRadius: 22,
-              offset: const Offset(0, 8),
+              blurRadius: 20,
+              offset: const Offset(0, 6),
             ),
             BoxShadow(
               color: const Color(0xFF1E3A8A).withOpacity(0.18),
-              blurRadius: 28,
+              blurRadius: 24,
               spreadRadius: 0,
             ),
           ],
@@ -47,10 +44,10 @@ class UpgradeLikesBanner extends ConsumerWidget {
           children: [
             // ── Crown Icon Box ──────────────────────────────────────────
             Container(
-              width: 52,
-              height: 52,
+              width: 40,
+              height: 40,
               decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(16),
+                borderRadius: BorderRadius.circular(12),
                 gradient: const LinearGradient(
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
@@ -66,20 +63,20 @@ class UpgradeLikesBanner extends ConsumerWidget {
                 boxShadow: [
                   BoxShadow(
                     color: const Color(0xFFD97706).withOpacity(0.35),
-                    blurRadius: 14,
+                    blurRadius: 10,
                     spreadRadius: 0,
                   ),
                 ],
               ),
               child: const Center(
                 child: CustomPaint(
-                  size: Size(26, 20),
+                  size: Size(20, 15),
                   painter: _CrownPainter(),
                 ),
               ),
             ),
 
-            const SizedBox(width: 14),
+            const SizedBox(width: 10),
 
             // ── Middle Text Column ──────────────────────────────────────
             Expanded(
@@ -90,23 +87,23 @@ class UpgradeLikesBanner extends ConsumerWidget {
                   Text(
                     'Upgrade to see who likes you',
                     style: TextStyle(
-                      fontSize: 15.5,
+                      fontSize: 12.5,
                       fontWeight: FontWeight.w700,
                       color: Color(0xFF6BA6FF),
                       letterSpacing: -0.2,
                       height: 1.2,
                     ),
-                    maxLines: 1,
+                    maxLines: 2,
                     overflow: TextOverflow.ellipsis,
                   ),
-                  SizedBox(height: 3.5),
+                  SizedBox(height: 2.5),
                   Text(
-                    'Get unlimited faceoffs and more!',
+                    'Get unlimited faceoffs & more',
                     style: TextStyle(
-                      fontSize: 12.5,
+                      fontSize: 10.5,
                       fontWeight: FontWeight.w400,
                       color: Color(0xFFA0ABBA),
-                      letterSpacing: 0.0,
+                      letterSpacing: -0.1,
                       height: 1.2,
                     ),
                     maxLines: 1,
@@ -116,13 +113,13 @@ class UpgradeLikesBanner extends ConsumerWidget {
               ),
             ),
 
-            const SizedBox(width: 10),
+            const SizedBox(width: 8),
 
             // ── Right "Go Premium >" Button ─────────────────────────────
             Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 9.5),
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
               decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(30),
+                borderRadius: BorderRadius.circular(24),
                 gradient: const LinearGradient(
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
@@ -133,13 +130,13 @@ class UpgradeLikesBanner extends ConsumerWidget {
                 ),
                 boxShadow: [
                   BoxShadow(
-                    color: const Color(0xFF2563EB).withOpacity(0.55),
-                    blurRadius: 16,
-                    offset: const Offset(0, 4),
+                    color: const Color(0xFF2563EB).withOpacity(0.5),
+                    blurRadius: 12,
+                    offset: const Offset(0, 3),
                   ),
                   BoxShadow(
-                    color: const Color(0xFF38BDF8).withOpacity(0.35),
-                    blurRadius: 8,
+                    color: const Color(0xFF38BDF8).withOpacity(0.3),
+                    blurRadius: 6,
                     offset: const Offset(0, 1),
                   ),
                 ],
@@ -151,16 +148,16 @@ class UpgradeLikesBanner extends ConsumerWidget {
                     'Go Premium',
                     style: TextStyle(
                       color: Colors.white,
-                      fontSize: 13.5,
+                      fontSize: 11.5,
                       fontWeight: FontWeight.w700,
                       letterSpacing: -0.1,
                     ),
                   ),
-                  SizedBox(width: 3),
+                  SizedBox(width: 2),
                   Icon(
                     Icons.chevron_right_rounded,
                     color: Colors.white,
-                    size: 18,
+                    size: 14,
                   ),
                 ],
               ),

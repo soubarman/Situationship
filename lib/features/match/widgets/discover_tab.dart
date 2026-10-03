@@ -493,8 +493,10 @@ class _DiscoverTabState extends ConsumerState<DiscoverTab>
     return LayoutBuilder(
       builder: (context, constraints) {
         final availableW = constraints.maxWidth;
-        // 10px spacing between cards
-        final halfW = (availableW - 10) / 2;
+        // 6px edge breathing room, 12px gap between cards
+        const horizontalMargin = 6.0;
+        const gap = 12.0;
+        final halfW = (availableW - (horizontalMargin * 2) - gap) / 2;
         // Responsive portrait ratio (1 : 1.48) so cards maintain ideal proportions
         final cardHeight = (halfW * 1.48).clamp(240.0, 315.0);
 
@@ -511,6 +513,7 @@ class _DiscoverTabState extends ConsumerState<DiscoverTab>
               isOther: _chosenId != null && _chosenId != pair[0].id,
               glowAnim: _glowAnim,
               palette: palette,
+              baseAngle: -0.052, // Funky GenZ tilt (~ -3.0°)
               onTap: () => _choose(pair[0]),
               onLongPress: () => context.push('/profile/view/${pair[0].id}'),
             ),
@@ -531,6 +534,7 @@ class _DiscoverTabState extends ConsumerState<DiscoverTab>
                     isOther: _chosenId != null && _chosenId != pair[1].id,
                     glowAnim: _glowAnim,
                     palette: palette,
+                    baseAngle: 0.052, // Funky GenZ tilt (~ +3.0°)
                     onTap: () => _choose(pair[1]),
                     onLongPress: () => context.push('/profile/view/${pair[1].id}'),
                   ),
@@ -539,17 +543,17 @@ class _DiscoverTabState extends ConsumerState<DiscoverTab>
             : const SizedBox.shrink();
 
         return SizedBox(
-          height: cardHeight,
+          height: cardHeight + 16,
           child: Stack(
             clipBehavior: Clip.none,
             children: [
               Positioned(
-                left: 0, top: 0, bottom: 0, width: halfW,
+                left: horizontalMargin, top: 8, bottom: 8, width: halfW,
                 child: buildLeft(),
               ),
               if (pair.length > 1)
                 Positioned(
-                  right: 0, top: 0, bottom: 0, width: halfW,
+                  right: horizontalMargin, top: 8, bottom: 8, width: halfW,
                   child: buildRight(),
                 ),
               if (pair.length > 1)
@@ -1023,32 +1027,35 @@ class _VsBadge extends StatelessWidget {
     return ScaleTransition(
       scale: Tween<double>(begin: 0.4, end: 1.0)
           .animate(CurvedAnimation(parent: anim, curve: Curves.elasticOut)),
-      child: Container(
-        width: 38, height: 38,
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            colors: [palette.primary, palette.secondary],
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-          ),
-          shape: BoxShape.circle,
-          border: Border.all(color: const Color(0xFF0D0717), width: 3.0),
-          boxShadow: [
-            BoxShadow(
-              color: palette.primary.withValues(alpha: 0.55),
-              blurRadius: 12,
-              spreadRadius: 1,
+      child: Transform.rotate(
+        angle: -0.065, // Funky sticker angle (~ -3.7°)
+        child: Container(
+          width: 40, height: 40,
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              colors: [palette.primary, palette.secondary],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
             ),
-          ],
-        ),
-        child: const Center(
-          child: Text(
-            'vs',
-            style: TextStyle(
-              fontSize: 11,
-              fontWeight: FontWeight.w900,
-              color: Colors.white,
-              letterSpacing: 0.3,
+            shape: BoxShape.circle,
+            border: Border.all(color: const Color(0xFF0D0717), width: 3.2),
+            boxShadow: [
+              BoxShadow(
+                color: palette.primary.withValues(alpha: 0.6),
+                blurRadius: 14,
+                spreadRadius: 2,
+              ),
+            ],
+          ),
+          child: const Center(
+            child: Text(
+              'vs',
+              style: TextStyle(
+                fontSize: 11.5,
+                fontWeight: FontWeight.w900,
+                color: Colors.white,
+                letterSpacing: 0.4,
+              ),
             ),
           ),
         ),
@@ -1251,6 +1258,7 @@ class _FaceOffCard extends StatefulWidget {
   final double? deviceLon;
   final Animation<double> glowAnim;
   final AppPalette palette;
+  final double baseAngle;
   final VoidCallback onTap;
   final VoidCallback onLongPress;
 
@@ -1263,6 +1271,7 @@ class _FaceOffCard extends StatefulWidget {
     this.deviceLon,
     required this.glowAnim,
     required this.palette,
+    this.baseAngle = 0.0,
     required this.onTap,
     required this.onLongPress,
   });
@@ -1299,14 +1308,19 @@ class _FaceOffCardState extends State<_FaceOffCard> with SingleTickerProviderSta
       id2: widget.user.id,
     );
 
-    // Compute scale: hover slightly lifts up, chosen scales to 1.03, other shrinks to 0.94
+    // Compute scale & dynamic rotation
     double targetScale = 1.0;
+    double targetAngle = widget.baseAngle;
+
     if (widget.isChosen) {
-      targetScale = 1.03;
+      targetScale = 1.04;
+      targetAngle = 0.0; // snaps upright with celebratory bounce
     } else if (widget.isOther) {
-      targetScale = 0.94;
+      targetScale = 0.93;
+      targetAngle = widget.baseAngle * 1.35; // tilts slightly further away
     } else if (_isHovered) {
       targetScale = 1.03;
+      targetAngle = widget.baseAngle * 0.35; // playful interactive straighten on hover
     }
 
     return MouseRegion(
@@ -1330,16 +1344,39 @@ class _FaceOffCardState extends State<_FaceOffCard> with SingleTickerProviderSta
         child: AnimatedOpacity(
           duration: const Duration(milliseconds: 280),
           opacity: widget.isOther ? 0.32 : 1.0,
-          child: AnimatedScale(
-            duration: const Duration(milliseconds: 260),
-            scale: targetScale,
-            curve: Curves.easeOutCubic,
-            child: ScaleTransition(
-              scale: _pressScale,
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(24),
-                child: Stack(
-                  fit: StackFit.expand,
+          child: AnimatedRotation(
+            duration: const Duration(milliseconds: 320),
+            curve: Curves.easeOutBack,
+            turns: targetAngle / (2 * pi),
+            child: AnimatedScale(
+              duration: const Duration(milliseconds: 260),
+              scale: targetScale,
+              curve: Curves.easeOutCubic,
+              child: ScaleTransition(
+                scale: _pressScale,
+                child: Container(
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(24),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.36),
+                        blurRadius: 18,
+                        spreadRadius: -2,
+                        offset: Offset(widget.baseAngle < 0 ? -3.5 : 3.5, 6),
+                      ),
+                      if (widget.isChosen)
+                        BoxShadow(
+                          color: widget.palette.primary.withValues(alpha: 0.5),
+                          blurRadius: 22,
+                          spreadRadius: 2,
+                          offset: const Offset(0, 4),
+                        ),
+                    ],
+                  ),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(24),
+                    child: Stack(
+                      fit: StackFit.expand,
                   children: [
                     // Photo with Grayscale filter when other card is picked
                     widget.isOther
@@ -1568,7 +1605,9 @@ class _FaceOffCardState extends State<_FaceOffCard> with SingleTickerProviderSta
           ),
         ),
       ),
-    );
+    ),
+  ),
+);
   }
 
   Widget _buildImage() {

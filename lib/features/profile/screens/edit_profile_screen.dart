@@ -508,7 +508,7 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
       style: const TextStyle(
         fontSize: 14,
         fontWeight: FontWeight.w700,
-        color: AppTheme.textPrimary,
+        color: Colors.white,
       ),
     );
   }
@@ -517,18 +517,19 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
     return TextField(
       controller: controller,
       maxLines: maxLines,
-      style: const TextStyle(fontSize: 15),
+      style: const TextStyle(fontSize: 15, color: Colors.white),
       decoration: InputDecoration(
         hintText: hint,
+        hintStyle: const TextStyle(color: Colors.white38, fontSize: 15),
         filled: true,
-        fillColor: isDark ? AppTheme.darkCard : Colors.white,
+        fillColor: isDark ? AppTheme.darkCard : const Color(0xFF19112E),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(16),
-          borderSide: BorderSide(color: isDark ? AppTheme.darkBorder : Colors.black12),
+          borderSide: BorderSide(color: isDark ? AppTheme.darkBorder : const Color(0x24FFFFFF)),
         ),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(16),
-          borderSide: BorderSide(color: isDark ? AppTheme.darkBorder : Colors.black12),
+          borderSide: BorderSide(color: isDark ? AppTheme.darkBorder : const Color(0x24FFFFFF)),
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(16),
@@ -543,15 +544,17 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
       decoration: BoxDecoration(
-        color: isDark ? AppTheme.darkCard : Colors.white,
+        color: isDark ? AppTheme.darkCard : const Color(0xFF19112E),
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: isDark ? AppTheme.darkBorder : Colors.black12),
+        border: Border.all(color: isDark ? AppTheme.darkBorder : const Color(0x24FFFFFF)),
       ),
       child: DropdownButtonHideUnderline(
         child: DropdownButton<String>(
           value: _gender.isNotEmpty ? _gender : 'other',
           isExpanded: true,
-          dropdownColor: isDark ? AppTheme.darkCard : Colors.white,
+          dropdownColor: isDark ? AppTheme.darkCard : const Color(0xFF19112E),
+          iconEnabledColor: Colors.white70,
+          style: const TextStyle(color: Colors.white, fontSize: 15),
           items: const [
             DropdownMenuItem(value: 'male', child: Text('Male')),
             DropdownMenuItem(value: 'female', child: Text('Female')),
@@ -569,15 +572,17 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
       decoration: BoxDecoration(
-        color: isDark ? AppTheme.darkCard : Colors.white,
+        color: isDark ? AppTheme.darkCard : const Color(0xFF19112E),
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: isDark ? AppTheme.darkBorder : Colors.black12),
+        border: Border.all(color: isDark ? AppTheme.darkBorder : const Color(0x24FFFFFF)),
       ),
       child: DropdownButtonHideUnderline(
         child: DropdownButton<String>(
           value: _interestedIn,
           isExpanded: true,
-          dropdownColor: isDark ? AppTheme.darkCard : Colors.white,
+          dropdownColor: isDark ? AppTheme.darkCard : const Color(0xFF19112E),
+          iconEnabledColor: Colors.white70,
+          style: const TextStyle(color: Colors.white, fontSize: 15),
           items: const [
             DropdownMenuItem(value: 'female', child: Text('Women 🌸')),
             DropdownMenuItem(value: 'male', child: Text('Men ⚡')),
@@ -596,15 +601,17 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
       decoration: BoxDecoration(
-        color: isDark ? AppTheme.darkCard : Colors.white,
+        color: isDark ? AppTheme.darkCard : const Color(0xFF19112E),
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: isDark ? AppTheme.darkBorder : Colors.black12),
+        border: Border.all(color: isDark ? AppTheme.darkBorder : const Color(0x24FFFFFF)),
       ),
       child: DropdownButtonHideUnderline(
         child: DropdownButton<String>(
           value: _relationshipIntent,
           isExpanded: true,
-          dropdownColor: isDark ? AppTheme.darkCard : Colors.white,
+          dropdownColor: isDark ? AppTheme.darkCard : const Color(0xFF19112E),
+          iconEnabledColor: Colors.white70,
+          style: const TextStyle(color: Colors.white, fontSize: 15),
           items: const [
             DropdownMenuItem(value: 'serious', child: Text('Serious / Long-term Connection 💍')),
             DropdownMenuItem(value: 'casual', child: Text('Casual Dating / Situationship 🥂')),
@@ -625,15 +632,17 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
       decoration: BoxDecoration(
-        color: isDark ? AppTheme.darkCard : Colors.white,
+        color: isDark ? AppTheme.darkCard : const Color(0xFF19112E),
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: isDark ? AppTheme.darkBorder : Colors.black12),
+        border: Border.all(color: isDark ? AppTheme.darkBorder : const Color(0x24FFFFFF)),
       ),
       child: DropdownButtonHideUnderline(
         child: DropdownButton<ThemeVibe>(
           value: currentVibe,
           isExpanded: true,
-          dropdownColor: isDark ? AppTheme.darkCard : Colors.white,
+          dropdownColor: isDark ? AppTheme.darkCard : const Color(0xFF19112E),
+          iconEnabledColor: Colors.white70,
+          style: const TextStyle(color: Colors.white, fontSize: 15),
           items: const [
             DropdownMenuItem(
               value: ThemeVibe.auto,

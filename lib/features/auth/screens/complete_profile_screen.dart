@@ -14,6 +14,10 @@ import '../../../shared/widgets/multi_photo_manager.dart';
 
 final _db = firestoreProvider;
 
+const Color _onboardText = Color(0xFF0F172A);
+const Color _onboardSub = Color(0xFF475569);
+const Color _onboardTertiary = Color(0xFF64748B);
+
 // ─── Screen ──────────────────────────────────────────────────────────────────
 
 class CompleteProfileScreen extends ConsumerStatefulWidget {
@@ -357,9 +361,9 @@ class _CompleteProfileScreenState extends ConsumerState<CompleteProfileScreen>
               children: [
                 Text(
                   'Step ${_currentStep + 1} of ${_steps.length}',
-                  style: TextStyle(
+                  style: const TextStyle(
                     fontSize: 12,
-                    color: AppTheme.textSecondary,
+                    color: _onboardSub,
                     fontWeight: FontWeight.w500,
                   ),
                 ),
@@ -369,7 +373,7 @@ class _CompleteProfileScreenState extends ConsumerState<CompleteProfileScreen>
                   style: const TextStyle(
                     fontSize: 20,
                     fontWeight: FontWeight.w800,
-                    color: AppTheme.textPrimary,
+                    color: _onboardText,
                   ),
                   textAlign: TextAlign.center,
                 ),
@@ -420,13 +424,13 @@ class _CompleteProfileScreenState extends ConsumerState<CompleteProfileScreen>
           const SizedBox(height: 24),
           const Text(
             'Who are you? 💫',
-            style: TextStyle(fontSize: 28, fontWeight: FontWeight.w800, color: AppTheme.textPrimary),
+            style: TextStyle(fontSize: 28, fontWeight: FontWeight.w800, color: _onboardText),
             textAlign: TextAlign.center,
           ),
           const SizedBox(height: 8),
-          Text(
+          const Text(
             'This helps us tailor your experience.',
-            style: TextStyle(fontSize: 15, color: AppTheme.textSecondary),
+            style: TextStyle(fontSize: 15, color: _onboardSub),
             textAlign: TextAlign.center,
           ),
           const SizedBox(height: 40),
@@ -459,7 +463,7 @@ class _CompleteProfileScreenState extends ConsumerState<CompleteProfileScreen>
               alignment: Alignment.centerLeft,
               child: Text(
                 'Who would you like to date? 💕',
-                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: AppTheme.textPrimary),
+                style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: _onboardText),
               ),
             ),
             const SizedBox(height: 8),
@@ -477,7 +481,7 @@ class _CompleteProfileScreenState extends ConsumerState<CompleteProfileScreen>
               alignment: Alignment.centerLeft,
               child: Text(
                 'What are you looking for? 🎯',
-                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: AppTheme.textPrimary),
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: _onboardText),
               ),
             ),
             const SizedBox(height: 8),
@@ -519,7 +523,7 @@ class _CompleteProfileScreenState extends ConsumerState<CompleteProfileScreen>
             style: TextStyle(
               fontSize: 13,
               fontWeight: isSelected ? FontWeight.w700 : FontWeight.w600,
-              color: isSelected ? Colors.white : AppTheme.textPrimary,
+              color: isSelected ? Colors.white : _onboardText,
             ),
           ),
         ),
@@ -547,7 +551,7 @@ class _CompleteProfileScreenState extends ConsumerState<CompleteProfileScreen>
           style: TextStyle(
             fontSize: 13,
             fontWeight: isSelected ? FontWeight.w700 : FontWeight.w600,
-            color: isSelected ? Colors.white : AppTheme.textPrimary,
+            color: isSelected ? Colors.white : _onboardText,
           ),
         ),
       ),
@@ -604,7 +608,7 @@ class _CompleteProfileScreenState extends ConsumerState<CompleteProfileScreen>
                     style: TextStyle(
                       fontSize: 18,
                       fontWeight: FontWeight.w800,
-                      color: selected ? Colors.white : AppTheme.textPrimary,
+                      color: selected ? Colors.white : _onboardText,
                     ),
                   ),
                   const SizedBox(height: 4),
@@ -613,7 +617,7 @@ class _CompleteProfileScreenState extends ConsumerState<CompleteProfileScreen>
                     style: TextStyle(
                       fontSize: 12,
                       height: 1.4,
-                      color: selected ? Colors.white.withOpacity(0.85) : AppTheme.textSecondary,
+                      color: selected ? Colors.white.withOpacity(0.85) : _onboardSub,
                     ),
                   ),
                 ],
@@ -622,7 +626,7 @@ class _CompleteProfileScreenState extends ConsumerState<CompleteProfileScreen>
             if (selected)
               const Icon(Icons.check_circle_rounded, color: Colors.white, size: 24)
             else
-              Icon(Icons.radio_button_unchecked_rounded, color: AppTheme.textTertiary, size: 24),
+              const Icon(Icons.radio_button_unchecked_rounded, color: _onboardTertiary, size: 24),
           ],
         ),
       ),
@@ -639,13 +643,13 @@ class _CompleteProfileScreenState extends ConsumerState<CompleteProfileScreen>
           const SizedBox(height: 8),
           const Text(
             'Add your best photos ✨',
-            style: TextStyle(fontSize: 26, fontWeight: FontWeight.w800, color: AppTheme.textPrimary),
+            style: TextStyle(fontSize: 26, fontWeight: FontWeight.w800, color: _onboardText),
             textAlign: TextAlign.center,
           ),
           const SizedBox(height: 6),
-          Text(
+          const Text(
             'Upload up to 4 photos. Drag or tap arrows to pick your #1 main picture!',
-            style: TextStyle(fontSize: 14, color: AppTheme.textSecondary, height: 1.4),
+            style: TextStyle(fontSize: 14, color: _onboardSub, height: 1.4),
             textAlign: TextAlign.center,
           ),
           const SizedBox(height: 24),
@@ -697,12 +701,12 @@ class _CompleteProfileScreenState extends ConsumerState<CompleteProfileScreen>
             const SizedBox(height: 16),
             const Text(
               'Tell us about you 🌟',
-              style: TextStyle(fontSize: 28, fontWeight: FontWeight.w800, color: AppTheme.textPrimary),
+              style: TextStyle(fontSize: 28, fontWeight: FontWeight.w800, color: _onboardText),
             ),
             const SizedBox(height: 8),
-            Text(
+            const Text(
               'This is what people see on your profile.',
-              style: TextStyle(fontSize: 15, color: AppTheme.textSecondary),
+              style: TextStyle(fontSize: 15, color: _onboardSub),
             ),
             const SizedBox(height: 32),
             _label('Your Name'),
@@ -748,12 +752,12 @@ class _CompleteProfileScreenState extends ConsumerState<CompleteProfileScreen>
           const SizedBox(height: 16),
           const Text(
             "What's your vibe? 🎯",
-            style: TextStyle(fontSize: 28, fontWeight: FontWeight.w800, color: AppTheme.textPrimary),
+            style: TextStyle(fontSize: 28, fontWeight: FontWeight.w800, color: _onboardText),
           ),
           const SizedBox(height: 8),
-          Text(
+          const Text(
             'Pick at least 3 interests to find your match.',
-            style: TextStyle(fontSize: 15, color: AppTheme.textSecondary),
+            style: TextStyle(fontSize: 15, color: _onboardSub),
           ),
           const SizedBox(height: 8),
           AnimatedContainer(
@@ -811,7 +815,7 @@ class _CompleteProfileScreenState extends ConsumerState<CompleteProfileScreen>
                     style: TextStyle(
                       fontSize: 13,
                       fontWeight: FontWeight.w600,
-                      color: selected ? Colors.white : AppTheme.textPrimary,
+                      color: selected ? Colors.white : _onboardText,
                     ),
                   ),
                 ),
@@ -834,12 +838,12 @@ class _CompleteProfileScreenState extends ConsumerState<CompleteProfileScreen>
           const SizedBox(height: 16),
           const Text(
             "Where are you? 📍",
-            style: TextStyle(fontSize: 28, fontWeight: FontWeight.w800, color: AppTheme.textPrimary),
+            style: TextStyle(fontSize: 28, fontWeight: FontWeight.w800, color: _onboardText),
           ),
           const SizedBox(height: 8),
-          Text(
+          const Text(
             'Optional — helps find people near you.',
-            style: TextStyle(fontSize: 15, color: AppTheme.textSecondary),
+            style: TextStyle(fontSize: 15, color: _onboardSub),
           ),
           const SizedBox(height: 32),
           _label('City / Location'),
@@ -863,13 +867,13 @@ class _CompleteProfileScreenState extends ConsumerState<CompleteProfileScreen>
                 const SizedBox(height: 12),
                 const Text(
                   "You're all set!",
-                  style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: AppTheme.textPrimary),
+                  style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: _onboardText),
                   textAlign: TextAlign.center,
                 ),
                 const SizedBox(height: 8),
-                Text(
+                const Text(
                   "Hit Launch to enter the vibe and start making connections 🔥",
-                  style: TextStyle(fontSize: 14, color: AppTheme.textSecondary, height: 1.5),
+                  style: TextStyle(fontSize: 14, color: _onboardSub, height: 1.5),
                   textAlign: TextAlign.center,
                 ),
               ],
@@ -932,7 +936,7 @@ class _CompleteProfileScreenState extends ConsumerState<CompleteProfileScreen>
   Widget _label(String text) {
     return Text(
       text,
-      style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: AppTheme.textPrimary),
+      style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: _onboardText),
     );
   }
 
@@ -958,10 +962,10 @@ class _CompleteProfileScreenState extends ConsumerState<CompleteProfileScreen>
         keyboardType: keyboardType,
         inputFormatters: inputFormatters,
         maxLines: maxLines,
-        style: const TextStyle(fontSize: 15, color: AppTheme.textPrimary),
+        style: const TextStyle(fontSize: 15, color: _onboardText),
         decoration: InputDecoration(
           hintText: hint,
-          hintStyle: TextStyle(color: AppTheme.textTertiary, fontSize: 14),
+          hintStyle: const TextStyle(color: _onboardTertiary, fontSize: 14),
           prefixIcon: Icon(icon, color: AppTheme.primaryBlue, size: 20),
           border: InputBorder.none,
           contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),

@@ -36,9 +36,9 @@ class AppTheme {
   static const Color lightGlass   = Color(0xBFFFFFFF); // 75% white
 
   // ─── Text ──────────────────────────────────────────────────────────────────
-  static const Color textPrimary   = Color(0xFF111827);
-  static const Color textSecondary = Color(0xFF6B7280);
-  static const Color textTertiary  = Color(0xFF9CA3AF);
+  static const Color textPrimary   = Colors.white;
+  static const Color textSecondary = Color(0xFFA0ABBA);
+  static const Color textTertiary  = Color(0xFF718096);
 
   // ─── Semantic ──────────────────────────────────────────────────────────────
   static Color get success => _activePalette.primary;
@@ -242,9 +242,19 @@ class AppTheme {
         borderSide: BorderSide(color: primaryBlue, width: 1.8),
       ),
       contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
+      labelStyle: GoogleFonts.outfit(
+        fontSize: 14,
+        fontWeight: FontWeight.w600,
+        color: Colors.white,
+      ),
+      floatingLabelStyle: GoogleFonts.outfit(
+        fontSize: 14,
+        fontWeight: FontWeight.w600,
+        color: primaryBlue,
+      ),
       hintStyle: GoogleFonts.outfit(
         fontSize: 14,
-        color: isDark ? Colors.white38 : textTertiary,
+        color: Colors.white38,
       ),
     );
   }
