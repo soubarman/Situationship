@@ -8,6 +8,9 @@ class GradientButton extends StatefulWidget {
   final double height;
   final IconData? icon;
 
+  final Gradient? gradient;
+  final Color? shadowColor;
+
   const GradientButton({
     super.key,
     required this.text,
@@ -15,6 +18,8 @@ class GradientButton extends StatefulWidget {
     this.isLoading = false,
     this.height = 56,
     this.icon,
+    this.gradient,
+    this.shadowColor,
   });
 
   @override
@@ -70,11 +75,11 @@ class _GradientButtonState extends State<GradientButton>
             width: double.infinity,
             height: widget.height,
             decoration: BoxDecoration(
-              gradient: AppTheme.primaryGradient,
+              gradient: widget.gradient ?? AppTheme.primaryGradient,
               borderRadius: BorderRadius.circular(widget.height / 2),
               boxShadow: [
                 BoxShadow(
-                  color: AppTheme.primaryBlue.withOpacity(0.4),
+                  color: widget.shadowColor ?? AppTheme.primaryBlue.withOpacity(0.4),
                   blurRadius: 24,
                   offset: const Offset(0, 8),
                 ),

@@ -1,4 +1,5 @@
 import 'dart:ui';
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -6,6 +7,8 @@ import 'package:go_router/go_router.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:geolocator/geolocator.dart';
+import 'package:cached_network_image/cached_network_image.dart';
+import '../../../core/utils/image_url_helper.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/providers/app_state_provider.dart';
 import '../../../core/models/user_model.dart';
@@ -43,16 +46,40 @@ class _UserDetailScreenState extends ConsumerState<UserDetailScreen>
   double? _deviceLat;
   double? _deviceLon;
   bool _hasAskedChoice = false;
+  bool _simulateVisitorView = false;
+  final Set<String> _locallyUnlockedKeys = {};
 
   // Animation controllers
   late final AnimationController _shimmerAnim;
   late final AnimationController _storyRingAnim;
   late final Animation<double> _pulseAnim;
+  late final AnimationController _entranceCtrl;
+  late final Animation<double> _infoSlideAnim;
+  late final Animation<double> _heroFadeAnim;
+  late final ScrollController _scrollController;
+  late final PageController _photoPageController;
+  int _currentPhotoIndex = 0;
 
   @override
   void initState() {
     super.initState();
     _fetchDeviceLocation();
+    _scrollController = ScrollController();
+    _photoPageController = PageController();
+
+    // Entrance animation controller for smooth staggered profile reveal
+    _entranceCtrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 700),
+    )..forward();
+
+    _infoSlideAnim = Tween<double>(begin: 36.0, end: 0.0).animate(
+      CurvedAnimation(parent: _entranceCtrl, curve: Curves.easeOutCubic),
+    );
+
+    _heroFadeAnim = Tween<double>(begin: 0.92, end: 1.0).animate(
+      CurvedAnimation(parent: _entranceCtrl, curve: Curves.easeOut),
+    );
 
     // Shimmer/pulse for confess bar
     _shimmerAnim = AnimationController(
@@ -80,7 +107,7 @@ class _UserDetailScreenState extends ConsumerState<UserDetailScreen>
 
       if (currentUser.id == widget.userId) return; // don't record own view
       
-      final db = FirebaseFirestore.instanceFor(app: Firebase.app(), databaseId: 'default');
+      final db = firestoreProvider;
       final timestamp = DateTime.now().millisecondsSinceEpoch;
       final viewId = '${currentUser.id}_${widget.userId}';
       
@@ -133,6 +160,9 @@ class _UserDetailScreenState extends ConsumerState<UserDetailScreen>
     _shimmerAnim.dispose();
     _storyRingAnim.dispose();
     _confessionController.dispose();
+    _entranceCtrl.dispose();
+    _scrollController.dispose();
+    _photoPageController.dispose();
     super.dispose();
   }
 
@@ -233,7 +263,7 @@ class _UserDetailScreenState extends ConsumerState<UserDetailScreen>
     });
 
     try {
-      final db = FirebaseFirestore.instanceFor(app: Firebase.app(), databaseId: 'default');
+      final db = firestoreProvider;
       
       final batch = db.batch();
       batch.update(db.collection('users').doc(currentUser.id), {
@@ -285,7 +315,7 @@ class _UserDetailScreenState extends ConsumerState<UserDetailScreen>
     });
 
     try {
-      final db = FirebaseFirestore.instanceFor(app: Firebase.app(), databaseId: 'default');
+      final db = firestoreProvider;
       final chatId = 'chat_${currentUser.id}_${targetUser.id}';
 
       await db.collection('chats').doc(chatId).set({
@@ -390,7 +420,7 @@ class _UserDetailScreenState extends ConsumerState<UserDetailScreen>
     });
 
     try {
-      final db = FirebaseFirestore.instanceFor(app: Firebase.app(), databaseId: 'default');
+      final db = firestoreProvider;
 
       final batch = db.batch();
       batch.delete(db.collection('chats').doc(chat.id));
@@ -441,7 +471,7 @@ class _UserDetailScreenState extends ConsumerState<UserDetailScreen>
     setState(() => _isSendingConfession = true);
 
     try {
-      final db = FirebaseFirestore.instanceFor(app: Firebase.app(), databaseId: 'default');
+      final db = firestoreProvider;
       final chatId = 'chat_${currentUser.id}_${targetUser.id}';
 
       // Ensure chat exists
@@ -1168,6 +1198,8 @@ class _UserDetailScreenState extends ConsumerState<UserDetailScreen>
     final userAsync = ref.watch(otherUserProvider(widget.userId));
     final chats = ref.watch(chatsProvider);
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final screenWidth = MediaQuery.of(context).size.width;
+    final isWide = screenWidth > 640;
 
     return userAsync.when(
       data: (user) {
@@ -1181,50 +1213,58 @@ class _UserDetailScreenState extends ConsumerState<UserDetailScreen>
           c.participants.contains(user.id)
         ).firstOrNull;
 
-        return Scaffold(
+        Widget content = Scaffold(
           backgroundColor: isDark ? AppTheme.darkBg : const Color(0xFFF8FAFC),
           body: Stack(
             children: [
               const BackgroundOrbs(),
               // Main scrollable content
               CustomScrollView(
+                controller: _scrollController,
                 physics: const BouncingScrollPhysics(),
                 slivers: [
-                  // Full-bleed hero (no margin, edge-to-edge)
+                  // Full-bleed responsive hero with photo carousel & story indicators
                   SliverToBoxAdapter(
-                    child: _buildHeroSection(user, currentUser, isDark, context),
+                    child: _buildHeroSection(user, currentUser, isDark, context, isWide),
                   ),
 
                   // Info card that slides up over the photo, containing all bottom sections
                   SliverToBoxAdapter(
-                    child: ClipRRect(
-                      borderRadius: const BorderRadius.vertical(top: Radius.circular(32)),
-                      child: BackdropFilter(
-                        filter: ImageFilter.blur(sigmaX: 16, sigmaY: 16),
-                        child: Container(
-                          decoration: BoxDecoration(
-                            color: isDark ? Colors.white.withOpacity(0.06) : Colors.white.withOpacity(0.45),
-                            borderRadius: const BorderRadius.vertical(top: Radius.circular(32)),
-                            border: Border(
-                              top: BorderSide(
-                                color: isDark ? Colors.white.withOpacity(0.12) : Colors.white.withOpacity(0.8),
-                                width: 1.2,
+                    child: AnimatedBuilder(
+                      animation: _entranceCtrl,
+                      builder: (context, child) => Transform.translate(
+                        offset: Offset(0, _infoSlideAnim.value),
+                        child: child,
+                      ),
+                      child: ClipRRect(
+                        borderRadius: const BorderRadius.vertical(top: Radius.circular(32)),
+                        child: BackdropFilter(
+                          filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
+                          child: Container(
+                            decoration: BoxDecoration(
+                              color: isDark ? Colors.white.withOpacity(0.06) : Colors.white.withOpacity(0.65),
+                              borderRadius: const BorderRadius.vertical(top: Radius.circular(32)),
+                              border: Border(
+                                top: BorderSide(
+                                  color: isDark ? Colors.white.withOpacity(0.14) : Colors.white.withOpacity(0.85),
+                                  width: 1.5,
+                                ),
                               ),
                             ),
-                          ),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.stretch,
-                            children: [
-                              _buildInfoCard(user, currentUser, existingChat, isFollowing, isDark),
-                              Padding(
-                                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
-                                child: _buildConfessSwipeBar(currentUser, user, isDark),
-                              ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.stretch,
+                              children: [
+                                _buildInfoCard(user, currentUser, existingChat, isFollowing, isDark),
+                                Padding(
+                                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
+                                  child: _buildConfessSwipeBar(currentUser, user, isDark),
+                                ),
 
-                              _buildAboutMeChips(user, isDark),
-                              _buildTabbedSections(user, currentUser, isDark),
-                              const SizedBox(height: 130),
-                            ],
+                                _buildAboutMeChips(user, isDark),
+                                _buildTabbedSections(user, currentUser, isDark),
+                                const SizedBox(height: 140),
+                              ],
+                            ),
                           ),
                         ),
                       ),
@@ -1233,9 +1273,31 @@ class _UserDetailScreenState extends ConsumerState<UserDetailScreen>
                 ],
               ),
 
+              // Soft ambient scrim at bottom so reaction buttons stand out
+              Positioned(
+                bottom: 0,
+                left: 0,
+                right: 0,
+                height: 110,
+                child: IgnorePointer(
+                  child: Container(
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                        colors: [
+                          Colors.transparent,
+                          (isDark ? AppTheme.darkBg : const Color(0xFFF8FAFC)).withOpacity(0.88),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+
               // Floating reaction bar at bottom
               Positioned(
-                bottom: 28,
+                bottom: 0,
                 left: 0,
                 right: 0,
                 child: _buildFloatingReactions(currentUser, user, isFollowing, isDark),
@@ -1243,6 +1305,38 @@ class _UserDetailScreenState extends ConsumerState<UserDetailScreen>
             ],
           ),
         );
+
+        if (isWide) {
+          return Scaffold(
+            backgroundColor: isDark ? const Color(0xFF090810) : const Color(0xFFEDF2F7),
+            body: Center(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 580),
+                child: Container(
+                  decoration: BoxDecoration(
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(isDark ? 0.45 : 0.12),
+                        blurRadius: 36,
+                        spreadRadius: 4,
+                        offset: const Offset(0, 10),
+                      ),
+                    ],
+                    border: Border.symmetric(
+                      vertical: BorderSide(
+                        color: isDark ? Colors.white.withOpacity(0.08) : Colors.black.withOpacity(0.06),
+                        width: 1,
+                      ),
+                    ),
+                  ),
+                  child: ClipRect(child: content),
+                ),
+              ),
+            ),
+          );
+        }
+
+        return content;
       },
       loading: () => const Scaffold(body: Center(child: CircularProgressIndicator())),
       error: (e, _) => Scaffold(body: Center(child: Text('Error: $e'))),
@@ -1260,30 +1354,152 @@ class _UserDetailScreenState extends ConsumerState<UserDetailScreen>
     ).displayScore;
   }
 
-  // ─── HERO PHOTO (full bleed) ────────────────────────────────────────────────
-  Widget _buildHeroSection(UserModel user, UserModel currentUser, bool isDark, BuildContext context) {
+  // ─── HERO PHOTO (multi-photo, parallax & story dashes) ─────────────────────
+  Widget _buildHeroSection(UserModel user, UserModel currentUser, bool isDark, BuildContext context, bool isWide) {
     final distance = LocationHelper.getDistanceKm(
       lat1: _deviceLat, lon1: _deviceLon,
       loc1: currentUser.location, loc2: user.location,
       id1: currentUser.id, id2: user.id,
     );
     final screenH = MediaQuery.of(context).size.height;
+    final heroHeight = isWide ? 520.0 : math.min(screenH * 0.62, 540.0);
 
     int compatibilityScore = _calculateCompatibilityScore(currentUser, user);
 
+    final List<String> photoList = [];
+    if (user.avatarUrl != null && user.avatarUrl!.trim().isNotEmpty) {
+      photoList.add(user.avatarUrl!.trim());
+    }
+    for (final p in user.photos) {
+      final trimmed = p.trim();
+      if (trimmed.isNotEmpty && !photoList.contains(trimmed)) {
+        photoList.add(trimmed);
+      }
+      if (photoList.length == 4) break;
+    }
+    if (photoList.isEmpty) {
+      final name = user.name.isNotEmpty ? user.name : 'User';
+      photoList.add('https://ui-avatars.com/api/?name=${Uri.encodeComponent(name)}&size=600&background=6C5CE7&color=fff');
+    }
+
     return SizedBox(
-      height: screenH * 0.64,
+      height: heroHeight,
       child: Stack(
         fit: StackFit.expand,
         children: [
-          // Photo
-          Image.network(
-            user.avatarUrl ?? 'https://i.pravatar.cc/600',
-            fit: BoxFit.cover,
+          // Photo Carousel
+          PageView.builder(
+            controller: _photoPageController,
+            physics: const ClampingScrollPhysics(),
+            onPageChanged: (idx) {
+              setState(() => _currentPhotoIndex = idx);
+            },
+            itemCount: photoList.length,
+            itemBuilder: (context, index) {
+              final rawUrl = photoList[index];
+              final proxiedUrl = ImageUrlHelper.proxy(rawUrl);
+
+              return AnimatedBuilder(
+                animation: _entranceCtrl,
+                builder: (context, child) => Transform.scale(
+                  scale: _heroFadeAnim.value,
+                  child: child,
+                ),
+                child: Image.network(
+                  proxiedUrl,
+                  fit: BoxFit.cover,
+                  loadingBuilder: (context, child, loadingProgress) {
+                    if (loadingProgress == null) return child;
+                    return Container(
+                      color: isDark ? const Color(0xFF1E1B4B) : const Color(0xFFFDE8F0),
+                      child: const Center(
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2.5,
+                          color: Colors.white70,
+                        ),
+                      ),
+                    );
+                  },
+                  errorBuilder: (_, error, ___) {
+                    debugPrint('[UserDetailScreen] Image failed: $proxiedUrl, error: $error');
+                    if (proxiedUrl != rawUrl) {
+                      return Image.network(
+                        rawUrl,
+                        fit: BoxFit.cover,
+                        errorBuilder: (_, __, ___) => _buildFallbackHero(user, isDark),
+                      );
+                    }
+                    return _buildFallbackHero(user, isDark);
+                  },
+                ),
+              );
+            },
+          ),
+
+          // Tap zones for photo navigation (left 35% prev, right 65% next)
+          Positioned.fill(
+            child: Row(
+              children: [
+                Expanded(
+                  flex: 35,
+                  child: GestureDetector(
+                    behavior: HitTestBehavior.translucent,
+                    onTap: () {
+                      if (_currentPhotoIndex > 0) {
+                        _photoPageController.previousPage(
+                          duration: const Duration(milliseconds: 260),
+                          curve: Curves.easeOutCubic,
+                        );
+                      }
+                    },
+                    child: const SizedBox.expand(),
+                  ),
+                ),
+                Expanded(
+                  flex: 65,
+                  child: GestureDetector(
+                    behavior: HitTestBehavior.translucent,
+                    onTap: () {
+                      if (_currentPhotoIndex < photoList.length - 1) {
+                        _photoPageController.nextPage(
+                          duration: const Duration(milliseconds: 260),
+                          curve: Curves.easeOutCubic,
+                        );
+                      }
+                    },
+                    child: const SizedBox.expand(),
+                  ),
+                ),
+              ],
+            ),
+          ),
+
+          // Top scrim
+          Positioned(
+            top: 0,
+            left: 0,
+            right: 0,
+            height: 120,
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [
+                    Colors.black.withOpacity(0.65),
+                    Colors.transparent,
+                  ],
+                ),
+              ),
+            ),
           ),
 
           // Bottom scrim
-          Positioned.fill(
+          Positioned(
+            bottom: 0,
+            left: 0,
+            right: 0,
+            height: 240,
             child: DecoratedBox(
               decoration: BoxDecoration(
                 gradient: LinearGradient(
@@ -1291,19 +1507,51 @@ class _UserDetailScreenState extends ConsumerState<UserDetailScreen>
                   end: Alignment.bottomCenter,
                   colors: [
                     Colors.transparent,
-                    Colors.transparent,
-                    Colors.black.withOpacity(0.25),
-                    Colors.black.withOpacity(0.88),
+                    Colors.black.withOpacity(0.12),
+                    Colors.black.withOpacity(0.55),
+                    Colors.black.withOpacity(0.92),
                   ],
-                  stops: const [0.0, 0.45, 0.7, 1.0],
+                  stops: const [0.0, 0.4, 0.72, 1.0],
                 ),
               ),
             ),
           ),
 
+          // Story indicator bars (if multiple photos)
+          if (photoList.length > 1)
+            Positioned(
+              top: 10,
+              left: 16,
+              right: 16,
+              child: SafeArea(
+                bottom: false,
+                child: Row(
+                  children: List.generate(photoList.length, (idx) {
+                    final isCurrent = idx == _currentPhotoIndex;
+                    return Expanded(
+                      child: Container(
+                        height: 3.5,
+                        margin: const EdgeInsets.symmetric(horizontal: 2.5),
+                        decoration: BoxDecoration(
+                          color: isCurrent ? Colors.white : Colors.white.withOpacity(0.38),
+                          borderRadius: BorderRadius.circular(2),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withOpacity(0.35),
+                              blurRadius: 4,
+                            ),
+                          ],
+                        ),
+                      ),
+                    );
+                  }),
+                ),
+              ),
+            ),
+
           // Top bar: back + options
           Positioned(
-            top: 0,
+            top: photoList.length > 1 ? 16 : 0,
             left: 0,
             right: 0,
             child: SafeArea(
@@ -1316,12 +1564,31 @@ class _UserDetailScreenState extends ConsumerState<UserDetailScreen>
                     _buildGlassIconBtn(Icons.arrow_back_ios_new_rounded, () => context.pop()),
                     if (user.id == currentUser.id)
                       GestureDetector(
-                        onTap: () => ProfileChoiceSheet.show(context, currentUser, isDark),
+                        onTap: () {
+                          setState(() {
+                            _simulateVisitorView = !_simulateVisitorView;
+                          });
+                          HapticFeedback.selectionClick();
+                          ScaffoldMessenger.of(context).removeCurrentSnackBar();
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text(
+                                _simulateVisitorView
+                                    ? '👁️ Previewing as Visitor (Public View)'
+                                    : '👑 Switched back to Owner View',
+                              ),
+                              duration: const Duration(seconds: 2),
+                              behavior: SnackBarBehavior.floating,
+                            ),
+                          );
+                        },
                         child: Container(
                           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
                           decoration: BoxDecoration(
                             gradient: LinearGradient(
-                              colors: [AppTheme.accentPurple, AppTheme.primaryBlue],
+                              colors: _simulateVisitorView
+                                  ? [Colors.orange.shade700, Colors.deepOrange]
+                                  : [AppTheme.accentPurple, AppTheme.primaryBlue],
                             ),
                             borderRadius: BorderRadius.circular(20),
                             border: Border.all(
@@ -1330,28 +1597,32 @@ class _UserDetailScreenState extends ConsumerState<UserDetailScreen>
                             ),
                             boxShadow: [
                               BoxShadow(
-                                color: AppTheme.accentPurple.withOpacity(0.4),
+                                color: (_simulateVisitorView ? Colors.orange : AppTheme.accentPurple).withOpacity(0.4),
                                 blurRadius: 12,
                                 offset: const Offset(0, 3),
                               ),
                             ],
                           ),
-                          child: const Row(
+                          child: Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
-                              Icon(Icons.remove_red_eye_rounded, size: 14, color: Colors.white),
-                              SizedBox(width: 6),
+                              Icon(
+                                _simulateVisitorView ? Icons.visibility_rounded : Icons.remove_red_eye_rounded,
+                                size: 14,
+                                color: Colors.white,
+                              ),
+                              const SizedBox(width: 6),
                               Text(
-                                'Preview Mode 👁️',
-                                style: TextStyle(
+                                _simulateVisitorView ? 'Visitor View 👁️' : 'Owner View 👑',
+                                style: const TextStyle(
                                   color: Colors.white,
                                   fontWeight: FontWeight.w900,
                                   fontSize: 12.5,
                                   letterSpacing: -0.2,
                                 ),
                               ),
-                              SizedBox(width: 4),
-                              Icon(Icons.swap_vert_rounded, size: 15, color: Colors.white),
+                              const SizedBox(width: 4),
+                              const Icon(Icons.swap_vert_rounded, size: 15, color: Colors.white),
                             ],
                           ),
                         ),
@@ -1364,6 +1635,7 @@ class _UserDetailScreenState extends ConsumerState<UserDetailScreen>
                         if (value == 'switch') {
                           ProfileChoiceSheet.show(context, currentUser, isDark);
                         } else if (value == 'share') {
+                          Clipboard.setData(ClipboardData(text: 'https://situatioship.netlify.app/profile/view/${widget.userId}'));
                           ScaffoldMessenger.of(context).showSnackBar(
                             const SnackBar(content: Text('Profile link copied! ✨'), behavior: SnackBarBehavior.floating),
                           );
@@ -1412,7 +1684,7 @@ class _UserDetailScreenState extends ConsumerState<UserDetailScreen>
             ),
           ),
 
-          // Bottom overlay: name, status, mini stats
+          // Bottom overlay: badges, online status, name + age, location
           Positioned(
             left: 0, right: 0, bottom: 0,
             child: Padding(
@@ -1421,38 +1693,47 @@ class _UserDetailScreenState extends ConsumerState<UserDetailScreen>
                 crossAxisAlignment: CrossAxisAlignment.start,
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  // Badges (moved here)
+                  // Badges
                   Row(
                     children: [
                       _buildGlassPill('🤝 $compatibilityScore% Match', accent: const Color(0xFFB06EF5)),
                       const SizedBox(width: 8),
                       _buildGlassPill('📍 $distance km', accent: const Color(0xFF4FC3F7)),
+                      if (photoList.length > 1) ...[
+                        const SizedBox(width: 8),
+                        _buildGlassPill('📷 ${_currentPhotoIndex + 1}/${photoList.length}'),
+                      ],
                     ],
                   ),
                   const SizedBox(height: 14),
-                  
+
                   // Online indicator
                   Row(
                     children: [
-                      AnimatedContainer(
-                        duration: const Duration(milliseconds: 600),
-                        width: 9,
-                        height: 9,
-                        decoration: BoxDecoration(
-                          color: user.isOnline ? AppTheme.accentPurple : Colors.grey.shade500,
-                          shape: BoxShape.circle,
-                          boxShadow: user.isOnline ? [
-                            BoxShadow(color: AppTheme.accentPurple.withOpacity(0.7), blurRadius: 6, spreadRadius: 2),
-                          ] : [],
+                      AnimatedBuilder(
+                        animation: _pulseAnim,
+                        builder: (context, _) => Transform.scale(
+                          scale: user.isOnline ? _pulseAnim.value : 1.0,
+                          child: Container(
+                            width: 9,
+                            height: 9,
+                            decoration: BoxDecoration(
+                              color: user.isOnline ? const Color(0xFF10B981) : Colors.grey.shade500,
+                              shape: BoxShape.circle,
+                              boxShadow: user.isOnline ? [
+                                BoxShadow(color: const Color(0xFF10B981).withOpacity(0.8), blurRadius: 8, spreadRadius: 2),
+                              ] : [],
+                            ),
+                          ),
                         ),
                       ),
                       const SizedBox(width: 7),
                       Text(
                         user.isOnline ? 'Active now' : 'Offline',
                         style: TextStyle(
-                          color: Colors.white.withOpacity(0.85),
+                          color: Colors.white.withOpacity(0.9),
                           fontSize: 13,
-                          fontWeight: FontWeight.w600,
+                          fontWeight: FontWeight.w700,
                           letterSpacing: 0.2,
                         ),
                       ),
@@ -1472,7 +1753,7 @@ class _UserDetailScreenState extends ConsumerState<UserDetailScreen>
                             fontWeight: FontWeight.w900,
                             letterSpacing: -1,
                             height: 1.1,
-                            shadows: [Shadow(color: Colors.black38, blurRadius: 12)],
+                            shadows: [Shadow(color: Colors.black45, blurRadius: 14)],
                           ),
                           overflow: TextOverflow.ellipsis,
                         ),
@@ -1483,8 +1764,7 @@ class _UserDetailScreenState extends ConsumerState<UserDetailScreen>
                       ],
                     ],
                   ),
-                  if ((user.location ?? '').isNotEmpty) ...
-                  [
+                  if ((user.location ?? '').isNotEmpty) ...[
                     const SizedBox(height: 6),
                     Row(
                       children: [
@@ -1492,7 +1772,7 @@ class _UserDetailScreenState extends ConsumerState<UserDetailScreen>
                         const SizedBox(width: 4),
                         Text(
                           user.location ?? '',
-                          style: TextStyle(color: Colors.white.withOpacity(0.75), fontSize: 13, fontWeight: FontWeight.w500),
+                          style: TextStyle(color: Colors.white.withOpacity(0.85), fontSize: 13, fontWeight: FontWeight.w600),
                         ),
                       ],
                     ),
@@ -1506,11 +1786,67 @@ class _UserDetailScreenState extends ConsumerState<UserDetailScreen>
     );
   }
 
+  Widget _buildFallbackHero(UserModel user, bool isDark) {
+    final initials = user.name.trim().isNotEmpty
+        ? user.name.trim().split(' ').map((e) => e.isNotEmpty ? e[0] : '').take(2).join().toUpperCase()
+        : 'U';
+    return Container(
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: isDark
+              ? [const Color(0xFF3B0764), const Color(0xFF1E1B4B), const Color(0xFF0F172A)]
+              : [const Color(0xFFFDE8F0), AppTheme.accentPink, AppTheme.primaryBlue],
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+        ),
+      ),
+      child: Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            CircleAvatar(
+              radius: 46,
+              backgroundColor: Colors.white.withValues(alpha: 0.18),
+              child: Text(
+                initials,
+                style: const TextStyle(
+                  fontSize: 34,
+                  fontWeight: FontWeight.w900,
+                  color: Colors.white,
+                ),
+              ),
+            ),
+            const SizedBox(height: 12),
+            Text(
+              user.name,
+              style: const TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.w700,
+                color: Colors.white,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   // ─── INFO CARD (slides up over photo) ───────────────────────────────────────
   Widget _buildInfoCard(UserModel user, UserModel currentUser, ChatModel? existingChat, bool isFollowing, bool isDark) {
     final chatLabel = existingChat?.status == 'accepted'
         ? 'Open Chat'
         : (existingChat?.status == 'requested' ? 'Pending…' : 'Message');
+
+    final hasBio = (user.bio ?? '').trim().isNotEmpty;
+    final hasPhone = (user.phoneNumber ?? '').trim().isNotEmpty;
+    final isSelf = user.id == currentUser.id && !_simulateVisitorView;
+    final unlockKey = '${user.id}_${user.phoneVisibilityVersion}';
+    final hasUnlocked = currentUser.unlockedUserPhones.contains(unlockKey) ||
+        _locallyUnlockedKeys.contains(unlockKey) ||
+        (user.phoneVisibilityVersion == 0 &&
+            (currentUser.unlockedUserPhones.contains(user.id) ||
+                _locallyUnlockedKeys.contains(user.id)));
+    final showPhone = hasPhone && (isSelf || user.isPhonePublic || hasUnlocked);
 
     return Container(
       margin: const EdgeInsets.only(top: 0),
@@ -1550,93 +1886,82 @@ class _UserDetailScreenState extends ConsumerState<UserDetailScreen>
             padding: const EdgeInsets.symmetric(horizontal: 20),
             child: Row(
               children: [
-                // Message button
+                // Follow button with bouncing tactile response
                 Expanded(
-                  flex: 3,
-                  child: GestureDetector(
-                    onTap: () {
-                      if (existingChat != null && existingChat.status == 'accepted') {
-                        context.pushNamed('chat-detail', pathParameters: {
-                          'chatId': existingChat.id
-                        }, extra: {
-                          'otherUserId': user.id,
-                          'name': user.name,
-                          'avatarUrl': user.avatarUrl,
-                          'isOnline': user.isOnline,
-                          'isConfession': existingChat.isConfession,
-                        });
-                      } else if (existingChat != null && existingChat.status == 'requested') {
-                        if (existingChat.requestSenderId == currentUser.id) _cancelChatRequest(currentUser, existingChat);
-                      } else {
-                        _handleChatRequest(currentUser, user);
-                      }
-                    },
+                  child: _BouncingButton(
+                    onTap: () => _handleFollow(currentUser, user, isFollowing),
                     child: Container(
-                      height: 54,
+                      height: 46,
                       decoration: BoxDecoration(
-                        gradient: const LinearGradient(
-                          colors: [Color(0xFFB06EF5), Color(0xFF7B2FBE)],
-                          begin: Alignment.topLeft,
-                          end: Alignment.bottomRight,
+                        gradient: isFollowing
+                            ? null
+                            : LinearGradient(
+                                colors: [
+                                  const Color(0xFF9B5DE5).withOpacity(0.24),
+                                  const Color(0xFF6C5CE7).withOpacity(0.18),
+                                ],
+                              ),
+                        color: isFollowing
+                            ? (isDark ? Colors.white.withOpacity(0.08) : const Color(0xFFF1F0FF))
+                            : null,
+                        borderRadius: BorderRadius.circular(23),
+                        border: Border.all(
+                          color: const Color(0xFF9B5DE5).withOpacity(0.4),
+                          width: 1.5,
                         ),
-                        borderRadius: BorderRadius.circular(27),
-                        boxShadow: [
-                          BoxShadow(
-                            color: const Color(0xFF9B5DE5).withOpacity(0.45),
-                            blurRadius: 20,
-                            offset: const Offset(0, 8),
-                          ),
-                        ],
                       ),
                       child: Row(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          const Icon(Icons.chat_bubble_rounded, color: Colors.white, size: 18),
+                          Icon(
+                            isFollowing ? Icons.person_remove_rounded : Icons.person_add_alt_1_rounded,
+                            color: const Color(0xFFB06EF5),
+                            size: 18,
+                          ),
                           const SizedBox(width: 8),
-                          Text(chatLabel, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 15)),
+                          Text(
+                            isFollowing ? 'Following' : 'Follow',
+                            style: const TextStyle(
+                              color: Color(0xFFB06EF5),
+                              fontWeight: FontWeight.w800,
+                              fontSize: 14,
+                            ),
+                          ),
                         ],
                       ),
                     ),
                   ),
                 ),
                 const SizedBox(width: 12),
-                // Follow button
-                GestureDetector(
-                  onTap: () => _handleFollow(currentUser, user, isFollowing),
-                  child: Container(
-                    height: 54,
-                    width: 54,
-                    decoration: BoxDecoration(
-                      color: isFollowing
-                          ? (isDark ? Colors.white.withOpacity(0.08) : const Color(0xFFF1F0FF))
-                          : const Color(0xFF9B5DE5).withOpacity(0.15),
-                      shape: BoxShape.circle,
-                      border: Border.all(
-                        color: const Color(0xFF9B5DE5).withOpacity(0.4),
-                        width: 1.5,
-                      ),
-                    ),
-                    child: Icon(
-                      isFollowing ? Icons.person_remove_rounded : Icons.person_add_alt_1_rounded,
-                      color: isFollowing ? const Color(0xFF9B5DE5) : const Color(0xFF9B5DE5),
-                      size: 22,
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                // Gift button
-                GestureDetector(
+                // Gift button with bouncing tactile response
+                _BouncingButton(
                   onTap: () => _showGiftDialog(currentUser, user),
                   child: Container(
-                    height: 54,
-                    width: 54,
+                    height: 46,
+                    padding: const EdgeInsets.symmetric(horizontal: 18),
                     decoration: BoxDecoration(
-                      color: isDark ? Colors.amber.withOpacity(0.1) : Colors.amber.withOpacity(0.12),
-                      shape: BoxShape.circle,
-                      border: Border.all(color: Colors.amber.withOpacity(0.4), width: 1.5),
+                      gradient: LinearGradient(
+                        colors: isDark
+                            ? [Colors.amber.withOpacity(0.18), Colors.orange.withOpacity(0.12)]
+                            : [Colors.amber.withOpacity(0.22), Colors.orange.withOpacity(0.14)],
+                      ),
+                      borderRadius: BorderRadius.circular(23),
+                      border: Border.all(color: Colors.amber.withOpacity(0.45), width: 1.5),
                     ),
-                    child: const Center(
-                      child: Text('🎁', style: TextStyle(fontSize: 22)),
+                    child: const Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text('🎁', style: TextStyle(fontSize: 18)),
+                        SizedBox(width: 6),
+                        Text(
+                          'Send Gift',
+                          style: TextStyle(
+                            color: Colors.amber,
+                            fontWeight: FontWeight.w900,
+                            fontSize: 13,
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                 ),
@@ -1650,7 +1975,7 @@ class _UserDetailScreenState extends ConsumerState<UserDetailScreen>
           _buildUserTakesSection(user, isDark),
 
           // Bio + Phone in a unified section card
-          if ((user.bio ?? '').isNotEmpty || (user.phoneNumber != null && user.phoneNumber!.isNotEmpty))
+          if (hasBio || showPhone)
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 20),
               child: Container(
@@ -1676,8 +2001,7 @@ class _UserDetailScreenState extends ConsumerState<UserDetailScreen>
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    if ((user.bio ?? '').isNotEmpty) ...
-                    [
+                    if (hasBio) ...[
                       Padding(
                         padding: const EdgeInsets.fromLTRB(18, 18, 18, 14),
                         child: Column(
@@ -1722,7 +2046,7 @@ class _UserDetailScreenState extends ConsumerState<UserDetailScreen>
                           ],
                         ),
                       ),
-                      if (user.phoneNumber != null && user.phoneNumber!.trim().isNotEmpty)
+                      if (showPhone)
                         Divider(
                           height: 1,
                           color: isDark ? Colors.white.withOpacity(0.07) : const Color(0xFFEDE8FF),
@@ -1731,10 +2055,11 @@ class _UserDetailScreenState extends ConsumerState<UserDetailScreen>
                         ),
                     ],
                     // Phone Section
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 4),
-                      child: _buildPhoneSection(user, currentUser, isDark),
-                    ),
+                    if (showPhone)
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 4),
+                        child: _buildPhoneSection(user, currentUser, isDark),
+                      ),
                   ],
                 ),
               ),
@@ -1753,18 +2078,21 @@ class _UserDetailScreenState extends ConsumerState<UserDetailScreen>
       return const SizedBox.shrink();
     }
 
-    final isSelf = targetUser.id == currentUser.id;
+    final isSelf = targetUser.id == currentUser.id && !_simulateVisitorView;
     final allowUnlock = targetUser.isPhonePublic; // repurposed from public to allow unlock
     final unlockKey = '${targetUser.id}_${targetUser.phoneVisibilityVersion}';
-    final hasUnlocked = currentUser.unlockedUserPhones.contains(unlockKey) || 
-                        (targetUser.phoneVisibilityVersion == 0 && currentUser.unlockedUserPhones.contains(targetUser.id));
-    
+    final hasUnlocked = currentUser.unlockedUserPhones.contains(unlockKey) ||
+        _locallyUnlockedKeys.contains(unlockKey) ||
+        (targetUser.phoneVisibilityVersion == 0 &&
+            (currentUser.unlockedUserPhones.contains(targetUser.id) ||
+                _locallyUnlockedKeys.contains(targetUser.id)));
+
     if (!isSelf && !allowUnlock && !hasUnlocked) {
       return const SizedBox.shrink();
     }
 
     final displayedPhone = (isSelf || hasUnlocked) ? targetUser.phoneNumber! : '••••• •••••';
-        
+
     // Render as a flat row inside the parent card (no extra container)
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 10),
@@ -1784,14 +2112,38 @@ class _UserDetailScreenState extends ConsumerState<UserDetailScreen>
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  'PHONE NUMBER',
-                  style: TextStyle(
-                    color: isDark ? Colors.white38 : Colors.black38,
-                    fontSize: 10,
-                    fontWeight: FontWeight.w900,
-                    letterSpacing: 0.8,
-                  ),
+                Row(
+                  children: [
+                    Text(
+                      'PHONE NUMBER',
+                      style: TextStyle(
+                        color: isDark ? Colors.white38 : Colors.black38,
+                        fontSize: 10,
+                        fontWeight: FontWeight.w900,
+                        letterSpacing: 0.8,
+                      ),
+                    ),
+                    if (isSelf) ...[
+                      const SizedBox(width: 8),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1.5),
+                        decoration: BoxDecoration(
+                          color: allowUnlock
+                              ? Colors.green.withOpacity(0.18)
+                              : Colors.orange.withOpacity(0.18),
+                          borderRadius: BorderRadius.circular(5),
+                        ),
+                        child: Text(
+                          allowUnlock ? 'UNLOCKABLE (50🪙)' : 'PRIVATE 🔒',
+                          style: TextStyle(
+                            color: allowUnlock ? Colors.greenAccent : Colors.orangeAccent,
+                            fontSize: 8.5,
+                            fontWeight: FontWeight.w900,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ],
                 ),
                 const SizedBox(height: 3),
                 Text(
@@ -1800,9 +2152,18 @@ class _UserDetailScreenState extends ConsumerState<UserDetailScreen>
                     color: isDark ? Colors.white.withOpacity(0.87) : Colors.black87,
                     fontSize: 15.5,
                     fontWeight: FontWeight.w800,
-                    letterSpacing: -0.3,
+                    letterSpacing: (isSelf || hasUnlocked) ? -0.3 : 2.0,
                   ),
                 ),
+                if (!isSelf && !hasUnlocked)
+                  Text(
+                    'Unlocked using 50 coins',
+                    style: TextStyle(
+                      color: AppTheme.textSecondary,
+                      fontSize: 11,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
               ],
             ),
           ),
@@ -1810,7 +2171,7 @@ class _UserDetailScreenState extends ConsumerState<UserDetailScreen>
             GestureDetector(
               onTap: () {
                 Clipboard.setData(ClipboardData(text: targetUser.phoneNumber ?? ''));
-                _showSuccess('Phone number copied!');
+                _showSuccess('Phone number copied to clipboard! 📋');
               },
               child: Container(
                 padding: const EdgeInsets.all(9),
@@ -1845,7 +2206,7 @@ class _UserDetailScreenState extends ConsumerState<UserDetailScreen>
                     Icon(Icons.lock_open_rounded, size: 14, color: Colors.white),
                     SizedBox(width: 6),
                     Text(
-                      'Unlock',
+                      'Unlock (50 🪙)',
                       style: TextStyle(
                         fontSize: 13,
                         fontWeight: FontWeight.w800,
@@ -1865,9 +2226,17 @@ class _UserDetailScreenState extends ConsumerState<UserDetailScreen>
     final allowed = await showCoinGate(context, ref, 'phone_unlock');
     if (!allowed) return;
 
+    final unlockKey = '${targetUser.id}_${targetUser.phoneVisibilityVersion}';
+
+    // Optimistically reveal immediately so the user sees the unmasked number with 0 delay
+    if (mounted) {
+      setState(() {
+        _locallyUnlockedKeys.add(unlockKey);
+      });
+    }
+
     try {
-      final db = FirebaseFirestore.instanceFor(app: Firebase.app(), databaseId: 'default');
-      
+      final db = firestoreProvider;
       final isFree = currentUser.hasActiveSubscription && currentUser.phoneUnlocksRemaining > 0;
       
       await db.runTransaction((tx) async {
@@ -1876,7 +2245,6 @@ class _UserDetailScreenState extends ConsumerState<UserDetailScreen>
         if (!snap.exists) return;
         
         final unlocked = List<String>.from(snap.data()?['unlockedUserPhones'] ?? []);
-        final unlockKey = '${targetUser.id}_${targetUser.phoneVisibilityVersion}';
         if (!unlocked.contains(unlockKey)) {
           unlocked.add(unlockKey);
         }
@@ -1891,6 +2259,17 @@ class _UserDetailScreenState extends ConsumerState<UserDetailScreen>
         
         tx.update(userRef, updates);
       });
+
+      // Mirror write to (default) for cross-db sync
+      try {
+        await FirebaseFirestore.instanceFor(app: Firebase.app(), databaseId: '(default)')
+            .collection('users')
+            .doc(currentUser.id)
+            .update({
+          'unlockedUserPhones': FieldValue.arrayUnion([unlockKey]),
+          if (isFree) 'phoneUnlocksUsed': FieldValue.increment(1),
+        });
+      } catch (_) {}
       
       _showSuccess('Phone number unlocked successfully! 🎉');
     } catch (e) {
@@ -1898,30 +2277,40 @@ class _UserDetailScreenState extends ConsumerState<UserDetailScreen>
     }
   }
 
-  Widget _buildStatCell(String value, String label, bool isDark) {
+  Widget _buildStatCell(String value, String label, bool isDark, {VoidCallback? onTap}) {
     return Expanded(
-      child: Column(
-        children: [
-          Text(
-            value,
-            style: TextStyle(
-              fontSize: 20,
-              fontWeight: FontWeight.w900,
-              color: isDark ? Colors.white : Colors.black,
-              letterSpacing: -0.5,
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(16),
+          onTap: onTap ?? () => HapticFeedback.lightImpact(),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 6),
+            child: Column(
+              children: [
+                Text(
+                  value,
+                  style: TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.w900,
+                    color: isDark ? Colors.white : Colors.black87,
+                    letterSpacing: -0.5,
+                  ),
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  label,
+                  style: TextStyle(
+                    fontSize: 11.5,
+                    fontWeight: FontWeight.w600,
+                    color: isDark ? Colors.white54 : Colors.black45,
+                    letterSpacing: 0.2,
+                  ),
+                ),
+              ],
             ),
           ),
-          const SizedBox(height: 3),
-          Text(
-            label,
-            style: TextStyle(
-              fontSize: 11.5,
-              fontWeight: FontWeight.w600,
-              color: isDark ? Colors.white38 : Colors.black38,
-              letterSpacing: 0.2,
-            ),
-          ),
-        ],
+        ),
       ),
     );
   }
@@ -1985,23 +2374,28 @@ class _UserDetailScreenState extends ConsumerState<UserDetailScreen>
   }
 
   Widget _buildAboutMeChips(UserModel user, bool isDark) {
-    final chips = [
-      '👩 Woman', '♋ Cancer', '🐱 Cat lover', '🍷 Social drinker',
-      ...user.interests.take(5),
+    final chips = <String>[
+      if (user.gender.isNotEmpty) '👤 ${user.gender.substring(0, 1).toUpperCase()}${user.gender.substring(1)}',
+      if ((user.zodiacSign ?? '').isNotEmpty) '✨ ${user.zodiacSign}',
+      ...user.interests.take(6).map((i) => '🏷️ $i'),
     ];
+    if (chips.isEmpty) {
+      chips.addAll(['✨ Kind soul', '☕ Coffee lover', '🎵 Music enthusiast']);
+    }
+
     return Padding(
       padding: const EdgeInsets.fromLTRB(20, 20, 20, 8),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _buildSectionLabel('About Me', isDark),
+          _buildSectionLabel('Interests & Vibe', isDark),
           const SizedBox(height: 14),
           Wrap(
-            spacing: 10,
-            runSpacing: 10,
+            spacing: 8,
+            runSpacing: 8,
             children: chips.map((c) => _buildPillChip(c, isDark)).toList(),
           ),
-          const SizedBox(height: 24),
+          const SizedBox(height: 18),
         ],
       ),
     );
@@ -2059,87 +2453,51 @@ class _UserDetailScreenState extends ConsumerState<UserDetailScreen>
   }
 
   Widget _buildFloatingReactions(UserModel currentUser, UserModel user, bool isFollowing, bool isDark) {
-    return Center(
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(56),
-        child: BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 14),
-            decoration: BoxDecoration(
-              color: isDark ? Colors.white.withOpacity(0.08) : Colors.white.withOpacity(0.7),
-              borderRadius: BorderRadius.circular(56),
-              border: Border.all(
-                color: isDark ? Colors.white.withOpacity(0.1) : Colors.white.withOpacity(0.9),
-                width: 1.5,
-              ),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withOpacity(isDark ? 0.35 : 0.12),
-                  blurRadius: 30,
-                  offset: const Offset(0, 10),
-                ),
-              ],
+    final bottomInset = MediaQuery.of(context).padding.bottom;
+
+    return Padding(
+      padding: EdgeInsets.only(bottom: math.max(bottomInset, 18)),
+      child: Center(
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.end,
+          children: [
+            _AnimatedReactionBtn(
+              emoji: '🥵',
+              label: 'Too Hot',
+              gradientColors: const [Color(0xFFFF6584), Color(0xFFFF416C)],
+              glowColor: const Color(0xFFFF416C),
+              onTap: () => _handleReaction('🥵', currentUser, user, isFollowing),
+              isDark: isDark,
             ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                _buildReactionBtn('🥶', 'Cold!', const Color(0xFF6C3FC5), () => _handleReaction('🥶', currentUser, user, isFollowing), isDark),
-                const SizedBox(width: 24),
-                _buildReactionBtn('🤌', 'Chef Kiss', const Color(0xFFFF2A5F), () => _handleReaction('🤌', currentUser, user, isFollowing), isDark, isMain: true),
-                const SizedBox(width: 24),
-                _buildReactionBtn('😘', 'Love!', const Color(0xFFE91E8C), () => _handleReaction('😘', currentUser, user, isFollowing), isDark),
-              ],
+            const SizedBox(width: 24),
+            _AnimatedReactionBtn(
+              emoji: '😍',
+              label: 'Crushing',
+              gradientColors: const [Color(0xFFFF758C), Color(0xFFFF7EB3)],
+              glowColor: const Color(0xFFFF758C),
+              onTap: () => _handleReaction('😍', currentUser, user, isFollowing),
+              isDark: isDark,
+              isMain: true,
             ),
-          ),
+            const SizedBox(width: 24),
+            _AnimatedReactionBtn(
+              emoji: '😊',
+              label: 'DM Me',
+              gradientColors: const [Color(0xFF5B86E5), Color(0xFF36D1DC)],
+              glowColor: const Color(0xFF5B86E5),
+              onTap: () => _handleReaction('😊', currentUser, user, isFollowing),
+              isDark: isDark,
+            ),
+          ],
         ),
       ),
     );
   }
 
-  Widget _buildReactionBtn(String emoji, String label, Color color, VoidCallback onTap, bool isDark, {bool isMain = false}) {
-    final size = isMain ? 68.0 : 52.0;
-    return GestureDetector(
-      onTap: onTap,
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Container(
-            width: size,
-            height: size,
-            decoration: BoxDecoration(
-              gradient: isMain ? LinearGradient(
-                colors: [color.withOpacity(1), color.withRed(255)],
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-              ) : null,
-              color: isMain ? null : color.withOpacity(isDark ? 0.25 : 0.15),
-              shape: BoxShape.circle,
-              border: Border.all(color: color.withOpacity(0.5), width: 1.5),
-              boxShadow: isMain ? [
-                BoxShadow(color: color.withOpacity(0.45), blurRadius: 18, offset: const Offset(0, 6)),
-              ] : [],
-            ),
-            child: Center(
-              child: Text(emoji, style: TextStyle(fontSize: isMain ? 30 : 22)),
-            ),
-          ),
-          const SizedBox(height: 6),
-          Text(
-            label,
-            style: TextStyle(
-              fontSize: 10,
-              fontWeight: FontWeight.w700,
-              color: isDark ? Colors.white60 : Colors.black45,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
   void _handleReaction(String emoji, UserModel currentUser, UserModel targetUser, bool isFollowing) async {
     try {
-      final db = FirebaseFirestore.instanceFor(app: Firebase.app(), databaseId: 'default');
+      final db = firestoreProvider;
       final chatId = 'chat_${currentUser.id}_${targetUser.id}';
 
       final chatDoc = await db.collection('chats').doc(chatId).get();
@@ -2182,7 +2540,19 @@ class _UserDetailScreenState extends ConsumerState<UserDetailScreen>
       });
 
       if (mounted) {
-        _showReactionSuccess(emoji, targetUser.name);
+        if (emoji == '😊' && chatDoc.exists && chatDoc.data()?['status'] == 'accepted') {
+          context.pushNamed('chat-detail', pathParameters: {
+            'chatId': chatId
+          }, extra: {
+            'otherUserId': targetUser.id,
+            'name': targetUser.name,
+            'avatarUrl': targetUser.avatarUrl,
+            'isOnline': targetUser.isOnline,
+            'isConfession': false,
+          });
+        } else {
+          _showReactionSuccess(emoji, targetUser.name);
+        }
       }
     } catch (e) {
       if (mounted) _showError('Reaction error: $e');
@@ -2256,32 +2626,40 @@ class _UserDetailScreenState extends ConsumerState<UserDetailScreen>
     return Column(
       children: [
         Container(
-          margin: const EdgeInsets.symmetric(horizontal: 24),
-          height: 52,
+          margin: const EdgeInsets.symmetric(horizontal: 20),
+          height: 50,
+          padding: const EdgeInsets.all(4),
           decoration: BoxDecoration(
-            color: isDark ? Colors.white.withOpacity(0.04) : Colors.black.withOpacity(0.04),
-            borderRadius: BorderRadius.circular(20),
+            color: isDark ? Colors.white.withOpacity(0.05) : Colors.black.withOpacity(0.04),
+            borderRadius: BorderRadius.circular(22),
             border: Border.all(
-              color: isDark ? Colors.white.withOpacity(0.08) : Colors.black.withOpacity(0.02),
+              color: isDark ? Colors.white.withOpacity(0.08) : Colors.black.withOpacity(0.04),
               width: 1,
             ),
           ),
-          child: SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            physics: const BouncingScrollPhysics(),
-            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
-            child: Row(
-              children: [
-                _buildTabHeader(0, '🧬 Compatibility', isDark),
-                _buildTabHeader(1, '🎯 Looking For', isDark),
-                _buildTabHeader(2, '✍️ Posts', isDark),
-              ],
-            ),
+          child: Row(
+            children: [
+              Expanded(child: _buildTabHeader(0, '🧬 Match', isDark)),
+              Expanded(child: _buildTabHeader(1, '🎯 Intent', isDark)),
+              Expanded(child: _buildTabHeader(2, '✍️ Posts', isDark)),
+            ],
           ),
         ),
-        const SizedBox(height: 24),
+        const SizedBox(height: 20),
         AnimatedSwitcher(
-          duration: const Duration(milliseconds: 300),
+          duration: const Duration(milliseconds: 320),
+          transitionBuilder: (child, animation) {
+            return FadeTransition(
+              opacity: animation,
+              child: SlideTransition(
+                position: Tween<Offset>(
+                  begin: const Offset(0, 0.05),
+                  end: Offset.zero,
+                ).animate(CurvedAnimation(parent: animation, curve: Curves.easeOutCubic)),
+                child: child,
+              ),
+            );
+          },
           child: _activeTab == 0
               ? _buildCompatibilityCard(user, currentUser, isDark)
               : _activeTab == 1
@@ -2300,19 +2678,24 @@ class _UserDetailScreenState extends ConsumerState<UserDetailScreen>
         setState(() => _activeTab = index);
       },
       child: AnimatedContainer(
-        duration: const Duration(milliseconds: 200),
-        margin: const EdgeInsets.symmetric(horizontal: 4),
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        duration: const Duration(milliseconds: 240),
+        curve: Curves.easeOutCubic,
         decoration: BoxDecoration(
           color: isActive
-              ? (isDark ? AppTheme.primaryBlue.withOpacity(0.2) : Colors.white)
+              ? (isDark ? AppTheme.accentPurple.withOpacity(0.25) : Colors.white)
               : Colors.transparent,
-          borderRadius: BorderRadius.circular(14),
+          borderRadius: BorderRadius.circular(18),
+          border: isActive
+              ? Border.all(
+                  color: isDark ? AppTheme.accentPurple.withOpacity(0.4) : Colors.black.withOpacity(0.06),
+                  width: 1.2,
+                )
+              : null,
           boxShadow: isActive && !isDark
               ? [
                   BoxShadow(
-                    color: Colors.black.withOpacity(0.06),
-                    blurRadius: 8,
+                    color: Colors.black.withOpacity(0.07),
+                    blurRadius: 10,
                     offset: const Offset(0, 2),
                   )
                 ]
@@ -2325,8 +2708,8 @@ class _UserDetailScreenState extends ConsumerState<UserDetailScreen>
               fontSize: 13,
               fontWeight: FontWeight.w900,
               color: isActive
-                  ? AppTheme.primaryBlue
-                  : (isDark ? Colors.white54 : AppTheme.textSecondary),
+                  ? (isDark ? const Color(0xFFD8B4FE) : AppTheme.accentPurple)
+                  : (isDark ? Colors.white60 : AppTheme.textSecondary),
             ),
           ),
         ),
@@ -2519,20 +2902,34 @@ class _UserDetailScreenState extends ConsumerState<UserDetailScreen>
               style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, color: AppTheme.textSecondary),
             ),
             const Spacer(),
-            Text(
-              '${(value * 100).toInt()}%',
-              style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w800, color: color),
+            TweenAnimationBuilder<double>(
+              tween: Tween<double>(begin: 0.0, end: value),
+              duration: const Duration(milliseconds: 800),
+              curve: Curves.easeOutCubic,
+              builder: (context, val, _) {
+                return Text(
+                  '${(val * 100).toInt()}%',
+                  style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w800, color: color),
+                );
+              },
             ),
           ],
         ),
         const SizedBox(height: 6),
         ClipRRect(
-          borderRadius: BorderRadius.circular(4),
-          child: LinearProgressIndicator(
-            value: value,
-            minHeight: 6,
-            backgroundColor: color.withOpacity(0.1),
-            valueColor: AlwaysStoppedAnimation<Color>(color),
+          borderRadius: BorderRadius.circular(6),
+          child: TweenAnimationBuilder<double>(
+            tween: Tween<double>(begin: 0.0, end: value),
+            duration: const Duration(milliseconds: 900),
+            curve: Curves.easeOutCubic,
+            builder: (context, val, _) {
+              return LinearProgressIndicator(
+                value: val,
+                minHeight: 7,
+                backgroundColor: color.withOpacity(0.12),
+                valueColor: AlwaysStoppedAnimation<Color>(color),
+              );
+            },
           ),
         ),
       ],
@@ -2540,20 +2937,29 @@ class _UserDetailScreenState extends ConsumerState<UserDetailScreen>
   }
 
   Widget _buildLookingForCard(UserModel user, bool isDark) {
+    final intent = user.relationshipIntent ?? 'Long-term connection';
+    final intentEmoji = switch (intent.toLowerCase()) {
+      'serious' || 'long-term connection' => '💍',
+      'casual' => '🥂',
+      'open' => '✨',
+      'friendship' => '🤝',
+      _ => '💖',
+    };
+
     return Container(
       key: const ValueKey(2),
-      margin: const EdgeInsets.symmetric(horizontal: 24),
+      margin: const EdgeInsets.symmetric(horizontal: 20),
       padding: const EdgeInsets.all(22),
       decoration: BoxDecoration(
-        color: isDark ? Colors.black.withOpacity(0.3) : Colors.white.withOpacity(0.55),
+        color: isDark ? Colors.black.withOpacity(0.3) : Colors.white.withOpacity(0.65),
         borderRadius: BorderRadius.circular(28),
         border: Border.all(
-          color: isDark ? Colors.white.withOpacity(0.08) : Colors.white.withOpacity(0.65),
+          color: isDark ? Colors.white.withOpacity(0.08) : Colors.white.withOpacity(0.7),
           width: 1.5,
         ),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(isDark ? 0.05 : 0.03),
+            color: Colors.black.withOpacity(isDark ? 0.08 : 0.03),
             blurRadius: 20,
             offset: const Offset(0, 8),
           ),
@@ -2575,24 +2981,69 @@ class _UserDetailScreenState extends ConsumerState<UserDetailScreen>
                   letterSpacing: -0.4,
                 ),
               ),
+              const Spacer(),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                decoration: BoxDecoration(
+                  color: AppTheme.accentPink.withOpacity(0.14),
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: AppTheme.accentPink.withOpacity(0.3)),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(intentEmoji, style: const TextStyle(fontSize: 12)),
+                    const SizedBox(width: 4),
+                    Text(
+                      intent.toUpperCase(),
+                      style: TextStyle(
+                        color: AppTheme.accentPink,
+                        fontWeight: FontWeight.w900,
+                        fontSize: 10.5,
+                        letterSpacing: 0.5,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
             ],
           ),
           const SizedBox(height: 16),
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+            padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
-              color: AppTheme.accentPink.withOpacity(0.08),
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: AppTheme.accentPink.withOpacity(0.15)),
+              gradient: LinearGradient(
+                colors: isDark
+                    ? [Colors.white.withOpacity(0.04), Colors.white.withOpacity(0.02)]
+                    : [const Color(0xFFFFF0F5), const Color(0xFFFFF5F7)],
+              ),
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(
+                color: isDark ? Colors.white12 : const Color(0xFFFFD6E5),
+                width: 1.2,
+              ),
             ),
             child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Icon(Icons.favorite_rounded, color: AppTheme.accentPink, size: 20),
-                const SizedBox(width: 12),
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: AppTheme.accentPink.withOpacity(0.15),
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(Icons.favorite_rounded, color: AppTheme.accentPink, size: 20),
+                ),
+                const SizedBox(width: 14),
                 Expanded(
                   child: Text(
-                    'Long-term relationship open to short-term connection. Seeking someone to explore food spots, art galleries, and share playlist discoveries. ☕🎵',
-                    style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, height: 1.4, color: AppTheme.accentPink),
+                    'Looking for genuine chemistry, meaningful conversations, and exploring cozy café spots. Open to where the right connection leads. ☕✨',
+                    style: TextStyle(
+                      fontSize: 13.5,
+                      fontWeight: FontWeight.w600,
+                      height: 1.5,
+                      color: isDark ? Colors.white.withOpacity(0.9) : const Color(0xFF881337),
+                    ),
                   ),
                 ),
               ],
@@ -3030,7 +3481,7 @@ class _UserDetailScreenState extends ConsumerState<UserDetailScreen>
               child: Transform.scale(
                 scale: 1.2, // Slightly scaled up so blur edges fill container smoothly
                 child: Image.network(
-                  mediaUrl,
+                  ImageUrlHelper.proxy(mediaUrl),
                   fit: BoxFit.cover,
                   errorBuilder: (_, __, ___) => _takePlaceholder(isDark, user),
                 ),
@@ -3131,7 +3582,7 @@ class _UserDetailScreenState extends ConsumerState<UserDetailScreen>
             imageFilter: ImageFilter.blur(sigmaX: 7.0, sigmaY: 7.0),
             child: Transform.scale(
               scale: 1.25,
-              child: Image.network(avatar, fit: BoxFit.cover),
+              child: Image.network(ImageUrlHelper.proxy(avatar), fit: BoxFit.cover),
             ),
           )
         else
@@ -3292,3 +3743,318 @@ class _CustomConfessThumbShape extends SliderComponentShape {
   }
 }
 
+// ─── Bouncing Button for Tactile Press Feedback ──────────────────────────────
+class _BouncingButton extends StatefulWidget {
+  final Widget child;
+  final VoidCallback onTap;
+  const _BouncingButton({required this.child, required this.onTap});
+
+  @override
+  State<_BouncingButton> createState() => _BouncingButtonState();
+}
+
+class _BouncingButtonState extends State<_BouncingButton> with SingleTickerProviderStateMixin {
+  late final AnimationController _ctrl;
+  late final Animation<double> _scale;
+
+  @override
+  void initState() {
+    super.initState();
+    _ctrl = AnimationController(vsync: this, duration: const Duration(milliseconds: 140));
+    _scale = Tween<double>(begin: 1.0, end: 0.94).animate(
+      CurvedAnimation(parent: _ctrl, curve: Curves.easeInOut),
+    );
+  }
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTapDown: (_) => _ctrl.forward(),
+      onTapUp: (_) {
+        _ctrl.reverse();
+        widget.onTap();
+      },
+      onTapCancel: () => _ctrl.reverse(),
+      child: AnimatedBuilder(
+        animation: _scale,
+        builder: (context, child) => Transform.scale(
+          scale: _scale.value,
+          child: child,
+        ),
+        child: widget.child,
+      ),
+    );
+  }
+}
+
+// ─── Animated Reaction Button ─────────────────────────────────────────────────
+
+class _AnimatedReactionBtn extends StatefulWidget {
+  final String emoji;
+  final String label;
+  final List<Color> gradientColors;
+  final Color glowColor;
+  final VoidCallback onTap;
+  final bool isDark;
+  final bool isMain;
+
+  const _AnimatedReactionBtn({
+    required this.emoji,
+    required this.label,
+    required this.gradientColors,
+    required this.glowColor,
+    required this.onTap,
+    required this.isDark,
+    this.isMain = false,
+  });
+
+  @override
+  State<_AnimatedReactionBtn> createState() => _AnimatedReactionBtnState();
+}
+
+class _AnimatedReactionBtnState extends State<_AnimatedReactionBtn>
+    with TickerProviderStateMixin {
+  late AnimationController _idleCtrl;
+  late AnimationController _tapCtrl;
+  late Animation<double> _tapScale;
+  late Animation<double> _tapEmojiOffsetY;
+  final List<_ReactionParticle> _particles = [];
+  final math.Random _random = math.Random();
+
+  @override
+  void initState() {
+    super.initState();
+    // Continuous idle breathing / floating animation
+    _idleCtrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 2200),
+    )..repeat();
+
+    // Interactive tap squish & elastic pop
+    _tapCtrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 550),
+    );
+
+    _tapScale = TweenSequence<double>([
+      TweenSequenceItem(
+        tween: Tween(begin: 1.0, end: 0.82)
+            .chain(CurveTween(curve: Curves.easeInQuad)),
+        weight: 20,
+      ),
+      TweenSequenceItem(
+        tween: Tween(begin: 0.82, end: 1.25)
+            .chain(CurveTween(curve: Curves.easeOutBack)),
+        weight: 45,
+      ),
+      TweenSequenceItem(
+        tween: Tween(begin: 1.25, end: 1.0)
+            .chain(CurveTween(curve: Curves.elasticOut)),
+        weight: 35,
+      ),
+    ]).animate(_tapCtrl);
+
+    _tapEmojiOffsetY = TweenSequence<double>([
+      TweenSequenceItem(
+        tween: Tween(begin: 0.0, end: -14.0)
+            .chain(CurveTween(curve: Curves.easeOutQuad)),
+        weight: 35,
+      ),
+      TweenSequenceItem(
+        tween: Tween(begin: -14.0, end: 0.0)
+            .chain(CurveTween(curve: Curves.bounceOut)),
+        weight: 65,
+      ),
+    ]).animate(_tapCtrl);
+
+    _tapCtrl.addStatusListener((status) {
+      if (status == AnimationStatus.completed) {
+        if (mounted) {
+          setState(() {
+            _particles.clear();
+          });
+        }
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _idleCtrl.dispose();
+    _tapCtrl.dispose();
+    super.dispose();
+  }
+
+  void _triggerTap() {
+    HapticFeedback.heavyImpact();
+    _spawnParticles();
+    _tapCtrl.forward(from: 0);
+    widget.onTap();
+  }
+
+  void _spawnParticles() {
+    _particles.clear();
+    final emojis = switch (widget.emoji) {
+      '🥵' => ['🔥', '🌶️', '✨', '🔥'],
+      '😍' => ['❤️', '💖', '✨', '💕'],
+      '😊' => ['💬', '💌', '✨', '⭐'],
+      _ => ['✨', '⭐', '💫'],
+    };
+    for (int i = 0; i < 6; i++) {
+      final angle = (i * 60 + _random.nextInt(20) - 10) * (math.pi / 180);
+      final dist = 28.0 + _random.nextDouble() * 20.0;
+      _particles.add(
+        _ReactionParticle(
+          emoji: emojis[i % emojis.length],
+          dx: math.cos(angle) * dist,
+          dy: math.sin(angle) * dist - 15,
+        ),
+      );
+    }
+    setState(() {});
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final size = widget.isMain ? 64.0 : 52.0;
+    final fontSize = widget.isMain ? 32.0 : 25.0;
+
+    return GestureDetector(
+      onTap: _triggerTap,
+      behavior: HitTestBehavior.opaque,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          SizedBox(
+            width: size + 16,
+            height: size + 8,
+            child: Stack(
+              clipBehavior: Clip.none,
+              alignment: Alignment.center,
+              children: [
+                // Floating Burst Particles on Tap
+                if (_tapCtrl.isAnimating)
+                  ..._particles.map((p) {
+                    final progress = _tapCtrl.value;
+                    final opacity = (1.0 - progress).clamp(0.0, 1.0);
+                    return Transform.translate(
+                      offset: Offset(p.dx * progress, p.dy * progress),
+                      child: Opacity(
+                        opacity: opacity,
+                        child: Transform.scale(
+                          scale: (0.6 + progress * 0.5).clamp(0.0, 1.2),
+                          child: Text(p.emoji, style: const TextStyle(fontSize: 16)),
+                        ),
+                      ),
+                    );
+                  }),
+
+                // Sleek Circular Action Button (Tinder/Bumble Style)
+                AnimatedBuilder(
+                  animation: Listenable.merge([_tapCtrl, _idleCtrl]),
+                  builder: (context, _) {
+                    final t = _idleCtrl.value;
+
+                    // Continuous idle animation
+                    double idleScale = 1.0;
+                    double idleRot = 0.0;
+                    double idleOffsetY = 0.0;
+
+                    if (widget.emoji == '🥵') {
+                      // Hot panting & subtle wobble
+                      idleScale = 1.0 + 0.08 * math.sin(t * 2 * math.pi);
+                      idleRot = 0.06 * math.sin(t * 4 * math.pi);
+                    } else if (widget.emoji == '😍') {
+                      // Heartbeat double-thump pulse
+                      final beat = math.sin(t * 2 * math.pi);
+                      idleScale = 1.0 + (beat > 0.4 ? (beat - 0.4) * 0.28 : 0.0);
+                    } else {
+                      // Cheerful floating bounce & greeting tilt
+                      idleOffsetY = -5.0 * math.sin(t * 2 * math.pi);
+                      idleRot = 0.05 * math.cos(t * 2 * math.pi);
+                    }
+
+                    return Transform.scale(
+                      scale: _tapScale.value,
+                      child: Container(
+                        width: size,
+                        height: size,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          gradient: LinearGradient(
+                            colors: widget.gradientColors,
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                          ),
+                          border: Border.all(
+                            color: Colors.white.withOpacity(0.35),
+                            width: 1.5,
+                          ),
+                          boxShadow: [
+                            BoxShadow(
+                              color: widget.glowColor.withOpacity(widget.isMain ? 0.55 : 0.4),
+                              blurRadius: widget.isMain ? 20 : 14,
+                              offset: const Offset(0, 6),
+                            ),
+                          ],
+                        ),
+                        child: Center(
+                          child: Transform.translate(
+                            offset: Offset(0, _tapEmojiOffsetY.value + idleOffsetY),
+                            child: Transform.rotate(
+                              angle: idleRot,
+                              child: Transform.scale(
+                                scale: idleScale,
+                                child: Text(
+                                  widget.emoji,
+                                  style: TextStyle(
+                                    fontSize: fontSize,
+                                    height: 1.0,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 5),
+          Text(
+            widget.label,
+            style: const TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w700,
+              color: Colors.white,
+              letterSpacing: 0.2,
+              shadows: [
+                Shadow(
+                  color: Colors.black87,
+                  blurRadius: 4,
+                  offset: Offset(0, 1),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ReactionParticle {
+  final String emoji;
+  final double dx;
+  final double dy;
+  _ReactionParticle({required this.emoji, required this.dx, required this.dy});
+}

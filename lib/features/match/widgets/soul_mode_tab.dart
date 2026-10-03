@@ -1,4 +1,5 @@
 import 'dart:ui';
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -141,7 +142,7 @@ class SoulModeTabState extends ConsumerState<SoulModeTab>
         body: body,
       );
 
-      // 2. Like if it's "too hot" or "crushing" — delegate to parent which handles follow + match detection
+      // 2. Like if it's "too_hot" or "crushing" — delegate to parent which handles follow + match detection
       if (reaction == 'too_hot' || reaction == 'crushing') {
         await widget.onLike(target);
       }
@@ -500,22 +501,20 @@ class SoulModeTabState extends ConsumerState<SoulModeTab>
             children: [
               _ReactionButton(
                 emoji: '🥵',
-                label: 'too hot',
-                color: const Color(0xFFF87171),
+                label: 'Too Hot',
                 isLoading: _isSending && _lastReaction == 'too_hot',
                 onTap: () => _react('too_hot'),
               ),
               _ReactionButton(
                 emoji: '😍',
-                label: 'crushing',
-                color: const Color(0xFFFF8EC8),
+                label: 'Crushing',
+                isMain: true,
                 isLoading: _isSending && _lastReaction == 'crushing',
                 onTap: () => _react('crushing'),
               ),
               _ReactionButton(
                 emoji: '😊',
-                label: 'Dm me',
-                color: const Color(0xFF6ECBF5),
+                label: 'DM Me',
                 isLoading: _isSending && _lastReaction == 'dm_me',
                 onTap: () => _react('dm_me'),
               ),
@@ -789,70 +788,157 @@ class SoulModeTabState extends ConsumerState<SoulModeTab>
 
 // ─── Reaction Button ─────────────────────────────────────────────────────────
 
-class _ReactionButton extends StatelessWidget {
+class _ReactionButton extends StatefulWidget {
   final String emoji;
   final String label;
-  final Color color;
   final bool isLoading;
   final VoidCallback onTap;
+  final bool isMain;
 
   const _ReactionButton({
     required this.emoji,
     required this.label,
-    required this.color,
     required this.isLoading,
     required this.onTap,
+    this.isMain = false,
   });
 
   @override
+  State<_ReactionButton> createState() => _ReactionButtonState();
+}
+
+class _ReactionButtonState extends State<_ReactionButton>
+    with TickerProviderStateMixin {
+  late AnimationController _idleCtrl;
+  late AnimationController _tapCtrl;
+  late Animation<double> _scale;
+
+  @override
+  void initState() {
+    super.initState();
+    _idleCtrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 2200),
+    )..repeat();
+
+    _tapCtrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 400),
+    );
+
+    _scale = TweenSequence<double>([
+      TweenSequenceItem(
+        tween: Tween(begin: 1.0, end: 0.82)
+            .chain(CurveTween(curve: Curves.easeInQuad)),
+        weight: 25,
+      ),
+      TweenSequenceItem(
+        tween: Tween(begin: 0.82, end: 1.22)
+            .chain(CurveTween(curve: Curves.easeOutBack)),
+        weight: 45,
+      ),
+      TweenSequenceItem(
+        tween: Tween(begin: 1.22, end: 1.0)
+            .chain(CurveTween(curve: Curves.elasticOut)),
+        weight: 30,
+      ),
+    ]).animate(_tapCtrl);
+  }
+
+  @override
+  void dispose() {
+    _idleCtrl.dispose();
+    _tapCtrl.dispose();
+    super.dispose();
+  }
+
+  void _handleTap() {
+    if (widget.isLoading) return;
+    HapticFeedback.heavyImpact();
+    _tapCtrl.forward(from: 0);
+    widget.onTap();
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final size = widget.isMain ? 58.0 : 48.0;
+    final fontSize = widget.isMain ? 40.0 : 34.0;
+
     return GestureDetector(
-      onTap: isLoading ? null : onTap,
+      onTap: _handleTap,
+      behavior: HitTestBehavior.opaque,
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          AnimatedContainer(
-            duration: const Duration(milliseconds: 200),
-            width: 70,
-            height: 70,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              color: color.withValues(alpha: 0.15),
-              border: Border.all(
-                color: color.withValues(alpha: 0.5),
-                width: 2,
-              ),
-              boxShadow: [
-                BoxShadow(
-                  color: color.withValues(alpha: 0.25),
-                  blurRadius: 16,
-                  offset: const Offset(0, 4),
+          ScaleTransition(
+            scale: _scale,
+            child: AnimatedBuilder(
+              animation: _idleCtrl,
+              builder: (context, _) {
+                final t = _idleCtrl.value;
+                double idleScale = 1.0;
+                double idleRot = 0.0;
+                double idleOffsetY = 0.0;
+
+                if (widget.emoji == '🥵') {
+                  idleScale = 1.0 + 0.08 * math.sin(t * 2 * math.pi);
+                  idleRot = 0.06 * math.sin(t * 4 * math.pi);
+                } else if (widget.emoji == '😍') {
+                  final beat = math.sin(t * 2 * math.pi);
+                  idleScale = 1.0 + (beat > 0.4 ? (beat - 0.4) * 0.28 : 0.0);
+                } else {
+                  idleOffsetY = -5.0 * math.sin(t * 2 * math.pi);
+                  idleRot = 0.05 * math.cos(t * 2 * math.pi);
+                }
+
+                return SizedBox(
+                  width: size,
+                  height: size,
+                  child: widget.isLoading
+                      ? const Center(
+                          child: SizedBox(
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: Colors.white,
+                            ),
+                          ),
+                        )
+                      : Center(
+                          child: Transform.translate(
+                            offset: Offset(0, idleOffsetY),
+                            child: Transform.rotate(
+                              angle: idleRot,
+                              child: Transform.scale(
+                                scale: idleScale,
+                                child: Text(
+                                  widget.emoji,
+                                  style: TextStyle(fontSize: fontSize, height: 1.0),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                );
+              },
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            widget.label,
+            style: const TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w700,
+              letterSpacing: 0.3,
+              color: Colors.white,
+              shadows: [
+                Shadow(
+                  color: Colors.black87,
+                  blurRadius: 6,
+                  offset: Offset(0, 1.5),
                 ),
               ],
-            ),
-            child: isLoading
-                ? Center(
-                    child: SizedBox(
-                      width: 24,
-                      height: 24,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2.5,
-                        color: color,
-                      ),
-                    ),
-                  )
-                : Center(
-                    child: Text(emoji,
-                        style: const TextStyle(fontSize: 30)),
-                  ),
-          ),
-          const SizedBox(height: 6),
-          Text(
-            label,
-            style: TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.w600,
-              color: Colors.white.withValues(alpha: 0.65),
             ),
           ),
         ],

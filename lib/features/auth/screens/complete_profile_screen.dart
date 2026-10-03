@@ -1,19 +1,18 @@
-import 'dart:io';
-import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:image_picker/image_picker.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_core/firebase_core.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/providers/firebase_auth_provider.dart';
+import '../../../core/providers/firestore_provider.dart';
+import '../../../shared/widgets/multi_photo_manager.dart';
 
 // ─── Provider ────────────────────────────────────────────────────────────────
 
-final _db = FirebaseFirestore.instanceFor(app: Firebase.app(), databaseId: 'default');
+final _db = firestoreProvider;
 
 // ─── Screen ──────────────────────────────────────────────────────────────────
 
@@ -39,8 +38,7 @@ class _CompleteProfileScreenState extends ConsumerState<CompleteProfileScreen>
   String _gender = ''; // 'male' | 'female' | 'other'
   String _interestedIn = 'female';
   String _relationshipIntent = 'serious';
-  XFile? _avatarFile;
-  String? _avatarUrl;
+  List<PhotoItem> _photos = [];
   final _nameCtrl = TextEditingController();
   final _bioCtrl = TextEditingController();
   final _ageCtrl = TextEditingController();
@@ -72,11 +70,23 @@ class _CompleteProfileScreenState extends ConsumerState<CompleteProfileScreen>
         .animate(CurvedAnimation(parent: _progressController, curve: Curves.easeInOut));
     _progressController.forward();
 
-    // Pre-fill name from Firebase Auth
+    // Pre-fill name and photo from Firebase Auth
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final user = ref.read(authStateChangesProvider).asData?.value;
-      if (user != null && user.displayName != null) {
-        _nameCtrl.text = user.displayName!;
+      if (user != null) {
+        if (user.displayName != null && user.displayName!.isNotEmpty) {
+          _nameCtrl.text = user.displayName!;
+        }
+        if (user.photoURL != null && user.photoURL!.isNotEmpty && _photos.isEmpty) {
+          setState(() {
+            _photos = [
+              PhotoItem(
+                id: 'auth_avatar_${DateTime.now().millisecondsSinceEpoch}',
+                url: user.photoURL,
+              ),
+            ];
+          });
+        }
       }
     });
   }
@@ -102,9 +112,9 @@ class _CompleteProfileScreenState extends ConsumerState<CompleteProfileScreen>
       return;
     }
     // Step 1: Photo
-    if (_currentStep == 1 && _avatarFile == null && _avatarUrl == null) {
+    if (_currentStep == 1 && _photos.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        _snack('Please pick a profile photo 📸'),
+        _snack('Please add at least 1 photo 📸'),
       );
       return;
     }
@@ -152,42 +162,36 @@ class _CompleteProfileScreenState extends ConsumerState<CompleteProfileScreen>
     }
   }
 
-  Future<void> _pickImage() async {
-    final picker = ImagePicker();
-    final picked = await picker.pickImage(
-      source: ImageSource.gallery,
-      imageQuality: 80,
-      maxWidth: 800,
-    );
-    if (picked != null) {
-      setState(() => _avatarFile = picked);
-    }
-  }
-
   Future<void> _saveProfile() async {
     setState(() => _isSaving = true);
     try {
       final user = ref.read(authStateChangesProvider).asData?.value;
       if (user == null) throw Exception('Not authenticated');
 
-      // Upload avatar if a new file was chosen
-      String? photoUrl = _avatarUrl;
-      if (_avatarFile != null) {
-        final storageRef = FirebaseStorage.instance.ref('avatars/${user.uid}.jpg');
-        if (kIsWeb) {
-          final bytes = await _avatarFile!.readAsBytes();
-          await storageRef.putData(
-            bytes,
-            SettableMetadata(contentType: 'image/jpeg'),
-          );
-        } else {
-          await storageRef.putFile(
-            File(_avatarFile!.path),
-            SettableMetadata(contentType: 'image/jpeg'),
-          );
+      // Upload photos (max 4)
+      final List<String> finalUrls = [];
+      final storage = FirebaseStorage.instance;
+      final timestamp = DateTime.now().millisecondsSinceEpoch;
+
+      for (int i = 0; i < _photos.length && i < 4; i++) {
+        final item = _photos[i];
+        if (item.bytes != null || item.file != null) {
+          final storageRef = storage.ref('avatars/${user.uid}_photo_${timestamp}_$i.jpg');
+          final bytes = item.bytes ?? (item.file != null ? await item.file!.readAsBytes() : null);
+          if (bytes != null) {
+            await storageRef.putData(
+              bytes,
+              SettableMetadata(contentType: 'image/jpeg'),
+            );
+            final downloadUrl = await storageRef.getDownloadURL();
+            finalUrls.add(downloadUrl);
+          }
+        } else if (item.url != null && item.url!.isNotEmpty) {
+          finalUrls.add(item.url!);
         }
-        photoUrl = await storageRef.getDownloadURL();
       }
+
+      final String? photoUrl = finalUrls.isNotEmpty ? finalUrls.first : null;
 
       // Build the profile map
       final isFemale = _gender == 'female';
@@ -202,7 +206,7 @@ class _CompleteProfileScreenState extends ConsumerState<CompleteProfileScreen>
         'interests': _selectedInterests.map((i) => i.substring(3)).toList(),
         'isVerified': false,
         'isOnline': true,
-        'photos': photoUrl != null ? [photoUrl] : [],
+        'photos': finalUrls,
         'followers': [],
         'following': [],
         'likedBy': [],
@@ -231,6 +235,12 @@ class _CompleteProfileScreenState extends ConsumerState<CompleteProfileScreen>
       };
 
       await _db.collection('users').doc(user.uid).set(data, SetOptions(merge: true));
+      try {
+        await FirebaseFirestore.instanceFor(app: Firebase.app(), databaseId: '(default)')
+            .collection('users')
+            .doc(user.uid)
+            .set(data, SetOptions(merge: true));
+      } catch (_) {}
 
       if (mounted) context.go('/feed');
     } catch (e) {
@@ -623,84 +633,38 @@ class _CompleteProfileScreenState extends ConsumerState<CompleteProfileScreen>
 
   Widget _buildPhotoStep(bool isDark, Size size) {
     return SingleChildScrollView(
-      padding: const EdgeInsets.all(24),
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
       child: Column(
         children: [
-          const SizedBox(height: 16),
-          const Text(
-            'Add your best photo ✨',
-            style: TextStyle(fontSize: 28, fontWeight: FontWeight.w800, color: AppTheme.textPrimary),
-            textAlign: TextAlign.center,
-          ),
           const SizedBox(height: 8),
-          Text(
-            'Your photo is the first impression.\nMake it count! 🔥',
-            style: TextStyle(fontSize: 15, color: AppTheme.textSecondary, height: 1.5),
+          const Text(
+            'Add your best photos ✨',
+            style: TextStyle(fontSize: 26, fontWeight: FontWeight.w800, color: AppTheme.textPrimary),
             textAlign: TextAlign.center,
           ),
-          const SizedBox(height: 40),
-          GestureDetector(
-            onTap: _pickImage,
-            child: AnimatedContainer(
-              duration: const Duration(milliseconds: 300),
-              width: 200,
-              height: 200,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                gradient: _avatarFile != null
-                    ? null
-                    : LinearGradient(
-                        colors: [AppTheme.primaryBlue, AppTheme.accentPurple],
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                      ),
-                boxShadow: [
-                  BoxShadow(
-                    color: AppTheme.primaryBlue.withOpacity(0.4),
-                    blurRadius: 40,
-                    offset: const Offset(0, 10),
-                  ),
-                ],
-              ),
-              child: _avatarFile != null
-                  ? ClipOval(
-                      child: kIsWeb
-                          ? Image.network(_avatarFile!.path, fit: BoxFit.cover)
-                          : Image.file(File(_avatarFile!.path), fit: BoxFit.cover),
-                    )
-                  : Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        const Icon(Icons.add_a_photo_rounded, color: Colors.white, size: 48),
-                        const SizedBox(height: 8),
-                        Text(
-                          'Tap to choose',
-                          style: TextStyle(color: Colors.white.withOpacity(0.9), fontSize: 14),
-                        ),
-                      ],
-                    ),
-            ),
+          const SizedBox(height: 6),
+          Text(
+            'Upload up to 4 photos. Drag or tap arrows to pick your #1 main picture!',
+            style: TextStyle(fontSize: 14, color: AppTheme.textSecondary, height: 1.4),
+            textAlign: TextAlign.center,
           ),
-          if (_avatarFile != null) ...[
-            const SizedBox(height: 24),
-            TextButton.icon(
-              onPressed: _pickImage,
-              icon: const Icon(Icons.edit_rounded, size: 16),
-              label: const Text('Change photo'),
-              style: TextButton.styleFrom(
-                foregroundColor: AppTheme.primaryBlue,
-                backgroundColor: AppTheme.primaryBlue.withOpacity(0.1),
-                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-              ),
-            ),
-          ],
-          const SizedBox(height: 32),
+          const SizedBox(height: 24),
+          MultiPhotoManager(
+            photos: _photos,
+            onPhotosChanged: (updated) {
+              setState(() => _photos = updated);
+            },
+            isDark: isDark,
+          ),
+          const SizedBox(height: 20),
           Container(
-            padding: const EdgeInsets.all(16),
+            padding: const EdgeInsets.all(14),
             decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.6),
+              color: isDark ? Colors.white.withOpacity(0.05) : Colors.white.withOpacity(0.7),
               borderRadius: BorderRadius.circular(16),
+              border: Border.all(
+                color: isDark ? Colors.white.withOpacity(0.08) : Colors.black.withOpacity(0.05),
+              ),
             ),
             child: Row(
               children: [
@@ -708,7 +672,7 @@ class _CompleteProfileScreenState extends ConsumerState<CompleteProfileScreen>
                 const SizedBox(width: 12),
                 Expanded(
                   child: Text(
-                    'Profiles with photos get 5× more connections',
+                    'The 1st photo is your main avatar. Up to 4 photos will be shown in your profile!',
                     style: TextStyle(fontSize: 13, color: AppTheme.textSecondary),
                   ),
                 ),

@@ -33,7 +33,7 @@ const Map<String, int> kFeatureCosts = {
 };
 
 const Set<String> _alwaysCostsCoins = {'boost', 'spotlight', 'gift'};
-const Set<String> _subGated = {'undo_ghost', 'priority_feed', 'extra_filters', 'ar_effects', 'phone_unlock'};
+const Set<String> _subGated = {'undo_ghost', 'priority_feed', 'extra_filters', 'ar_effects'};
 
 final featureAccessProvider = Provider.family<AccessDecision, String>((ref, feature) {
   final user = ref.watch(currentUserProvider);
@@ -42,6 +42,17 @@ final featureAccessProvider = Provider.family<AccessDecision, String>((ref, feat
 
 AccessDecision _check(String feature, UserModel user) {
   final cost = kFeatureCosts[feature] ?? 0;
+
+  // Phone unlock: free if active subscriber with remaining quota; otherwise directly costs coins
+  if (feature == 'phone_unlock') {
+    if (user.hasActiveSubscription && user.phoneUnlocksRemaining > 0) {
+      return const AccessDecision('phone_unlock', AccessResult.free);
+    }
+    if (user.isFemale && user.coins < cost) {
+      return AccessDecision(feature, AccessResult.cannotBuy, coinCost: cost);
+    }
+    return AccessDecision(feature, AccessResult.needsCoins, coinCost: cost);
+  }
 
   // Female users cannot purchase coins — send them to earn screen for coin-gated features
   if (user.isFemale && (_alwaysCostsCoins.contains(feature) || _subGated.contains(feature))) {
@@ -60,10 +71,6 @@ AccessDecision _check(String feature, UserModel user) {
   // Subscription-gated features
   if (_subGated.contains(feature)) {
     if (user.hasActiveSubscription) {
-      // Phone unlock: check quota
-      if (feature == 'phone_unlock' && user.phoneUnlocksRemaining <= 0) {
-        return AccessDecision(feature, AccessResult.needsCoins, coinCost: cost);
-      }
       return AccessDecision(feature, AccessResult.free);
     }
     // Not subscribed → show sub upsell or coin gate

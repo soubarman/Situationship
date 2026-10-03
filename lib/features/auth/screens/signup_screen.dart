@@ -2,12 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/theme/app_theme.dart';
-import '../../../core/providers/app_state_provider.dart';
 import '../../../core/providers/firebase_auth_provider.dart';
-import 'package:image_picker/image_picker.dart';
 import '../../../shared/widgets/gradient_button.dart';
-import 'dart:io';
-import 'package:flutter/foundation.dart' show kIsWeb;
+import '../../../shared/widgets/multi_photo_manager.dart';
 
 class SignupScreen extends ConsumerStatefulWidget {
   const SignupScreen({super.key});
@@ -29,8 +26,7 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
   bool _isLoading = false;
   int _step = 0;
   String? _errorMessage;
-  XFile? _avatarFile;
-  final ImagePicker _picker = ImagePicker();
+  List<PhotoItem> _photos = [];
 
   final List<String> _interests = [
     'Photography', 'Music', 'Art', 'Fashion', 'Travel',
@@ -79,8 +75,8 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
         return false;
       }
     } else if (_step == 3) {
-      if (_avatarFile == null) {
-        setState(() => _errorMessage = 'Please select a profile picture 📸');
+      if (_photos.isEmpty) {
+        setState(() => _errorMessage = 'Please add at least 1 profile photo 📸');
         return false;
       }
     }
@@ -116,7 +112,7 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
             gender: _selectedGender,
             phoneNumber: _phoneController.text.trim(),
             interests: List.from(_selectedInterests),
-            avatarFile: _avatarFile,
+            photoFiles: _photos.where((p) => p.file != null).map((p) => p.file!).toList(),
           );
       if (mounted) {
         context.go('/feed');
@@ -206,6 +202,10 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
                     text: _step == 3 ? 'Create Account 🎉' : 'Continue',
                     isLoading: _isLoading,
                     onPressed: _nextStep,
+                    gradient: const LinearGradient(
+                      colors: [Color(0xFFFF3366), Color(0xFFFF5252)],
+                    ),
+                    shadowColor: const Color(0xFFFF3366).withOpacity(0.4),
                   ),
                   const SizedBox(height: 20),
                 ],
@@ -221,16 +221,29 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
     return Row(
       children: [
         IconButton(
-          onPressed: () => _step == 0 ? context.pop() : setState(() { _step--; _errorMessage = null; }),
+          onPressed: () {
+            if (_step == 0) {
+              if (context.canPop()) {
+                context.pop();
+              } else {
+                context.go('/welcome');
+              }
+            } else {
+              setState(() {
+                _step--;
+                _errorMessage = null;
+              });
+            }
+          },
           icon: const Icon(Icons.arrow_back_ios_rounded),
           padding: EdgeInsets.zero,
         ),
         const Spacer(),
         TextButton(
           onPressed: () => context.go('/login'),
-          child: Text(
+          child: const Text(
             'Sign in',
-            style: TextStyle(color: AppTheme.primaryBlue, fontWeight: FontWeight.w600),
+            style: TextStyle(color: Color(0xFFFF5277), fontWeight: FontWeight.w700),
           ),
         ),
       ],
@@ -250,7 +263,11 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
                 margin: EdgeInsets.only(right: index < 3 ? 8 : 0),
                 decoration: BoxDecoration(
                   borderRadius: BorderRadius.circular(2),
-                  gradient: index <= _step ? AppTheme.primaryGradient : null,
+                  gradient: index <= _step
+                      ? const LinearGradient(
+                          colors: [Color(0xFFFF3366), Color(0xFFFF5252)],
+                        )
+                      : null,
                   color: index > _step ? AppTheme.textTertiary.withOpacity(0.2) : null,
                 ),
               ),
@@ -502,85 +519,36 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
   }
 
   Widget _buildStep3() {
-    return Column(
+    return SingleChildScrollView(
       key: const ValueKey(3),
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: [
-        const SizedBox(height: 20),
-        GestureDetector(
-          onTap: () async {
-            final XFile? image = await _picker.pickImage(
-              source: ImageSource.gallery,
-              imageQuality: 70,
-              maxWidth: 800,
-            );
-            if (image != null) {
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          MultiPhotoManager(
+            photos: _photos,
+            onPhotosChanged: (updated) {
               setState(() {
-                _avatarFile = image;
-                _errorMessage = null;
+                _photos = updated;
+                if (_photos.isNotEmpty) _errorMessage = null;
               });
-            }
-          },
-          child: Container(
-            width: 180,
-            height: 180,
-            decoration: BoxDecoration(
-              color: Theme.of(context).colorScheme.surfaceContainerHighest,
-              shape: BoxShape.circle,
-              border: Border.all(
-                color: _avatarFile != null ? AppTheme.primaryBlue : Colors.transparent,
-                width: 4,
+            },
+            isDark: Theme.of(context).brightness == Brightness.dark,
+            maxPhotos: 4,
+          ),
+          const SizedBox(height: 24),
+          Center(
+            child: Text(
+              'A great primary photo helps you stand out in the community ✨',
+              style: TextStyle(
+                color: AppTheme.textSecondary,
+                fontSize: 13,
+                fontWeight: FontWeight.w500,
               ),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.1),
-                  blurRadius: 20,
-                  offset: const Offset(0, 10),
-                ),
-              ],
-            ),
-            child: ClipOval(
-              child: _avatarFile != null
-                  ? (kIsWeb 
-                      ? Image.network(_avatarFile!.path, fit: BoxFit.cover) 
-                      : Image.file(File(_avatarFile!.path), fit: BoxFit.cover))
-                  : Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(Icons.add_a_photo_rounded, size: 40, color: AppTheme.primaryBlue),
-                        const SizedBox(height: 8),
-                        Text(
-                          'Upload Photo',
-                          style: TextStyle(
-                            color: AppTheme.primaryBlue,
-                            fontWeight: FontWeight.w600,
-                            fontSize: 12,
-                          ),
-                        ),
-                      ],
-                    ),
+              textAlign: TextAlign.center,
             ),
           ),
-        ),
-        const SizedBox(height: 48),
-        Text(
-          'Let others see your vibe! 💫',
-          style: TextStyle(
-            color: AppTheme.textSecondary,
-            fontSize: 16,
-            fontWeight: FontWeight.w500,
-          ),
-        ),
-        const SizedBox(height: 12),
-        Text(
-          'A clear photo helps you stand out in the community.',
-          style: TextStyle(
-            color: AppTheme.textTertiary,
-            fontSize: 13,
-          ),
-          textAlign: TextAlign.center,
-        ),
-      ],
+        ],
+      ),
     );
   }
 }

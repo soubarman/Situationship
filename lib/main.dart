@@ -5,7 +5,6 @@ import 'core/router/app_router.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'firebase_options.dart';
 import 'core/theme/app_theme.dart';
-import 'core/providers/theme_provider.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
@@ -68,16 +67,15 @@ class SituationshipApp extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final router = ref.watch(appRouterProvider);
-    final themeMode = ref.watch(themeModeProvider);
     final palette = ref.watch(appPaletteProvider);
     AppTheme.setPalette(palette);
 
     return MaterialApp.router(
       title: 'Situationship',
       debugShowCheckedModeBanner: false,
-      theme: AppTheme.lightThemeWith(palette),
+      theme: AppTheme.darkThemeWith(palette),
       darkTheme: AppTheme.darkThemeWith(palette),
-      themeMode: themeMode,
+      themeMode: ThemeMode.dark,
       routerConfig: router,
       // Lock text scale factor — prevents mid-session font-size jank
       builder: (context, child) {

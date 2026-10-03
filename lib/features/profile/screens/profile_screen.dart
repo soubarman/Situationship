@@ -18,6 +18,7 @@ import '../../../core/providers/firebase_auth_provider.dart';
 import '../../feed/widgets/post_card.dart';
 import '../../../shared/widgets/background_orbs.dart';
 import '../../wallet/widgets/coin_gate_sheet.dart';
+import '../../../core/utils/image_url_helper.dart';
 import '../../../shared/widgets/profile_choice_sheet.dart';
 
 class ProfileScreen extends ConsumerStatefulWidget {
@@ -251,8 +252,8 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
                     padding: const EdgeInsets.all(4.5),
                     child: ClipOval(
                       child: Image.network(
-                        user.avatarUrl ??
-                            'https://ui-avatars.com/api/?name=${Uri.encodeComponent(user.name)}&size=200&background=6ECBF5&color=fff&rounded=true',
+                        ImageUrlHelper.proxy(user.avatarUrl ??
+                            'https://ui-avatars.com/api/?name=${Uri.encodeComponent(user.name)}&size=200&background=6ECBF5&color=fff&rounded=true'),
                         fit: BoxFit.cover,
                         errorBuilder: (_, __, ___) => const Icon(Icons.person, color: Colors.white, size: 50),
                       ),
@@ -1197,13 +1198,12 @@ class _SettingsSheet extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final themeMode = ref.watch(themeModeProvider);
+    final currentVibe = ref.watch(themeVibeProvider);
 
     return Container(
       padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
-        color: isDark ? AppTheme.darkSurface : Colors.white,
+        color: AppTheme.darkSurface,
         borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
       ),
       child: Column(
@@ -1215,62 +1215,62 @@ class _SettingsSheet extends StatelessWidget {
               width: 38,
               height: 4,
               decoration: BoxDecoration(
-                color: isDark ? Colors.white24 : Colors.black26,
+                color: Colors.white24,
                 borderRadius: BorderRadius.circular(2),
               ),
             ),
           ),
           const SizedBox(height: 18),
-          Text(
+          const Text(
             'Settings & Preferences ⚙️',
             style: TextStyle(
               fontSize: 18,
               fontWeight: FontWeight.w900,
-              color: isDark ? Colors.white : Colors.black87,
+              color: Colors.white,
             ),
           ),
           const SizedBox(height: 20),
-          Text(
-            'Appearance Theme',
+          const Text(
+            'Theme Accent (Dark Mode)',
             style: TextStyle(
               fontSize: 13,
               fontWeight: FontWeight.w700,
-              color: isDark ? Colors.white60 : Colors.black54,
+              color: Colors.white60,
             ),
           ),
           const SizedBox(height: 10),
           Row(
             children: [
               Expanded(
-                child: _themeOption(
+                child: _vibeOption(
                   context,
-                  mode: ThemeMode.system,
-                  label: 'System',
-                  icon: Icons.brightness_auto_rounded,
-                  isSelected: themeMode == ThemeMode.system,
-                  isDark: isDark,
+                  vibe: ThemeVibe.male,
+                  label: 'Boy (Blue)',
+                  icon: Icons.bolt_rounded,
+                  isSelected: currentVibe == ThemeVibe.male,
+                  accentColor: const Color(0xFF2D6FD4),
                 ),
               ),
               const SizedBox(width: 8),
               Expanded(
-                child: _themeOption(
+                child: _vibeOption(
                   context,
-                  mode: ThemeMode.light,
-                  label: 'Light',
-                  icon: Icons.light_mode_rounded,
-                  isSelected: themeMode == ThemeMode.light,
-                  isDark: isDark,
+                  vibe: ThemeVibe.female,
+                  label: 'Girl (Pink)',
+                  icon: Icons.favorite_rounded,
+                  isSelected: currentVibe == ThemeVibe.female,
+                  accentColor: const Color(0xFFFF5277),
                 ),
               ),
               const SizedBox(width: 8),
               Expanded(
-                child: _themeOption(
+                child: _vibeOption(
                   context,
-                  mode: ThemeMode.dark,
-                  label: 'Dark',
-                  icon: Icons.dark_mode_rounded,
-                  isSelected: themeMode == ThemeMode.dark,
-                  isDark: isDark,
+                  vibe: ThemeVibe.auto,
+                  label: 'Auto (Gender)',
+                  icon: Icons.auto_awesome_rounded,
+                  isSelected: currentVibe == ThemeVibe.auto,
+                  accentColor: AppTheme.primaryPink,
                 ),
               ),
             ],
@@ -1298,39 +1298,38 @@ class _SettingsSheet extends StatelessWidget {
     );
   }
 
-  Widget _themeOption(
+  Widget _vibeOption(
     BuildContext context, {
-    required ThemeMode mode,
+    required ThemeVibe vibe,
     required String label,
     required IconData icon,
     required bool isSelected,
-    required bool isDark,
+    required Color accentColor,
   }) {
-    final activeColor = AppTheme.primaryBlue;
     return GestureDetector(
-      onTap: () => ref.read(themeModeProvider.notifier).setThemeMode(mode),
+      onTap: () => ref.read(themeVibeProvider.notifier).setVibe(vibe),
       child: Container(
         padding: const EdgeInsets.symmetric(vertical: 12),
         decoration: BoxDecoration(
           color: isSelected
-              ? activeColor.withOpacity(0.15)
-              : (isDark ? Colors.white.withOpacity(0.04) : Colors.black.withOpacity(0.04)),
+              ? accentColor.withOpacity(0.18)
+              : Colors.white.withOpacity(0.04),
           borderRadius: BorderRadius.circular(14),
           border: Border.all(
-            color: isSelected ? activeColor : (isDark ? Colors.white12 : Colors.black12),
+            color: isSelected ? accentColor : Colors.white12,
             width: isSelected ? 1.8 : 1.0,
           ),
         ),
         child: Column(
           children: [
-            Icon(icon, size: 20, color: isSelected ? activeColor : (isDark ? Colors.white60 : Colors.black54)),
+            Icon(icon, size: 20, color: isSelected ? accentColor : Colors.white60),
             const SizedBox(height: 6),
             Text(
               label,
               style: TextStyle(
                 fontSize: 12,
                 fontWeight: isSelected ? FontWeight.w800 : FontWeight.w600,
-                color: isSelected ? activeColor : (isDark ? Colors.white60 : Colors.black54),
+                color: isSelected ? accentColor : Colors.white60,
               ),
             ),
           ],

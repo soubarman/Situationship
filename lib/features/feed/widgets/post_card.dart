@@ -295,23 +295,39 @@ class _PostCardState extends ConsumerState<PostCard>
     final hasPlan = widget.post.caption.contains('Plan:') ||
         widget.post.caption.contains('🗓️ Plan');
 
+    final boostStatus = ref.watch(contentBoostStatusProvider(widget.post.id));
+    final isBoosted = boostStatus != null;
+
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
       decoration: BoxDecoration(
         color: isDark ? palette.surfaceTint : Colors.white,
         borderRadius: BorderRadius.circular(28),
         border: Border.all(
-          color: isDark ? palette.primary.withOpacity(0.20) : const Color(0xFFE8E4F2),
-          width: 1.2,
+          color: isBoosted
+              ? (boostStatus.boostTier == 'premium'
+                  ? const Color(0xFFFFB800).withValues(alpha: 0.5)
+                  : const Color(0xFF6366F1).withValues(alpha: 0.5))
+              : (isDark ? palette.primary.withValues(alpha: 0.20) : const Color(0xFFE8E4F2)),
+          width: isBoosted ? 1.5 : 1.2,
         ),
         boxShadow: [
+          if (isBoosted)
+            BoxShadow(
+              color: (boostStatus.boostTier == 'premium'
+                  ? const Color(0xFFFFB800)
+                  : const Color(0xFF6366F1)).withValues(alpha: isDark ? 0.16 : 0.08),
+              blurRadius: 20,
+              spreadRadius: 1,
+              offset: const Offset(0, 4),
+            ),
           BoxShadow(
-            color: Colors.black.withOpacity(isDark ? 0.35 : 0.05),
+            color: Colors.black.withValues(alpha: isDark ? 0.35 : 0.05),
             blurRadius: 18,
             offset: const Offset(0, 6),
           ),
           BoxShadow(
-            color: palette.primary.withOpacity(isDark ? 0.06 : 0.03),
+            color: palette.primary.withValues(alpha: isDark ? 0.06 : 0.03),
             blurRadius: 24,
             offset: const Offset(0, 8),
           ),
@@ -514,9 +530,9 @@ class _PostCardState extends ConsumerState<PostCard>
 
   Widget _buildVerifiedBadge(AppPalette palette) {
     return Container(
-      width: 17,
-      height: 17,
-      margin: const EdgeInsets.only(left: 6),
+      width: 15,
+      height: 15,
+      margin: const EdgeInsets.only(left: 4),
       decoration: BoxDecoration(
         shape: BoxShape.circle,
         color: palette.verifiedBadgeBg,
@@ -525,7 +541,7 @@ class _PostCardState extends ConsumerState<PostCard>
         child: Icon(
           palette.verifiedIcon,
           color: palette.verifiedIconColor,
-          size: 11,
+          size: 10,
         ),
       ),
     );
@@ -537,8 +553,8 @@ class _PostCardState extends ConsumerState<PostCard>
     return GestureDetector(
       onTap: () => _handleFollowToggle(isFollowing),
       child: Container(
-        margin: const EdgeInsets.only(left: 8),
-        padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 4),
+        margin: const EdgeInsets.only(left: 6),
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
         decoration: BoxDecoration(
           gradient: isFollowing ? null : palette.primaryGradient,
           color: isFollowing
@@ -549,8 +565,8 @@ class _PostCardState extends ConsumerState<PostCard>
               ? null
               : [
                   BoxShadow(
-                    color: palette.primary.withOpacity(0.35),
-                    blurRadius: 8,
+                    color: palette.primary.withOpacity(0.3),
+                    blurRadius: 6,
                     offset: const Offset(0, 2),
                   ),
                 ],
@@ -565,14 +581,14 @@ class _PostCardState extends ConsumerState<PostCard>
           mainAxisSize: MainAxisSize.min,
           children: [
             if (!isFollowing) ...[
-              const Icon(Icons.add_rounded, color: Colors.white, size: 13),
+              const Icon(Icons.add_rounded, color: Colors.white, size: 11),
               const SizedBox(width: 2),
             ],
             Text(
               isFollowing ? 'Following' : 'Follow',
               style: const TextStyle(
                 color: Colors.white,
-                fontSize: 11.5,
+                fontSize: 10.5,
                 fontWeight: FontWeight.w700,
               ),
             ),
@@ -630,6 +646,7 @@ class _PostCardState extends ConsumerState<PostCard>
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Row(
+                  crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
                     Flexible(
                       child: GestureDetector(
@@ -638,7 +655,7 @@ class _PostCardState extends ConsumerState<PostCard>
                           displayName,
                           style: TextStyle(
                             fontWeight: FontWeight.w700,
-                            fontSize: 16,
+                            fontSize: 15,
                             color: isDark ? Colors.white : const Color(0xFF131127),
                             letterSpacing: -0.2,
                           ),
@@ -648,6 +665,16 @@ class _PostCardState extends ConsumerState<PostCard>
                     ),
                     if (isVerified) _buildVerifiedBadge(palette),
                     _buildFollowButton(isDark, isFollowing, palette),
+                    if (boostStatus != null)
+                      Padding(
+                        padding: const EdgeInsets.only(left: 6),
+                        child: BoostBadge(
+                          isPremium: boostStatus.boostTier == 'premium',
+                          onTap: widget.post.userId == _currentUserId
+                              ? () => BoostScreen.show(context, widget.post)
+                              : null,
+                        ),
+                      ),
                     if (widget.post.isPinned) ...[
                       const SizedBox(width: 4),
                       Icon(
@@ -655,10 +682,6 @@ class _PostCardState extends ConsumerState<PostCard>
                         size: 13,
                         color: palette.primary,
                       ),
-                    ],
-                    if (boostStatus != null) ...[
-                      const SizedBox(width: 6),
-                      BoostBadge(isPremium: boostStatus.boostTier == 'premium'),
                     ],
                   ],
                 ),
@@ -740,45 +763,66 @@ class _PostCardState extends ConsumerState<PostCard>
               ],
             ),
           ),
+          const SizedBox(width: 6),
           Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              if (widget.post.userId == _currentUserId)
-                GestureDetector(
-                  onTap: () => BoostScreen.show(context, widget.post),
-                  child: Container(
-                    margin: const EdgeInsets.only(right: 6),
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                    decoration: BoxDecoration(
-                      gradient: const LinearGradient(
-                        colors: [Color(0xFFF59E0B), Color(0xFFEF4444)],
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                      ),
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: const Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(Icons.bolt_rounded, color: Colors.white, size: 12),
-                        SizedBox(width: 2),
-                        Text(
-                          'Boost',
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontSize: 10.5,
-                            fontWeight: FontWeight.w900,
+              if (boostStatus == null && widget.post.userId == _currentUserId)
+                Padding(
+                  padding: const EdgeInsets.only(right: 6),
+                  child: MouseRegion(
+                    cursor: SystemMouseCursors.click,
+                    child: GestureDetector(
+                      onTap: () {
+                        HapticFeedback.lightImpact();
+                        BoostScreen.show(context, widget.post);
+                      },
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3.5),
+                        decoration: BoxDecoration(
+                          gradient: const LinearGradient(
+                            colors: [Color(0xFFFF9F43), Color(0xFFFF5252)],
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
                           ),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(
+                            color: Colors.white.withValues(alpha: 0.3),
+                            width: 0.8,
+                          ),
+                          boxShadow: [
+                            BoxShadow(
+                              color: const Color(0xFFFF5252).withValues(alpha: 0.35),
+                              blurRadius: 6,
+                              offset: const Offset(0, 2),
+                            ),
+                          ],
                         ),
-                      ],
+                        child: const Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(Icons.bolt_rounded, color: Colors.white, size: 12),
+                            SizedBox(width: 2.5),
+                            Text(
+                              'Boost',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontSize: 10,
+                                fontWeight: FontWeight.w800,
+                                letterSpacing: 0.2,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
                     ),
                   ),
                 ),
               GestureDetector(
                 onTap: () => _showPostOptionsSheet(context, isDark, palette),
                 child: Container(
-                  width: 36,
-                  height: 36,
+                  width: 32,
+                  height: 32,
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
                     color: isDark ? palette.backgroundTint.withOpacity(0.85) : Colors.black.withOpacity(0.05),
@@ -790,7 +834,7 @@ class _PostCardState extends ConsumerState<PostCard>
                   child: Icon(
                     Icons.more_horiz_rounded,
                     color: isDark ? Colors.white.withOpacity(0.85) : Colors.black87,
-                    size: 19,
+                    size: 18,
                   ),
                 ),
               ),

@@ -56,6 +56,7 @@ class AuthController extends StateNotifier<AsyncValue<User?>> {
     required String phoneNumber,
     required List<String> interests,
     XFile? avatarFile,
+    List<XFile>? photoFiles,
   }) async {
     state = const AsyncValue.loading();
     try {
@@ -65,31 +66,34 @@ class AuthController extends StateNotifier<AsyncValue<User?>> {
 
       await user.updateDisplayName(name);
 
-      String? photoUrl;
+      final List<String> uploadedPhotoUrls = [];
+      final filesToUpload = (photoFiles != null && photoFiles.isNotEmpty)
+          ? photoFiles.take(4).toList()
+          : (avatarFile != null ? [avatarFile] : <XFile>[]);
 
-      if (avatarFile != null) {
+      for (int i = 0; i < filesToUpload.length; i++) {
         try {
-          final storageRef = FirebaseStorage.instance.ref('avatars/${user.uid}.jpg');
-
+          final f = filesToUpload[i];
+          final storageRef = FirebaseStorage.instance
+              .ref('avatars/${user.uid}_photo_${DateTime.now().millisecondsSinceEpoch}_$i.jpg');
           if (kIsWeb) {
-            final bytes = await avatarFile.readAsBytes();
-            await storageRef.putData(
-              bytes,
-              SettableMetadata(contentType: 'image/jpeg'),
-            );
+            final bytes = await f.readAsBytes();
+            await storageRef.putData(bytes, SettableMetadata(contentType: 'image/jpeg'));
           } else {
-            await storageRef.putFile(
-              File(avatarFile.path),
-              SettableMetadata(contentType: 'image/jpeg'),
-            );
+            await storageRef.putFile(File(f.path), SettableMetadata(contentType: 'image/jpeg'));
           }
-
-          photoUrl = await storageRef.getDownloadURL();
-          await user.updatePhotoURL(photoUrl);
+          final url = await storageRef.getDownloadURL();
+          uploadedPhotoUrls.add(url);
         } catch (e) {
-          print('Storage upload failed: $e');
-          // Don't crash the whole signup just because the photo failed to upload
+          print('Storage upload failed for photo $i: $e');
         }
+      }
+
+      final String? photoUrl = uploadedPhotoUrls.isNotEmpty ? uploadedPhotoUrls.first : null;
+      if (photoUrl != null) {
+        try {
+          await user.updatePhotoURL(photoUrl);
+        } catch (_) {}
       }
 
       await _db.collection('users').doc(user.uid).set({
@@ -106,7 +110,7 @@ class AuthController extends StateNotifier<AsyncValue<User?>> {
         'interests': interests,
         'isVerified': false,
         'isOnline': true,
-        'photos': photoUrl != null ? [photoUrl] : [],
+        'photos': uploadedPhotoUrls,
         'followers': [],
         'following': [],
         'likedBy': [],

@@ -7,6 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/theme/app_palette.dart';
 import '../../../shared/widgets/image_with_fallback.dart';
 import '../../../core/models/community_model.dart';
 import '../../../core/models/post_model.dart';
@@ -40,39 +41,202 @@ class _CommunityDetailScreenState extends ConsumerState<CommunityDetailScreen> {
     super.dispose();
   }
 
+  void _openCreatePost(BuildContext context, CommunityModel community) {
+    showModalBottomSheet(
+      context: context,
+      useRootNavigator: true,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => Padding(
+        padding: EdgeInsets.only(
+          bottom: MediaQuery.of(context).viewInsets.bottom,
+        ),
+        child: SafeArea(
+          child: QuickPostBox(
+            communityId: widget.communityId,
+            communityName: community.name,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCreatePostCard(
+    BuildContext context,
+    CommunityModel community,
+    UserModel currentUser,
+    AppPalette palette,
+    bool isDark,
+  ) {
+    final avatar = (currentUser.avatarUrl != null && currentUser.avatarUrl!.isNotEmpty)
+        ? currentUser.avatarUrl!
+        : 'https://i.pravatar.cc/100?u=${currentUser.id}';
+
+    return GestureDetector(
+      onTap: () => _openCreatePost(context, community),
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 16),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        decoration: BoxDecoration(
+          color: isDark ? const Color(0xFF141724) : Colors.white,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(
+            color: isDark ? Colors.white.withOpacity(0.08) : Colors.black.withOpacity(0.06),
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(isDark ? 0.25 : 0.05),
+              blurRadius: 10,
+              offset: const Offset(0, 3),
+            ),
+          ],
+        ),
+        child: Row(
+          children: [
+            CircleAvatar(
+              radius: 18,
+              backgroundImage: NetworkImage(avatar),
+              backgroundColor: isDark ? Colors.white10 : Colors.black12,
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                'Share something in ${community.name}...',
+                style: TextStyle(
+                  color: isDark ? Colors.white38 : Colors.black38,
+                  fontSize: 14,
+                  fontWeight: FontWeight.w500,
+                ),
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+              decoration: BoxDecoration(
+                gradient: palette.primaryGradient,
+                borderRadius: BorderRadius.circular(16),
+                boxShadow: [
+                  BoxShadow(
+                    color: palette.primary.withOpacity(0.3),
+                    blurRadius: 8,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
+              ),
+              child: const Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.edit_rounded, color: Colors.white, size: 14),
+                  SizedBox(width: 5),
+                  Text(
+                    'Post',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 12.5,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _handleJoinToggle(
+    UserModel currentUser,
+    CommunityModel community,
+    bool isJoined,
+    bool isPending,
+    AppPalette palette,
+  ) {
+    if (currentUser.id.isEmpty) return;
+    try {
+      ref.read(socialProvider.notifier).toggleCommunityJoin(
+        currentUserId: currentUser.id,
+        communityId: community.id,
+        isCurrentlyJoined: isJoined,
+        isOnlyAdminApproved: community.isOnlyAdminApproved,
+        pendingApprovals: community.pendingApprovals,
+      );
+
+      final message = isJoined
+          ? 'Left ${community.name}'
+          : (isPending
+              ? 'Cancelled join request for ${community.name}'
+              : (community.isOnlyAdminApproved
+                  ? 'Join request sent! 📨'
+                  : 'Joined ${community.name}! 🎉'));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(message),
+          backgroundColor: isJoined ? Colors.grey[800] : palette.primary,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          duration: const Duration(seconds: 2),
+        ),
+      );
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error: $e'),
+          backgroundColor: Colors.red[700],
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        ),
+      );
+    }
+  }
+
   Widget _buildTabButton({
     required String label,
+    required IconData icon,
     required bool isActive,
     required VoidCallback onTap,
   }) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final palette = ref.watch(appPaletteProvider);
     return GestureDetector(
       onTap: onTap,
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 200),
         curve: Curves.easeInOut,
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+        padding: const EdgeInsets.symmetric(vertical: 10),
+        alignment: Alignment.center,
         decoration: BoxDecoration(
-          gradient: isActive ? AppTheme.primaryGradient : null,
-          color: isActive ? null : (isDark ? AppTheme.darkCard : Colors.grey[200]),
-          borderRadius: BorderRadius.circular(30),
+          gradient: isActive ? palette.primaryGradient : null,
+          color: isActive ? null : Colors.transparent,
+          borderRadius: BorderRadius.circular(26),
           boxShadow: isActive
               ? [
                   BoxShadow(
-                    color: AppTheme.primaryBlue.withOpacity(0.3),
+                    color: palette.primary.withOpacity(0.35),
                     blurRadius: 10,
                     offset: const Offset(0, 3),
                   )
                 ]
               : [],
         ),
-        child: Text(
-          label,
-          style: TextStyle(
-            color: isActive ? Colors.white : (isDark ? Colors.white70 : Colors.black87),
-            fontSize: 13.5,
-            fontWeight: FontWeight.w800,
-          ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              icon,
+              size: 16,
+              color: isActive ? Colors.white : (isDark ? Colors.white60 : Colors.black54),
+            ),
+            const SizedBox(width: 6),
+            Text(
+              label,
+              style: TextStyle(
+                color: isActive ? Colors.white : (isDark ? Colors.white60 : Colors.black54),
+                fontSize: 13.5,
+                fontWeight: isActive ? FontWeight.w800 : FontWeight.w600,
+              ),
+            ),
+          ],
         ),
       ),
     );
@@ -340,6 +504,7 @@ class _CommunityDetailScreenState extends ConsumerState<CommunityDetailScreen> {
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final palette = ref.watch(appPaletteProvider);
     final currentUser = ref.watch(currentUserProvider);
     final communitiesAsync = ref.watch(communitiesProvider);
     final communities = communitiesAsync.valueOrNull;
@@ -362,27 +527,58 @@ class _CommunityDetailScreenState extends ConsumerState<CommunityDetailScreen> {
 
     return Scaffold(
       backgroundColor: isDark ? AppTheme.darkBg : AppTheme.lightBg,
+      floatingActionButton: isJoined && _activeTab == 'feed'
+          ? FloatingActionButton.extended(
+              onPressed: () => _openCreatePost(context, community),
+              backgroundColor: palette.primary,
+              icon: const Icon(Icons.edit_rounded, color: Colors.white, size: 18),
+              label: const Text(
+                'Post',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.w800,
+                  fontSize: 14,
+                ),
+              ),
+            )
+          : null,
       body: CustomScrollView(
         slivers: [
           // ─── Flexible Banner Header ─────────────────────────────────────────
           SliverAppBar(
-            expandedHeight: 300,
+            expandedHeight: 280,
             pinned: true,
             backgroundColor: isDark ? AppTheme.darkSurface : Colors.white,
             leading: IconButton(
-              icon: const Icon(Icons.arrow_back_ios_new, color: Colors.white),
+              icon: const Icon(Icons.arrow_back_ios_new, color: Colors.white, size: 20),
               onPressed: () => context.pop(),
             ),
             actions: [
               if (currentUser.id == community.createdBy)
                 IconButton(
-                  icon: const Icon(Icons.settings_outlined, color: Colors.white, size: 26),
+                  icon: const Icon(Icons.settings_outlined, color: Colors.white, size: 24),
                   tooltip: 'Community Settings',
                   onPressed: () => _showEditCommunitySheet(context, community),
                 ),
             ],
-            flexibleSpace: FlexibleSpaceBar(
-              background: Stack(
+            flexibleSpace: LayoutBuilder(
+              builder: (context, constraints) {
+                final top = constraints.biggest.height;
+                final isCollapsed = top <= (kToolbarHeight + MediaQuery.of(context).padding.top + 20);
+                return FlexibleSpaceBar(
+                  centerTitle: true,
+                  title: isCollapsed
+                      ? Text(
+                          community.name,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 16,
+                            fontWeight: FontWeight.w800,
+                          ),
+                          overflow: TextOverflow.ellipsis,
+                        )
+                      : null,
+                  background: Stack(
                 fit: StackFit.expand,
                 children: [
                   ImageWithFallback(imageUrl: community.imageUrl, fit: BoxFit.cover),
@@ -465,87 +661,96 @@ class _CommunityDetailScreenState extends ConsumerState<CommunityDetailScreen> {
                   ),
                 ],
               ),
-            ),
-          ),
+            );
+          },
+        ),
+      ),
 
           // ─── Community Detail and Subreddit Feed Content ────────────────────
           SliverToBoxAdapter(
             child: Padding(
-              padding: const EdgeInsets.fromLTRB(16, 24, 16, 24),
+              padding: const EdgeInsets.fromLTRB(16, 20, 16, 24),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Join Button
-                  ElevatedButton.icon(
-                    onPressed: currentUser.id.isEmpty
-                        ? null
-                        : () {
-                            try {
-                              // Instant background execution (Optimistic UI update)
-                              ref.read(socialProvider.notifier).toggleCommunityJoin(
-                                currentUserId: currentUser.id,
-                                communityId: community.id,
-                                isCurrentlyJoined: isJoined,
-                                isOnlyAdminApproved: community.isOnlyAdminApproved,
-                                pendingApprovals: community.pendingApprovals,
-                              );
-                              
-                              final message = isJoined
-                                  ? 'Left ${community.name}'
-                                  : (isPending
-                                      ? 'Cancelled join request for ${community.name}'
-                                      : (community.isOnlyAdminApproved
-                                          ? 'Join request sent! 📨'
-                                          : 'Joined ${community.name}! 🎉'));
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(
-                                  content: Text(message),
-                                  backgroundColor: isJoined ? Colors.grey[800] : AppTheme.primaryBlue,
-                                  behavior: SnackBarBehavior.floating,
-                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                                  duration: const Duration(seconds: 2),
-                                ),
-                              );
-                            } catch (e) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(
-                                  content: Text('Error: $e'),
-                                  backgroundColor: Colors.red[700],
-                                  behavior: SnackBarBehavior.floating,
-                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                                ),
-                              );
-                            }
-                          },
-                    icon: Icon(
-                      isJoined
-                          ? Icons.check_circle_outline
-                          : (isPending ? Icons.hourglass_empty_rounded : Icons.group_add_rounded),
-                      size: 20,
-                    ),
-                    label: Text(
-                      currentUser.id.isEmpty
-                          ? 'Loading...'
-                          : isJoined
-                              ? 'Joined ✓'
-                              : (isPending ? 'Request Pending' : 'Join Community'),
-                      style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800),
-                    ),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: isJoined
-                          ? (isDark ? AppTheme.darkCard : Colors.grey[200])
-                          : (isPending ? Colors.orange.withOpacity(0.15) : AppTheme.primaryBlue),
-                      foregroundColor: isJoined
-                          ? (isDark ? Colors.white70 : Colors.black54)
-                          : (isPending ? Colors.orange : Colors.white),
-                      minimumSize: const Size(double.infinity, 56),
-                      elevation: 0,
-                      shape: RoundedRectangleBorder(
+                  // Join Button or Member Status
+                  if (!isJoined)
+                    ElevatedButton.icon(
+                      onPressed: currentUser.id.isEmpty
+                          ? null
+                          : () {
+                              _handleJoinToggle(currentUser, community, isJoined, isPending, palette);
+                            },
+                      icon: Icon(
+                        isPending ? Icons.hourglass_empty_rounded : Icons.group_add_rounded,
+                        size: 20,
+                      ),
+                      label: Text(
+                        currentUser.id.isEmpty
+                            ? 'Loading...'
+                            : (isPending ? 'Request Pending' : 'Join Community'),
+                        style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800),
+                      ),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: isPending ? Colors.orange.withOpacity(0.15) : palette.primary,
+                        foregroundColor: isPending ? Colors.orange : Colors.white,
+                        minimumSize: const Size(double.infinity, 52),
+                        elevation: 0,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(16),
+                          side: isPending ? const BorderSide(color: Colors.orange, width: 1.5) : BorderSide.none,
+                        ),
+                      ),
+                    )
+                  else
+                    // Joined Member Status Bar
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                      decoration: BoxDecoration(
+                        color: isDark ? const Color(0xFF141724) : Colors.black.withOpacity(0.03),
                         borderRadius: BorderRadius.circular(16),
-                        side: isPending ? const BorderSide(color: Colors.orange, width: 1.5) : BorderSide.none,
+                        border: Border.all(
+                          color: isDark ? Colors.white.withOpacity(0.06) : Colors.black.withOpacity(0.04),
+                        ),
+                      ),
+                      child: Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(5),
+                            decoration: BoxDecoration(
+                              color: AppTheme.primaryGreen.withOpacity(0.15),
+                              shape: BoxShape.circle,
+                            ),
+                            child: Icon(Icons.check_rounded, color: AppTheme.primaryGreen, size: 14),
+                          ),
+                          const SizedBox(width: 8),
+                          Text(
+                            'Joined as Member',
+                            style: TextStyle(
+                              fontSize: 13.5,
+                              fontWeight: FontWeight.w700,
+                              color: isDark ? Colors.white70 : Colors.black87,
+                            ),
+                          ),
+                          const Spacer(),
+                          TextButton(
+                            onPressed: () {
+                              _handleJoinToggle(currentUser, community, isJoined, isPending, palette);
+                            },
+                            style: TextButton.styleFrom(
+                              foregroundColor: Colors.redAccent.withOpacity(0.85),
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                              minimumSize: Size.zero,
+                              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                            ),
+                            child: const Text(
+                              'Leave',
+                              style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600),
+                            ),
+                          ),
+                        ],
                       ),
                     ),
-                  ),
                   const SizedBox(height: 28),
 
                   // About Section
@@ -774,47 +979,42 @@ class _CommunityDetailScreenState extends ConsumerState<CommunityDetailScreen> {
 
                   // Tab Selector (Posts Feed vs Discord Chat Room)
                   if (isJoined) ...[
-                    Row(
-                      children: [
-                        _buildTabButton(
-                          label: 'Feed 📰',
-                          isActive: _activeTab == 'feed',
-                          onTap: () => setState(() => _activeTab = 'feed'),
+                    Container(
+                      padding: const EdgeInsets.all(4),
+                      decoration: BoxDecoration(
+                        color: isDark ? const Color(0xFF141724) : Colors.black.withOpacity(0.04),
+                        borderRadius: BorderRadius.circular(30),
+                        border: Border.all(
+                          color: isDark ? Colors.white.withOpacity(0.08) : Colors.black.withOpacity(0.05),
                         ),
-                        const SizedBox(width: 12),
-                        _buildTabButton(
-                          label: 'Chat Room 💬',
-                          isActive: _activeTab == 'chat',
-                          onTap: () => setState(() => _activeTab = 'chat'),
-                        ),
-                      ],
+                      ),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: _buildTabButton(
+                              label: 'Feed',
+                              icon: Icons.dynamic_feed_rounded,
+                              isActive: _activeTab == 'feed',
+                              onTap: () => setState(() => _activeTab = 'feed'),
+                            ),
+                          ),
+                          const SizedBox(width: 4),
+                          Expanded(
+                            child: _buildTabButton(
+                              label: 'Chat Room',
+                              icon: Icons.chat_bubble_outline_rounded,
+                              isActive: _activeTab == 'chat',
+                              onTap: () => setState(() => _activeTab = 'chat'),
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
-                    const SizedBox(height: 24),
+                    const SizedBox(height: 20),
                   ],
 
                   // Feed Tab Contents
                   if (_activeTab == 'feed' || !isJoined) ...[
-                    // Reddit-Style Feed Header
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        const Text(
-                          'Community Feed',
-                          style: TextStyle(fontSize: 20, fontWeight: FontWeight.w900),
-                        ),
-                        if (!isJoined)
-                          Text(
-                            'Join to view posts',
-                            style: TextStyle(
-                              color: AppTheme.primaryBlue.withOpacity(0.8),
-                              fontSize: 13,
-                              fontWeight: FontWeight.w700,
-                            ),
-                          ),
-                      ],
-                    ),
-                    const SizedBox(height: 16),
-
                     // Private Lock or Post Feed
                     if (!isJoined)
                       Center(
@@ -851,12 +1051,15 @@ class _CommunityDetailScreenState extends ConsumerState<CommunityDetailScreen> {
                         ),
                       )
                     else ...[
-                      // QuickPostBox tailored for this specific community!
-                      QuickPostBox(
-                        communityId: widget.communityId,
-                        communityName: community.name,
+                      // Sleek Create Post Prompt Card (Opens QuickPostBox sheet)
+                      _buildCreatePostCard(
+                        context,
+                        community,
+                        currentUser,
+                        palette,
+                        isDark,
                       ),
-                      const SizedBox(height: 20),
+                      const SizedBox(height: 14),
 
                       // Post Feed Stream
                       postsAsync.when(
@@ -864,17 +1067,24 @@ class _CommunityDetailScreenState extends ConsumerState<CommunityDetailScreen> {
                           if (posts.isEmpty) {
                             return Center(
                               child: Padding(
-                                padding: const EdgeInsets.symmetric(vertical: 48),
+                                padding: const EdgeInsets.symmetric(vertical: 40),
                                 child: Column(
                                   children: [
-                                    Icon(
-                                      Icons.forum_outlined,
-                                      size: 54,
-                                      color: AppTheme.textSecondary.withOpacity(0.25),
+                                    Container(
+                                      padding: const EdgeInsets.all(18),
+                                      decoration: BoxDecoration(
+                                        color: palette.primary.withOpacity(0.1),
+                                        shape: BoxShape.circle,
+                                      ),
+                                      child: Icon(
+                                        Icons.forum_outlined,
+                                        size: 40,
+                                        color: palette.primary,
+                                      ),
                                     ),
                                     const SizedBox(height: 16),
                                     Text(
-                                      'No posts yet in r/${community.name.replaceAll(' ', '')}',
+                                      'No posts yet in ${community.name}',
                                       style: const TextStyle(
                                         fontWeight: FontWeight.w700,
                                         fontSize: 16,
@@ -882,11 +1092,23 @@ class _CommunityDetailScreenState extends ConsumerState<CommunityDetailScreen> {
                                     ),
                                     const SizedBox(height: 6),
                                     Text(
-                                      'Be the first to share a post and start the conversation!',
+                                      'Be the first to share a post and start the vibe!',
                                       textAlign: TextAlign.center,
                                       style: TextStyle(
                                         color: AppTheme.textSecondary,
                                         fontSize: 13.5,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 18),
+                                    ElevatedButton.icon(
+                                      onPressed: () => _openCreatePost(context, community),
+                                      icon: const Icon(Icons.add_rounded, size: 18),
+                                      label: const Text('Create First Post', style: TextStyle(fontWeight: FontWeight.w800)),
+                                      style: ElevatedButton.styleFrom(
+                                        backgroundColor: palette.primary,
+                                        foregroundColor: Colors.white,
+                                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                                        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 11),
                                       ),
                                     ),
                                   ],
@@ -895,11 +1117,12 @@ class _CommunityDetailScreenState extends ConsumerState<CommunityDetailScreen> {
                             );
                           }
 
-                          return ListView.builder(
+                          return ListView.separated(
                             shrinkWrap: true,
-                            padding: EdgeInsets.zero,
+                            padding: const EdgeInsets.only(bottom: 90),
                             physics: const NeverScrollableScrollPhysics(),
                             itemCount: posts.length,
+                            separatorBuilder: (_, __) => const SizedBox(height: 16),
                             itemBuilder: (context, index) {
                               final post = posts[index];
                               return PostCard(

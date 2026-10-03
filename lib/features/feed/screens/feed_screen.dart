@@ -19,6 +19,7 @@ import '../../../core/models/user_model.dart';
 import '../../../core/models/notification_model.dart';
 import '../../../core/providers/firestore_provider.dart';
 import '../../../shared/widgets/background_orbs.dart';
+import '../../../shared/widgets/situationship_logo.dart';
 
 // false = All Stories, true = Following Only
 final storiesFilterProvider = StateProvider<bool>((ref) => false);
@@ -266,45 +267,10 @@ class _FeedScreenState extends ConsumerState<FeedScreen> {
       title: FittedBox(
         fit: BoxFit.scaleDown,
         alignment: Alignment.centerLeft,
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            ShaderMask(
-              shaderCallback: (bounds) => palette.logoGradient.createShader(bounds),
-              child: const Text(
-                'situationship',
-                style: TextStyle(
-                  fontSize: 22,
-                  fontWeight: FontWeight.w900,
-                  fontStyle: FontStyle.italic,
-                  color: Colors.white,
-                  letterSpacing: -0.5,
-                ),
-              ),
-            ),
-            const SizedBox(width: 6),
-            Container(
-              width: 20,
-              height: 20,
-              decoration: BoxDecoration(
-                color: palette.verifiedBadgeBg,
-                shape: BoxShape.circle,
-                boxShadow: [
-                  BoxShadow(
-                    color: palette.verifiedBadgeBg.withValues(alpha: 0.35),
-                    blurRadius: 6,
-                  ),
-                ],
-              ),
-              child: Center(
-                child: Icon(
-                  palette.verifiedIcon,
-                  color: palette.verifiedIconColor,
-                  size: 12,
-                ),
-              ),
-            ),
-          ],
+        child: SituationshipLogo(
+          fontSize: 22,
+          isDark: isDark,
+          showTrademark: true,
         ),
       ),
       actions: [

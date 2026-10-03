@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import '../../features/auth/screens/welcome_screen.dart';
 import '../../features/auth/screens/splash_screen.dart';
 import '../../features/auth/screens/login_screen.dart';
 import '../../features/auth/screens/signup_screen.dart';
@@ -68,7 +69,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
 
       // 2. AUTHENTICATION GUARD
       if (!isLoggedIn) {
-        return isProtected ? '/login' : null;
+        return isProtected ? '/welcome' : null;
       }
 
       // 3. PROFILE DATA LOADING GUARD (FOR LOGGED IN USERS)
@@ -102,7 +103,8 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       }
 
       // Logged in & on auth / splash screens → send to feed/complete-profile/permissions.
-      if (state.matchedLocation == '/login' ||
+      if (state.matchedLocation == '/welcome' ||
+          state.matchedLocation == '/login' ||
           state.matchedLocation == '/login/signup' ||
           state.matchedLocation == '/splash') {
         if (isProfileIncomplete) return '/complete-profile';
@@ -122,6 +124,11 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         path: '/splash',
         name: 'splash',
         builder: (context, state) => const SplashScreen(),
+      ),
+      GoRoute(
+        path: '/welcome',
+        name: 'welcome',
+        builder: (context, state) => const WelcomeScreen(),
       ),
       GoRoute(
         path: '/login',

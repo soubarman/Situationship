@@ -13,6 +13,7 @@ import '../../../core/providers/firebase_auth_provider.dart';
 import '../../../shared/widgets/background_orbs.dart';
 import '../../../core/utils/location_helper.dart';
 import '../../../core/utils/heart_queue_engine.dart';
+import '../../../shared/widgets/situationship_logo.dart';
 import '../widgets/discover_tab.dart';
 import '../widgets/soul_mode_tab.dart';
 import '../widgets/nearly_souls_tab.dart';
@@ -565,48 +566,10 @@ class _MatchScreenState extends ConsumerState<MatchScreen>
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              ShaderMask(
-                shaderCallback: (bounds) => LinearGradient(
-                  colors: [
-                    Colors.white,
-                    Color(0xFFFDE8F0), // Blush white
-                    Color(0xFFFF9EC8), // Light pink
-                    AppTheme.primaryBlue, // Hot pink
-                    AppTheme.accentPurple, // Brand pink
-                  ],
-                  stops: [0.0, 0.25, 0.55, 0.82, 1.0],
-                ).createShader(bounds),
-                child: const Text(
-                  'situationship',
-                  style: TextStyle(
-                    fontSize: 23,
-                    fontWeight: FontWeight.w900,
-                    fontStyle: FontStyle.italic,
-                    color: Colors.white,
-                    letterSpacing: -0.6,
-                  ),
-                ),
-              ),
-              const SizedBox(width: 7),
-              Container(
-                width: 22,
-                height: 22,
-                decoration: BoxDecoration(
-                  color: AppTheme.accentPurple,
-                  shape: BoxShape.circle,
-                ),
-                child: const Center(
-                  child: Icon(
-                    Icons.verified_user_rounded,
-                    color: Colors.white,
-                    size: 13.5,
-                  ),
-                ),
-              ),
-            ],
+          SituationshipLogo(
+            fontSize: 22,
+            isDark: isDark,
+            showTrademark: true,
           ),
 
           // Action buttons: Fire pill, Shop bag, Bell with pink badge, Search

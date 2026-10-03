@@ -14,39 +14,34 @@ service firebase.storage {
 
     // Stories: users can only upload to stories/
     match /stories/{fileName} {
-      // Anyone authenticated can view stories
-      allow read: if isAuthenticated();
-      
-      // Allow upload if authenticated, file is an image or video, and size is < 50MB
+      allow read: if true;
       allow create: if isAuthenticated()
                     && request.resource.size < 50 * 1024 * 1024
                     && request.resource.contentType.matches('image/.*|video/.*');
-                    
-      // Only owner can delete their stories (assuming fileName contains userId, or handled securely by logic)
       allow delete: if isAuthenticated();
     }
 
     // Profile Images: stored at users/{userId}/{fileName} OR avatars/{userId}.jpg
     match /users/{userId}/{fileName} {
-      allow read: if isAuthenticated();
+      allow read: if true;
       allow write: if isAuthenticated() 
                    && request.auth.uid == userId
-                   && request.resource.size < 5 * 1024 * 1024
+                   && request.resource.size < 10 * 1024 * 1024
                    && request.resource.contentType.matches('image/.*');
     }
 
     // Avatars (used by edit_profile_screen, complete_profile_screen, firebase_auth_provider)
     match /avatars/{fileName} {
-      allow read: if isAuthenticated();
-      // Allow upload only if fileName starts with the user's uid
+      allow read: if true;
+      // Allow upload only if authenticated and valid image
       allow write: if isAuthenticated()
-                   && request.resource.size < 5 * 1024 * 1024
+                   && request.resource.size < 10 * 1024 * 1024
                    && request.resource.contentType.matches('image/.*');
     }
 
     // Posts: images and videos
     match /posts/{fileName} {
-      allow read: if isAuthenticated();
+      allow read: if true;
       allow create: if isAuthenticated()
                     && request.resource.size < 50 * 1024 * 1024
                     && request.resource.contentType.matches('image/.*|video/.*');

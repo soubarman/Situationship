@@ -10,11 +10,11 @@ import '../../../core/theme/app_theme.dart';
 import '../../../core/theme/app_palette.dart';
 import '../../../core/providers/app_state_provider.dart';
 import '../../../core/providers/firebase_auth_provider.dart';
+import '../../../core/models/user_model.dart';
+import '../../../shared/widgets/multi_photo_manager.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 
-// ─── Provider ────────────────────────────────────────────────────────────────
-
-final _db = FirebaseFirestore.instanceFor(app: Firebase.app(), databaseId: 'default');
+import '../../../core/providers/firestore_provider.dart';
 
 // ─── Screen ──────────────────────────────────────────────────────────────────
 
@@ -27,8 +27,7 @@ class EditProfileScreen extends ConsumerStatefulWidget {
 
 class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
   bool _isSaving = false;
-  XFile? _avatarFile;
-  String? _currentAvatarUrl;
+  List<PhotoItem> _photos = [];
   
   final _nameCtrl = TextEditingController();
   final _bioCtrl = TextEditingController();
@@ -39,6 +38,7 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
   String _relationshipIntent = 'serious';
   bool _isPhonePublic = false;
   List<String> _selectedInterests = [];
+  bool _initializedFromUser = false;
 
   static const _allInterests = [
     '🎵 Music', '🎬 Movies', '📚 Books', '✈️ Travel', '🍕 Food',
@@ -52,33 +52,60 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final user = ref.read(currentUserProvider);
-      setState(() {
-        _nameCtrl.text = user.name;
-        _bioCtrl.text = user.bio ?? '';
-        _locationCtrl.text = user.location ?? '';
-        _currentAvatarUrl = user.avatarUrl;
-        _gender = user.gender;
-        final eff = user.effectiveInterestedIn;
-        if (eff.contains('male') && eff.contains('female')) {
-          _interestedIn = 'all';
-        } else if (eff.isNotEmpty) {
-          _interestedIn = eff.first;
-        } else {
-          _interestedIn = user.isMale ? 'female' : 'male';
-        }
-        _relationshipIntent = user.relationshipIntent ?? 'serious';
-        _phoneCtrl.text = user.phoneNumber ?? '';
-        _isPhonePublic = user.isPhonePublic;
-        
-        _selectedInterests = user.interests.map((interestText) {
-          final match = _allInterests.firstWhere(
-            (i) => i.substring(3) == interestText,
-            orElse: () => '✨ $interestText',
-          );
-          return match;
-        }).toList();
-      });
+      if (user.id.isNotEmpty && !_initializedFromUser) {
+        setState(() {
+          _initializedFromUser = true;
+          _populateFields(user);
+        });
+      }
     });
+  }
+
+  void _populateFields(UserModel user) {
+    _nameCtrl.text = user.name;
+    _bioCtrl.text = user.bio ?? '';
+    _locationCtrl.text = user.location ?? '';
+    final List<String> photosList = [];
+    if (user.avatarUrl != null && user.avatarUrl!.trim().isNotEmpty) {
+      photosList.add(user.avatarUrl!.trim());
+    }
+    for (final p in user.photos) {
+      final trimmed = p.trim();
+      if (trimmed.isNotEmpty && !photosList.contains(trimmed)) {
+        photosList.add(trimmed);
+      }
+      if (photosList.length == 4) break;
+    }
+    _photos = photosList.map((url) => PhotoItem(url: url, id: 'url_$url')).toList();
+    _gender = user.gender;
+    final eff = user.effectiveInterestedIn;
+    if (eff.contains('male') && eff.contains('female')) {
+      _interestedIn = 'all';
+    } else if (eff.isNotEmpty) {
+      _interestedIn = eff.first;
+    } else {
+      _interestedIn = user.isMale ? 'female' : 'male';
+    }
+    _relationshipIntent = user.relationshipIntent ?? 'serious';
+    _phoneCtrl.text = user.phoneNumber ?? '';
+    _isPhonePublic = user.isPhonePublic;
+    
+    _selectedInterests = user.interests.map((interestText) {
+      final match = _allInterests.firstWhere(
+        (i) => i.substring(3) == interestText,
+        orElse: () => '✨ $interestText',
+      );
+      return match;
+    }).toList();
+  }
+
+  void _togglePhonePublic(bool val) {
+    if (val && _phoneCtrl.text.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        _snack('Please enter your phone number first so others can unlock it!', isError: true),
+      );
+    }
+    setState(() => _isPhonePublic = val);
   }
 
   @override
@@ -90,21 +117,16 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
     super.dispose();
   }
 
-  Future<void> _pickImage() async {
-    final picker = ImagePicker();
-    final picked = await picker.pickImage(
-      source: ImageSource.gallery,
-      imageQuality: 80,
-      maxWidth: 800,
-    );
-    if (picked != null) {
-      setState(() => _avatarFile = picked);
-    }
-  }
-
   Future<void> _saveProfile() async {
     if (_nameCtrl.text.trim().isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(_snack('Name is required'));
+      return;
+    }
+
+    if (_isPhonePublic && _phoneCtrl.text.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        _snack('Please enter your phone number to enable coin unlock, or turn the switch off.', isError: true),
+      );
       return;
     }
 
@@ -114,24 +136,46 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
       if (authUser == null) throw Exception('Not authenticated');
       final userModel = ref.read(currentUserProvider);
 
-      String? photoUrl = _currentAvatarUrl;
-      if (_avatarFile != null) {
-        final ref = FirebaseStorage.instance.ref('avatars/${authUser.uid}.jpg');
-        
-        if (kIsWeb) {
-          final bytes = await _avatarFile!.readAsBytes();
-          await ref.putData(
-            bytes,
-            SettableMetadata(contentType: 'image/jpeg'),
-          );
-        } else {
-          await ref.putFile(
-            File(_avatarFile!.path),
-            SettableMetadata(contentType: 'image/jpeg'),
-          );
+      // Upload newly chosen local photo files and preserve existing URLs in order
+      final List<String> finalUrls = [];
+      final storage = FirebaseStorage.instanceFor(
+        app: Firebase.app(),
+        bucket: 'situation-ship.firebasestorage.app',
+      );
+
+      for (int i = 0; i < _photos.length && i < 4; i++) {
+        final item = _photos[i];
+        if (item.bytes != null || item.file != null) {
+          try {
+            final fileName = 'avatars/${authUser.uid}_photo_${DateTime.now().millisecondsSinceEpoch}_$i.jpg';
+            final storageRef = storage.ref(fileName);
+            final bytes = item.bytes ?? (item.file != null ? await item.file!.readAsBytes() : null);
+            if (bytes != null && bytes.isNotEmpty) {
+              await storageRef.putData(
+                bytes,
+                SettableMetadata(contentType: 'image/jpeg'),
+              );
+              final downloadUrl = await storageRef.getDownloadURL();
+              finalUrls.add(downloadUrl);
+              debugPrint('✅ [EditProfile] Uploaded photo $i: $downloadUrl');
+            }
+          } catch (e) {
+            debugPrint('⚠️ [EditProfile] Failed uploading photo $i: $e');
+            // If upload fails, retain existing URL if available
+            if (item.url != null && item.url!.isNotEmpty) {
+              finalUrls.add(item.url!);
+            }
+          }
+        } else if (item.url != null && item.url!.isNotEmpty) {
+          finalUrls.add(item.url!);
         }
-        
-        photoUrl = await ref.getDownloadURL();
+      }
+
+      final String? primaryPhoto = finalUrls.isNotEmpty ? finalUrls.first : null;
+      if (primaryPhoto != null) {
+        try {
+          await authUser.updatePhotoURL(primaryPhoto);
+        } catch (_) {}
       }
 
       // Use the location text field as the city for Boost — simple and consistent
@@ -147,9 +191,9 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
         'name': _nameCtrl.text.trim(),
         'bio': _bioCtrl.text.trim(),
         'location': locationText.isEmpty ? null : locationText,
-        'avatarUrl': photoUrl,
+        'avatarUrl': primaryPhoto,
+        'photos': finalUrls,
         'interests': _selectedInterests.map((i) => i.substring(3)).toList(),
-        // Use location as city for Boost scope — users just type their city naturally
         'currentCityId': cityId,
         'gender': _gender,
         'interestedIn': _interestedIn == 'all'
@@ -161,11 +205,18 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
         'phoneVisibilityVersion': newVersion,
       };
 
-      if (photoUrl != null) {
-        updates['photos'] = FieldValue.arrayUnion([photoUrl]);
-      }
+      // 1. Primary write to centralized firestoreProvider ('default')
+      await firestoreProvider.collection('users').doc(authUser.uid).set(updates, SetOptions(merge: true));
 
-      await _db.collection('users').doc(authUser.uid).set(updates, SetOptions(merge: true));
+      // 2. Mirror write to '(default)' for backward-compatibility
+      try {
+        await FirebaseFirestore.instanceFor(app: Firebase.app(), databaseId: '(default)')
+            .collection('users')
+            .doc(authUser.uid)
+            .set(updates, SetOptions(merge: true));
+      } catch (e) {
+        debugPrint('[EditProfile] Mirror write notice: $e');
+      }
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(_snack('Profile updated! ✨'));
@@ -192,6 +243,11 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final user = ref.watch(currentUserProvider);
+    if (!_initializedFromUser && user.id.isNotEmpty) {
+      _initializedFromUser = true;
+      _populateFields(user);
+    }
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Scaffold(
@@ -224,60 +280,13 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Center(
-              child: GestureDetector(
-                onTap: _pickImage,
-                child: Stack(
-                  children: [
-                    Container(
-                      width: 120,
-                      height: 120,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: isDark ? AppTheme.darkCard : Colors.white,
-                        border: Border.all(
-                          color: AppTheme.primaryBlue.withOpacity(0.3),
-                          width: 2,
-                        ),
-                        boxShadow: [
-                          BoxShadow(
-                            color: AppTheme.primaryBlue.withOpacity(0.2),
-                            blurRadius: 20,
-                            offset: const Offset(0, 10),
-                          ),
-                        ],
-                      ),
-                      child: ClipOval(
-                        child: _avatarFile != null
-                            ? (kIsWeb 
-                                ? Image.network(_avatarFile!.path, fit: BoxFit.cover)
-                                : Image.file(File(_avatarFile!.path), fit: BoxFit.cover))
-                            : _currentAvatarUrl != null
-                                ? Image.network(_currentAvatarUrl!, fit: BoxFit.cover)
-                                : Icon(Icons.person, size: 60, color: AppTheme.textTertiary),
-                      ),
-                    ),
-                    Positioned(
-                      bottom: 0,
-                      right: 0,
-                      child: Container(
-                        padding: const EdgeInsets.all(8),
-                        decoration: BoxDecoration(
-                          color: AppTheme.primaryBlue,
-                          shape: BoxShape.circle,
-                          border: Border.all(
-                            color: isDark ? AppTheme.darkBg : AppTheme.lightBg,
-                            width: 3,
-                          ),
-                        ),
-                        child: const Icon(Icons.camera_alt_rounded, color: Colors.white, size: 16),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
+            MultiPhotoManager(
+              photos: _photos,
+              onPhotosChanged: (updated) => setState(() => _photos = updated),
+              isDark: isDark,
+              maxPhotos: 4,
             ),
-            const SizedBox(height: 40),
+            const SizedBox(height: 32),
             
             _label('Name'),
             const SizedBox(height: 8),
@@ -352,33 +361,81 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
             const SizedBox(height: 12),
             
             Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
               decoration: BoxDecoration(
                 color: isDark ? AppTheme.darkCard : Colors.white,
                 borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: isDark ? AppTheme.darkBorder : Colors.black12),
+                border: Border.all(
+                  color: _isPhonePublic
+                      ? AppTheme.primaryBlue.withOpacity(0.5)
+                      : (isDark ? AppTheme.darkBorder : Colors.black12),
+                  width: _isPhonePublic ? 1.5 : 1.0,
+                ),
               ),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+              child: Material(
+                color: Colors.transparent,
+                child: InkWell(
+                  borderRadius: BorderRadius.circular(16),
+                  onTap: () => _togglePhonePublic(!_isPhonePublic),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                    child: Row(
                       children: [
-                        const Text('Allow others to unlock number with coins', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
-                        const SizedBox(height: 4),
-                        Text(
-                          'If off, your number remains completely private.',
-                          style: TextStyle(color: AppTheme.textSecondary, fontSize: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  const Flexible(
+                                    child: Text(
+                                      'Allow others to unlock number with coins',
+                                      style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                    decoration: BoxDecoration(
+                                      color: _isPhonePublic
+                                          ? Colors.green.withOpacity(0.15)
+                                          : (isDark ? Colors.white10 : Colors.black12),
+                                      borderRadius: BorderRadius.circular(6),
+                                    ),
+                                    child: Text(
+                                      _isPhonePublic ? 'ACTIVE' : 'OFF',
+                                      style: TextStyle(
+                                        color: _isPhonePublic ? Colors.green : AppTheme.textSecondary,
+                                        fontSize: 10,
+                                        fontWeight: FontWeight.w800,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                _isPhonePublic
+                                    ? '🪙 Others can spend 50 coins to reveal and copy your phone number.'
+                                    : '🔒 Off: Your number remains completely private and cannot be unlocked.',
+                                style: TextStyle(
+                                  color: _isPhonePublic
+                                      ? (isDark ? Colors.white70 : Colors.black87)
+                                      : AppTheme.textSecondary,
+                                  fontSize: 12,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        Switch(
+                          value: _isPhonePublic,
+                          onChanged: _togglePhonePublic,
+                          activeColor: AppTheme.primaryBlue,
                         ),
                       ],
                     ),
                   ),
-                  Switch(
-                    value: _isPhonePublic,
-                    onChanged: (val) => setState(() => _isPhonePublic = val),
-                    activeColor: AppTheme.primaryBlue,
-                  ),
-                ],
+                ),
               ),
             ),
             const SizedBox(height: 28),
@@ -580,19 +637,15 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
           items: const [
             DropdownMenuItem(
               value: ThemeVibe.auto,
-              child: Text('Auto (Matches Gender)'),
-            ),
-            DropdownMenuItem(
-              value: ThemeVibe.female,
-              child: Text('🌸 Girl Mode (Hot Pink & White)'),
+              child: Text('Auto (Matches Gender) ⚧'),
             ),
             DropdownMenuItem(
               value: ThemeVibe.male,
-              child: Text('⚡ Boy Mode (Electric Blue & White)'),
+              child: Text('⚡ Boy Mode (Blue)'),
             ),
             DropdownMenuItem(
-              value: ThemeVibe.cyber,
-              child: Text('🌿 Cyber Lime & Lilac'),
+              value: ThemeVibe.female,
+              child: Text('🌸 Girl Mode (Pink)'),
             ),
           ],
           onChanged: (val) {

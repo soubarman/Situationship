@@ -223,6 +223,9 @@ class _CoinGateSheetState extends ConsumerState<_CoinGateSheet> {
   }
 
   String _title(AccessDecision d) {
+    if (d.feature == 'phone_unlock') {
+      return 'Unlock Phone Number 📱';
+    }
     switch (d.result) {
       case AccessResult.needsCoins:  return '${d.coinCost} Coins Required';
       case AccessResult.needsSub:    return 'Premium Feature';
@@ -232,6 +235,12 @@ class _CoinGateSheetState extends ConsumerState<_CoinGateSheet> {
   }
 
   String _subtitle(AccessDecision d, int balance) {
+    if (d.feature == 'phone_unlock') {
+      if (balance >= d.coinCost) {
+        return 'You have $balance coins. Unlock and reveal this phone number for ${d.coinCost} coins.';
+      }
+      return 'You need ${d.coinCost} coins to unlock this phone number, but you only have $balance coins.';
+    }
     switch (d.result) {
       case AccessResult.needsCoins:
         if (balance >= d.coinCost) {

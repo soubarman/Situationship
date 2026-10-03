@@ -1121,60 +1121,33 @@ class _CommunitiesScreenState extends ConsumerState<CommunitiesScreen>
                   ),
                   const SizedBox(height: 12),
 
-                  // Button Row: Tap in + View
-                  Row(
-                    children: [
-                      // Tap in button (opens user profile)
-                      GestureDetector(
-                        onTap: () => context.push('/profile/view/${user.id}'),
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 8),
-                          decoration: BoxDecoration(
-                            gradient: LinearGradient(
-                              colors: [AppTheme.primaryBlue, AppTheme.accentPurple],
-                            ),
-                            borderRadius: BorderRadius.circular(18),
-                            boxShadow: [
-                              BoxShadow(
-                                color: AppTheme.primaryBlue.withOpacity(0.35),
-                                blurRadius: 10,
-                                offset: const Offset(0, 3),
-                              ),
-                            ],
+                  // Button: Tap in
+                  GestureDetector(
+                    onTap: () => context.push('/profile/view/${user.id}'),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 9),
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          colors: [AppTheme.primaryBlue, AppTheme.accentPurple],
+                        ),
+                        borderRadius: BorderRadius.circular(18),
+                        boxShadow: [
+                          BoxShadow(
+                            color: AppTheme.primaryBlue.withOpacity(0.35),
+                            blurRadius: 10,
+                            offset: const Offset(0, 3),
                           ),
-                          child: const Text(
-                            'Tap in',
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontSize: 13,
-                              fontWeight: FontWeight.w800,
-                            ),
-                          ),
+                        ],
+                      ),
+                      child: const Text(
+                        'Tap in',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 13,
+                          fontWeight: FontWeight.w800,
                         ),
                       ),
-                      const SizedBox(width: 8),
-
-                      // View button
-                      GestureDetector(
-                        onTap: () => context.push('/profile/view/${user.id}'),
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                          decoration: BoxDecoration(
-                            color: Colors.black.withOpacity(0.55),
-                            borderRadius: BorderRadius.circular(18),
-                            border: Border.all(color: Colors.white24, width: 1),
-                          ),
-                          child: const Text(
-                            'View',
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontSize: 13,
-                              fontWeight: FontWeight.w700,
-                            ),
-                          ),
-                        ),
-                      ),
-                    ],
+                    ),
                   ),
                 ],
               ),

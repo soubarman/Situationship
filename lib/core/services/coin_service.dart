@@ -1,4 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/foundation.dart';
 import '../providers/firestore_provider.dart';
 
@@ -76,11 +77,19 @@ class CoinService {
       await _db.runTransaction((tx) async {
         final snap = await tx.get(userRef);
         if (!snap.exists) return;
-        final current = (snap.data()!['coins'] ?? 0) as int;
+        final current = ((snap.data()!['coins'] ?? 0) as num).toInt();
         if (current < amount) return; // insufficient
         tx.update(userRef, {'coins': current - amount});
         success = true;
       });
+      if (success) {
+        try {
+          await FirebaseFirestore.instanceFor(app: Firebase.app(), databaseId: '(default)')
+              .collection('users')
+              .doc(userId)
+              .update({'coins': FieldValue.increment(-amount)});
+        } catch (_) {}
+      }
     } catch (e) {
       debugPrint('[CoinService.spend] error: $e');
     }
@@ -204,7 +213,7 @@ class CoinService {
       final snap = await _db.collection('users').doc(userId).get();
       if (!snap.exists) return false;
       final data = snap.data()!;
-      final totalEarned = (data['totalEarnedCoins'] ?? 0) as int;
+      final totalEarned = ((data['totalEarnedCoins'] ?? 0) as num).toInt();
       final claimed = List<String>.from(data['claimedMilestones'] ?? []);
 
       if (claimed.contains(milestone.id)) return false;

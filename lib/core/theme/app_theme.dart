@@ -121,85 +121,20 @@ class AppTheme {
     );
   }
 
-  // ─── Light Theme ───────────────────────────────────────────────────────────
-  // ─── Light Theme ───────────────────────────────────────────────────────────
-  static ThemeData get lightTheme => lightThemeWith(AppPalette.female);
+  // ─── Theme Handlers (Strictly Dark Theme Only) ──────────────────────────────
+  static ThemeData get lightTheme => darkThemeWith(_activePalette);
 
-  static ThemeData lightThemeWith([AppPalette palette = AppPalette.female]) {
-    final primary = palette.primary;
-    final secondary = palette.secondary;
-    final accent = palette.accent;
-
-    return ThemeData(
-      useMaterial3: true,
-      brightness: Brightness.light,
-      colorScheme: ColorScheme.light(
-        primary: primary,
-        secondary: secondary,
-        tertiary: accent,
-        surface: lightSurface,
-        surfaceContainerHighest: const Color(0xFFEDF0FF),
-        onPrimary: Colors.white,
-        onSecondary: textPrimary,
-        error: error,
-      ),
-      scaffoldBackgroundColor: lightBg,
-      textTheme: _buildTextTheme(isDark: false),
-      appBarTheme: AppBarTheme(
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        scrolledUnderElevation: 0,
-        centerTitle: false,
-        titleTextStyle: GoogleFonts.outfit(
-          fontSize: 24,
-          fontWeight: FontWeight.w800,
-          color: textPrimary,
-          letterSpacing: -0.5,
-        ),
-        iconTheme: const IconThemeData(color: textPrimary),
-      ),
-      cardTheme: CardThemeData(
-        color: lightSurface,
-        elevation: 0,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-      ),
-      chipTheme: ChipThemeData(
-        backgroundColor: Colors.white.withOpacity(0.7),
-        selectedColor: primary.withOpacity(0.15),
-        labelStyle: GoogleFonts.outfit(fontSize: 12, fontWeight: FontWeight.w600),
-        shape: const StadiumBorder(),
-        side: BorderSide(color: Colors.black.withOpacity(0.07)),
-      ),
-      inputDecorationTheme: _buildInputTheme(isDark: false),
-      elevatedButtonTheme: _buildElevatedButtonTheme(primary),
-      outlinedButtonTheme: _buildOutlinedButtonTheme(),
-      navigationBarTheme: _buildNavBarTheme(isDark: false),
-      dialogTheme: DialogThemeData(
-        backgroundColor: Colors.white,
-        surfaceTintColor: Colors.transparent,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-        elevation: 0,
-      ),
-      snackBarTheme: SnackBarThemeData(
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-        backgroundColor: const Color(0xFF1C2232),
-        contentTextStyle: GoogleFonts.outfit(color: Colors.white, fontSize: 14),
-      ),
-      dividerTheme: DividerThemeData(
-        color: Colors.black.withOpacity(0.06),
-        thickness: 0.8,
-      ),
-    );
-  }
+  static ThemeData lightThemeWith([AppPalette? palette]) =>
+      darkThemeWith(palette ?? _activePalette);
 
   // ─── Dark Theme ────────────────────────────────────────────────────────────
-  static ThemeData get darkTheme => darkThemeWith(AppPalette.female);
+  static ThemeData get darkTheme => darkThemeWith(_activePalette);
 
-  static ThemeData darkThemeWith([AppPalette palette = AppPalette.female]) {
-    final primary = palette.primary;
-    final secondary = palette.secondary;
-    final accent = palette.accent;
+  static ThemeData darkThemeWith([AppPalette? palette]) {
+    final p = palette ?? _activePalette;
+    final primary = p.primary;
+    final secondary = p.secondary;
+    final accent = p.accent;
 
     return ThemeData(
       useMaterial3: true,
@@ -214,7 +149,7 @@ class AppTheme {
         onSecondary: Colors.white,
         error: error,
       ),
-      scaffoldBackgroundColor: palette.backgroundTint,
+      scaffoldBackgroundColor: p.backgroundTint,
       textTheme: _buildTextTheme(isDark: true),
       appBarTheme: AppBarTheme(
         backgroundColor: Colors.transparent,

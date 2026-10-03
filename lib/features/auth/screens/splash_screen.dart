@@ -52,9 +52,9 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
     // The router's `redirect` watches the Firebase auth stream.
     // Once Firebase resolves the auth state it will automatically
     // navigate to /feed (if logged in) or /login (if not).
-    Future.delayed(const Duration(milliseconds: 4500), () {
+    Future.delayed(const Duration(milliseconds: 3200), () {
       if (mounted) {
-        context.go('/login');
+        context.go('/welcome');
       }
     });
   }
