@@ -1,4 +1,6 @@
+import 'dart:ui';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/theme/app_palette.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -12,6 +14,7 @@ import '../../../core/providers/app_state_provider.dart';
 import '../../../core/providers/firestore_provider.dart';
 import '../../../core/utils/location_helper.dart';
 import '../../../shared/widgets/background_orbs.dart';
+import '../../../shared/widgets/app_header.dart';
 
 class CommunitiesScreen extends ConsumerStatefulWidget {
   const CommunitiesScreen({super.key});
@@ -390,6 +393,7 @@ class _CommunitiesScreenState extends ConsumerState<CommunitiesScreen>
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final currentUser = ref.watch(currentUserProvider);
+    final palette = ref.watch(appPaletteProvider);
     final allQueueUsers = ref.watch(matchQueueProvider);
     final unlikedIds = ref.watch(unlikedUserIdsProvider);
 
@@ -404,6 +408,7 @@ class _CommunitiesScreenState extends ConsumerState<CommunitiesScreen>
 
     // Fallback users if queue has few profiles
     final activeUsers = validUsers.isNotEmpty ? validUsers : _fallbackUsers;
+    final sparkCount = currentUser.likedBy.length;
 
     return Scaffold(
       backgroundColor: isDark ? const Color(0xFF090C15) : const Color(0xFFF8FAFC),
@@ -419,11 +424,11 @@ class _CommunitiesScreenState extends ConsumerState<CommunitiesScreen>
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    // Top App Bar: "People" + Search button
+                    // Top App Bar: "People" + action icons
                     _buildTopBar(isDark),
 
                     // 3-Pill Tab Bar: Active | Connections | Communities
-                    _buildSegmentedTabBar(isDark),
+                    _buildSegmentedTabBar(isDark, palette),
 
                     const SizedBox(height: 8),
 
@@ -433,7 +438,7 @@ class _CommunitiesScreenState extends ConsumerState<CommunitiesScreen>
                         controller: _tabController,
                         physics: const BouncingScrollPhysics(),
                         children: [
-                          _buildActiveTab(activeUsers, currentUser, isDark),
+                          _buildActiveTab(activeUsers, currentUser, isDark, palette),
                           _buildConnectionsTab(activeUsers, currentUser, isDark),
                           _buildCommunitiesTab(currentUser, isDark),
                         ],
@@ -452,30 +457,20 @@ class _CommunitiesScreenState extends ConsumerState<CommunitiesScreen>
   // ─── Top Header & Search ───────────────────────────────────────────────────
 
   Widget _buildTopBar(bool isDark) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(18, 12, 18, 10),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          if (!_isSearching)
-            Text(
-              'People',
-              style: TextStyle(
-                fontSize: 26,
-                fontWeight: FontWeight.w900,
-                color: isDark ? Colors.white : const Color(0xFF0F172A),
-                letterSpacing: -0.5,
-              ),
-            )
-          else
+    if (_isSearching) {
+      return Padding(
+        padding: const EdgeInsets.fromLTRB(18, 12, 18, 10),
+        child: Row(
+          children: [
             Expanded(
               child: Container(
                 height: 40,
                 decoration: BoxDecoration(
-                  color: isDark ? const Color(0xFF191D2C) : Colors.white,
-                  borderRadius: BorderRadius.circular(20),
+                  color: isDark ? Colors.white.withOpacity(0.08) : Colors.white,
+                  borderRadius: BorderRadius.circular(13),
                   border: Border.all(
-                    color: isDark ? Colors.white12 : Colors.black12,
+                    color: isDark ? Colors.white.withOpacity(0.12) : const Color(0xFFE2E8F0),
+                    width: 1,
                   ),
                   boxShadow: [
                     BoxShadow(
@@ -488,84 +483,102 @@ class _CommunitiesScreenState extends ConsumerState<CommunitiesScreen>
                 child: TextField(
                   controller: _searchCtrl,
                   autofocus: true,
-                  onChanged: (v) => setState(() => _searchQuery = v),
-                  style: TextStyle(color: isDark ? Colors.white : Colors.black87, fontSize: 13.5),
+                  style: TextStyle(
+                    color: isDark ? Colors.white : const Color(0xFF0F172A),
+                    fontSize: 14,
+                  ),
                   decoration: InputDecoration(
-                    hintText: 'Search people or vibe clubs...',
+                    hintText: 'Search people by name, bio...',
                     hintStyle: TextStyle(
                       color: isDark ? Colors.white38 : Colors.black38,
                       fontSize: 13,
                     ),
                     prefixIcon: Icon(Icons.search_rounded, size: 18, color: AppTheme.accentPurple),
+                    suffixIcon: _searchCtrl.text.isNotEmpty
+                        ? GestureDetector(
+                            child: const Icon(Icons.close_rounded, size: 16),
+                            onTap: () {
+                              _searchCtrl.clear();
+                              setState(() => _searchQuery = '');
+                            },
+                          )
+                        : null,
                     border: InputBorder.none,
-                    contentPadding: const EdgeInsets.symmetric(vertical: 10),
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                  ),
+                  onChanged: (val) => setState(() => _searchQuery = val),
+                ),
+              ),
+            ),
+            const SizedBox(width: 10),
+            GestureDetector(
+              onTap: () {
+                HapticFeedback.selectionClick();
+                setState(() {
+                  _isSearching = false;
+                  _searchCtrl.clear();
+                  _searchQuery = '';
+                });
+              },
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                decoration: BoxDecoration(
+                  color: isDark ? Colors.white.withOpacity(0.08) : const Color(0xFFE2E8F0),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Text(
+                  'Cancel',
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: isDark ? Colors.white70 : const Color(0xFF475569),
                   ),
                 ),
               ),
             ),
-          const SizedBox(width: 8),
-          GestureDetector(
-            onTap: () {
-              HapticFeedback.selectionClick();
-              setState(() {
-                _isSearching = !_isSearching;
-                if (!_isSearching) {
-                  _searchCtrl.clear();
-                  _searchQuery = '';
-                }
-              });
-            },
-            child: Container(
-              width: 38,
-              height: 38,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: isDark ? Colors.white.withOpacity(0.08) : Colors.black.withOpacity(0.05),
-                border: Border.all(
-                  color: isDark ? Colors.white.withOpacity(0.12) : Colors.black.withOpacity(0.08),
-                  width: 1,
-                ),
-              ),
-              child: Icon(
-                _isSearching ? Icons.close_rounded : Icons.search_rounded,
-                size: 19,
-                color: isDark ? Colors.white70 : Colors.black87,
-              ),
-            ),
-          ),
-        ],
-      ),
+          ],
+        ),
+      );
+    }
+
+    return SituationshipHeaderBar(
+      showLogo: true,
+      onSearchTap: () {
+        HapticFeedback.selectionClick();
+        setState(() => _isSearching = true);
+      },
     );
   }
 
   // ─── 3-Pill Segmented Tab Bar ──────────────────────────────────────────────
 
-  Widget _buildSegmentedTabBar(bool isDark) {
+  Widget _buildSegmentedTabBar(bool isDark, AppPalette palette) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16),
       child: Container(
-        padding: const EdgeInsets.all(4),
+        padding: const EdgeInsets.all(3.5),
         decoration: BoxDecoration(
-          color: isDark ? const Color(0xFF131722) : const Color(0xFFE2E8F0).withOpacity(0.6),
+          color: isDark ? const Color(0xFF130D20) : const Color(0xFFE2E8F0).withOpacity(0.6),
           borderRadius: BorderRadius.circular(26),
           border: Border.all(
-            color: isDark ? Colors.white.withOpacity(0.08) : Colors.black.withOpacity(0.05),
+            color: isDark ? Colors.white.withOpacity(0.10) : Colors.black.withOpacity(0.05),
+            width: 0.8,
           ),
         ),
         child: Row(
           children: [
-            _buildTabButton(0, 'Active', isDark),
-            const SizedBox(width: 4),
-            _buildTabButton(1, 'Connections', isDark),
-            const SizedBox(width: 4),
-            _buildTabButton(2, 'Communities', isDark),
+            _buildTabButton(0, 'Active', isDark, palette),
+            const SizedBox(width: 3),
+            _buildTabButton(1, 'Connections', isDark, palette),
+            const SizedBox(width: 3),
+            _buildTabButton(2, 'Communities', isDark, palette),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildTabButton(int index, String label, bool isDark) {
+  Widget _buildTabButton(int index, String label, bool isDark, AppPalette palette) {
     final isSelected = _selectedTab == index;
     return Expanded(
       child: GestureDetector(
@@ -578,35 +591,30 @@ class _CommunitiesScreenState extends ConsumerState<CommunitiesScreen>
           curve: Curves.easeOutCubic,
           padding: const EdgeInsets.symmetric(vertical: 9),
           decoration: BoxDecoration(
-            gradient: isSelected
-                ? LinearGradient(
-                    colors: [AppTheme.primaryBlue, AppTheme.accentPurple],
-                    begin: Alignment.centerLeft,
-                    end: Alignment.centerRight,
-                  )
-                : null,
+            gradient: isSelected ? palette.primaryGradient : null,
             color: isSelected ? null : Colors.transparent,
             borderRadius: BorderRadius.circular(22),
             boxShadow: isSelected
                 ? [
                     BoxShadow(
-                      color: AppTheme.primaryBlue.withOpacity(0.35),
-                      blurRadius: 10,
+                      color: palette.primary.withOpacity(0.38),
+                      blurRadius: 12,
                       offset: const Offset(0, 3),
                     ),
                   ]
                 : [],
           ),
           child: Center(
-            child: Text(
-              label,
+            child: AnimatedDefaultTextStyle(
+              duration: const Duration(milliseconds: 200),
               style: TextStyle(
-                fontSize: 13,
+                fontSize: 12.5,
                 fontWeight: isSelected ? FontWeight.w800 : FontWeight.w600,
                 color: isSelected
                     ? Colors.white
                     : (isDark ? Colors.white.withOpacity(0.55) : const Color(0xFF64748B)),
               ),
+              child: Text(label, maxLines: 1, overflow: TextOverflow.ellipsis),
             ),
           ),
         ),
@@ -618,7 +626,7 @@ class _CommunitiesScreenState extends ConsumerState<CommunitiesScreen>
   // TAB 1: ACTIVE (Screenshots 1 & 2)
   // ═══════════════════════════════════════════════════════════════════════════
 
-  Widget _buildActiveTab(List<UserModel> users, UserModel currentUser, bool isDark) {
+  Widget _buildActiveTab(List<UserModel> users, UserModel currentUser, bool isDark, AppPalette palette) {
     // ── Filter by distance using LocationHelper ──
     final nearbyUsers = users.where((u) {
       final dist = LocationHelper.getDistanceKm(
@@ -636,87 +644,110 @@ class _CommunitiesScreenState extends ConsumerState<CommunitiesScreen>
     final displayUsers = nearbyUsers.isNotEmpty ? nearbyUsers : users;
     final safePageIndex = _featuredPageIndex.clamp(0, (displayUsers.length - 1).clamp(0, 9999));
     final otherUsers = displayUsers.length > 1 ? displayUsers.sublist(1) : <UserModel>[];
-    final countDisplay = nearbyUsers.isNotEmpty ? nearbyUsers.length : displayUsers.length;
 
     return SingleChildScrollView(
       physics: const BouncingScrollPhysics(),
-      padding: const EdgeInsets.fromLTRB(0, 10, 0, 96),
+      padding: const EdgeInsets.fromLTRB(0, 8, 0, 96),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          // ── Live Nearby Status Header ──────────────────────────────────────
+          // ── Header: Discover Nearby & Radius Selector ─────────────────────
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               crossAxisAlignment: CrossAxisAlignment.center,
               children: [
-                Row(
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Container(
-                      width: 8,
-                      height: 8,
-                      decoration: BoxDecoration(
-                        color: AppTheme.accentPurple,
-                        shape: BoxShape.circle,
-                        boxShadow: [
-                          BoxShadow(
-                            color: AppTheme.accentPurple.withOpacity(0.6),
-                            blurRadius: 8,
-                            spreadRadius: 2,
+                    Row(
+                      children: [
+                        Text(
+                          'Discover Nearby',
+                          style: TextStyle(
+                            fontSize: 21,
+                            fontWeight: FontWeight.w900,
+                            color: isDark ? Colors.white : const Color(0xFF0F172A),
+                            letterSpacing: -0.5,
                           ),
-                        ],
-                      ),
+                        ),
+                        const SizedBox(width: 5),
+                        const Text('✨', style: TextStyle(fontSize: 16)),
+                      ],
                     ),
-                    const SizedBox(width: 7),
+                    const SizedBox(height: 2),
                     Text(
-                      'Live nearby',
+                      'Active singles around you looking to connect',
                       style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w800,
-                        color: isDark ? Colors.white : const Color(0xFF0F172A),
-                        letterSpacing: -0.2,
+                        fontSize: 12,
+                        color: isDark ? Colors.white54 : const Color(0xFF64748B),
+                        fontWeight: FontWeight.w500,
                       ),
                     ),
                   ],
                 ),
-                Text(
-                  '$countDisplay online · $_selectedRangeKm km',
-                  style: TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w700,
-                    color: AppTheme.accentPurple,
+
+                // Range Selector Chip
+                GestureDetector(
+                  onTap: _cycleRange,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: isDark ? const Color(0xFF1E172E) : const Color(0xFFF1F5F9),
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(
+                        color: palette.primary.withValues(alpha: 0.35),
+                        width: 1,
+                      ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: palette.primary.withValues(alpha: 0.1),
+                          blurRadius: 8,
+                          offset: const Offset(0, 2),
+                        ),
+                      ],
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.location_on_rounded, size: 14, color: palette.primary),
+                        const SizedBox(width: 4),
+                        Text(
+                          '${_selectedRangeKm.toInt()} km',
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w800,
+                            color: palette.primary,
+                          ),
+                        ),
+                        const SizedBox(width: 2),
+                        Icon(
+                          Icons.swap_vert_rounded,
+                          size: 14,
+                          color: isDark ? Colors.white60 : const Color(0xFF64748B),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
               ],
             ),
           ),
-          const SizedBox(height: 2),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            child: Text(
-              "Swipe to browse people around you",
-              style: TextStyle(
-                fontSize: 12,
-                color: isDark ? Colors.white.withOpacity(0.45) : const Color(0xFF64748B),
-                fontWeight: FontWeight.w500,
-              ),
-            ),
-          ),
 
           const SizedBox(height: 14),
 
-          // ── Sliding Profile Cards ─────────────────────────────────────────
+          // ── Featured Dating Hero Card Carousel ────────────────────────────
           if (displayUsers.isEmpty)
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: _buildFeaturedActiveCard(_fallbackUsers[0], currentUser, isDark),
+              child: _buildFeaturedActiveCard(_fallbackUsers[0], currentUser, isDark, palette),
             )
           else
             Column(
               children: [
                 SizedBox(
-                  height: 360,
+                  height: 425,
                   child: PageView.builder(
                     controller: _featuredPageController,
                     itemCount: displayUsers.length,
@@ -727,29 +758,30 @@ class _CommunitiesScreenState extends ConsumerState<CommunitiesScreen>
                     },
                     itemBuilder: (context, index) {
                       return Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 6),
+                        padding: const EdgeInsets.symmetric(horizontal: 10),
                         child: _buildFeaturedActiveCard(
-                          displayUsers[index], currentUser, isDark),
+                          displayUsers[index], currentUser, isDark, palette),
                       );
                     },
                   ),
                 ),
-                // ── Dot indicators ──────────────────────────────────────────
+
+                // ── Elegant Dot Indicators ──────────────────────────────────
                 if (displayUsers.length > 1)
                   Padding(
                     padding: const EdgeInsets.only(top: 10),
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.center,
-                      children: List.generate(displayUsers.length > 8 ? 8 : displayUsers.length, (i) {
+                      children: List.generate(displayUsers.length > 6 ? 6 : displayUsers.length, (i) {
                         final isActive = i == safePageIndex;
                         return AnimatedContainer(
                           duration: const Duration(milliseconds: 220),
                           margin: const EdgeInsets.symmetric(horizontal: 3),
-                          width: isActive ? 18 : 6,
-                          height: 6,
+                          width: isActive ? 20 : 6,
+                          height: 5,
                           decoration: BoxDecoration(
                             color: isActive
-                                ? AppTheme.primaryBlue
+                                ? palette.primary
                                 : (isDark ? Colors.white24 : Colors.black12),
                             borderRadius: BorderRadius.circular(4),
                           ),
@@ -760,28 +792,65 @@ class _CommunitiesScreenState extends ConsumerState<CommunitiesScreen>
               ],
             ),
 
-          const SizedBox(height: 20),
+          const SizedBox(height: 22),
 
-          // ── ALSO AROUND section ───────────────────────────────────────────
+          // ── Section: Active Sparks Carousel ──────────────────────────────
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16),
-            child: Text(
-              'ALSO AROUND',
-              style: TextStyle(
-                fontSize: 11,
-                fontWeight: FontWeight.w800,
-                letterSpacing: 0.8,
-                color: isDark ? Colors.white.withOpacity(0.4) : const Color(0xFF64748B),
-              ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                Row(
+                  children: [
+                    const Text('🔥', style: TextStyle(fontSize: 16)),
+                    const SizedBox(width: 6),
+                    Text(
+                      'Active Sparks',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: -0.2,
+                        color: isDark ? Colors.white : const Color(0xFF0F172A),
+                      ),
+                    ),
+                    const SizedBox(width: 6),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFFF3366).withValues(alpha: 0.15),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: const Text(
+                        'ONLINE',
+                        style: TextStyle(
+                          color: Color(0xFFFF3366),
+                          fontSize: 9,
+                          fontWeight: FontWeight.w900,
+                          letterSpacing: 0.4,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                Text(
+                  '${otherUsers.length} nearby',
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: isDark ? Colors.white54 : const Color(0xFF64748B),
+                  ),
+                ),
+              ],
             ),
           ),
           const SizedBox(height: 12),
 
-          // Horizontal list of avatars
+          // Horizontal List of Story-Ring Profiles
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16),
             child: SizedBox(
-              height: 96,
+              height: 106,
               child: ListView.separated(
                 scrollDirection: Axis.horizontal,
                 physics: const BouncingScrollPhysics(),
@@ -795,243 +864,106 @@ class _CommunitiesScreenState extends ConsumerState<CommunitiesScreen>
             ),
           ),
 
-          const SizedBox(height: 18),
+          const SizedBox(height: 20),
 
-          // ── Bottom Utility Cards (Live & Km range) ────────────────────────
+          // ── Section: Dating Visibility & Range Preferences ────────────────
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16),
-            child: Row(
-              children: [
-              // Left: Live visibility card
-              Expanded(
-                child: GestureDetector(
-                  onTap: () => _toggleLive(currentUser),
-                  child: AnimatedContainer(
-                    duration: const Duration(milliseconds: 200),
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
-                    decoration: BoxDecoration(
-                      color: _isLiveVisible
-                          ? (isDark ? const Color(0xFF09281D) : const Color(0xFFECFDF5))
-                          : (isDark ? const Color(0xFF141824) : Colors.white),
-                      borderRadius: BorderRadius.circular(20),
-                      border: Border.all(
-                        color: _isLiveVisible
-                            ? AppTheme.accentPurple.withOpacity(isDark ? 0.4 : 0.5)
-                            : (isDark ? Colors.white12 : Colors.black12),
-                        width: 1.2,
-                      ),
-                      boxShadow: [
-                        BoxShadow(
-                          color: _isLiveVisible
-                              ? AppTheme.accentPurple.withOpacity(0.12)
-                              : Colors.black.withOpacity(0.04),
-                          blurRadius: 10,
-                          offset: const Offset(0, 3),
-                        ),
-                      ],
-                    ),
-                    child: Row(
-                      children: [
-                        Container(
-                          width: 36,
-                          height: 36,
-                          decoration: BoxDecoration(
-                            color: AppTheme.accentPurple.withOpacity(isDark ? 0.25 : 0.15),
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          child: const Center(
-                            child: Text('🛰️', style: TextStyle(fontSize: 18)),
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Text(
-                                _isLiveVisible ? 'Live' : 'Hidden',
-                                style: TextStyle(
-                                  fontSize: 13.5,
-                                  fontWeight: FontWeight.w900,
-                                  color: _isLiveVisible
-                                      ? (isDark ? const Color(0xFF34D399) : const Color(0xFF065F46))
-                                      : (isDark ? Colors.white70 : Colors.black87),
-                                ),
-                              ),
-                              const SizedBox(height: 1),
-                              Text(
-                                _isLiveVisible ? 'Visible nearby' : 'Ghost mode',
-                                style: TextStyle(
-                                  fontSize: 10.5,
-                                  color: _isLiveVisible
-                                      ? (isDark ? Colors.white60 : const Color(0xFF047857))
-                                      : (isDark ? Colors.white38 : Colors.black45),
-                                  fontWeight: FontWeight.w500,
-                                ),
-                                maxLines: 1,
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
+            child: _buildDatingVisibilityCard(currentUser, isDark, palette),
+          ),
 
-              const SizedBox(width: 10),
+          const SizedBox(height: 12),
 
-              // Right: Km range selector card
-              Expanded(
-                child: GestureDetector(
-                  onTap: _cycleRange,
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
-                    decoration: BoxDecoration(
-                      color: isDark ? const Color(0xFF181432) : const Color(0xFFF5F3FF),
-                      borderRadius: BorderRadius.circular(20),
-                      border: Border.all(
-                        color: AppTheme.accentPurple.withOpacity(isDark ? 0.4 : 0.3),
-                        width: 1.2,
-                      ),
-                      boxShadow: [
-                        BoxShadow(
-                          color: AppTheme.accentPurple.withOpacity(0.12),
-                          blurRadius: 10,
-                          offset: const Offset(0, 3),
-                        ),
-                      ],
-                    ),
-                    child: Row(
-                      children: [
-                        Container(
-                          width: 36,
-                          height: 36,
-                          decoration: BoxDecoration(
-                            gradient: LinearGradient(
-                              colors: [AppTheme.primaryBlue, AppTheme.accentPurple],
-                            ),
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          child: Center(
-                            child: Text(
-                              '$_selectedRangeKm',
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontSize: 15,
-                                fontWeight: FontWeight.w900,
-                              ),
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Text(
-                                'km range',
-                                style: TextStyle(
-                                  fontSize: 13.5,
-                                  fontWeight: FontWeight.w900,
-                                  color: isDark ? Colors.white : const Color(0xFF1E1B4B),
-                                ),
-                              ),
-                              const SizedBox(height: 1),
-                              Text(
-                                'Within ${_selectedRangeKm}km',
-                                style: TextStyle(
-                                  fontSize: 10.5,
-                                  color: isDark ? Colors.white60 : AppTheme.accentPurple,
-                                  fontWeight: FontWeight.w500,
-                                ),
-                                maxLines: 1,
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-            ],
-            ),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: _buildDatingRangeCard(isDark, palette),
           ),
         ],
       ),
     );
   }
 
-  Widget _buildFeaturedActiveCard(UserModel user, UserModel currentUser, bool isDark) {
-    final vibeLabel = _vibeLabels[user.id.hashCode.abs() % _vibeLabels.length];
-    final matchScore = 86 + (user.id.hashCode.abs() % 12);
+  Widget _buildFeaturedActiveCard(UserModel user, UserModel currentUser, bool isDark, AppPalette palette) {
+    final matchScore = 88 + (user.id.hashCode.abs() % 11);
+    final interests = user.interests.isNotEmpty
+        ? user.interests.take(3).toList()
+        : ['Travel', 'Coffee', 'Music'];
+    final distanceKm = ((user.id.hashCode.abs() % 5) + 1).clamp(1, 25);
 
     return Container(
-      height: 310,
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(26),
-        color: const Color(0xFF171B2B),
+        borderRadius: BorderRadius.circular(28),
+        color: isDark ? const Color(0xFF161026) : Colors.white,
         border: Border.all(
-          color: Colors.white.withOpacity(0.1),
-          width: 1,
+          color: palette.primary.withValues(alpha: 0.25),
+          width: 1.2,
         ),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.25),
+            color: palette.primary.withValues(alpha: 0.14),
             blurRadius: 20,
             offset: const Offset(0, 8),
+          ),
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.25),
+            blurRadius: 18,
+            offset: const Offset(0, 6),
           ),
         ],
       ),
       child: ClipRRect(
-        borderRadius: BorderRadius.circular(26),
+        borderRadius: BorderRadius.circular(28),
         child: Stack(
           fit: StackFit.expand,
           children: [
-            // Image
+            // Full-bleed photo with fallback
             if (user.avatarUrl != null && user.avatarUrl!.isNotEmpty)
               CachedNetworkImage(
                 imageUrl: user.avatarUrl!,
                 fit: BoxFit.cover,
+                alignment: const Alignment(0, -0.15),
+                memCacheWidth: 700,
+                placeholder: (context, url) => Container(
+                  color: isDark ? const Color(0xFF161026) : const Color(0xFFF1F5F9),
+                  child: Center(
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: palette.primary,
+                    ),
+                  ),
+                ),
+                errorWidget: (context, url, error) => _buildAvatarFallback(user, [
+                  const Color(0xFFFF3366),
+                  const Color(0xFFFF8E53),
+                ]),
               )
             else
-              Container(
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    colors: [Color(0xFF312E81), AppTheme.primaryBlue],
-                  ),
-                ),
-                child: Center(
-                  child: Text(
-                    user.name.isNotEmpty ? user.name[0] : '?',
-                    style: const TextStyle(fontSize: 64, color: Colors.white70),
-                  ),
-                ),
-              ),
+              _buildAvatarFallback(user, [
+                const Color(0xFFFF3366),
+                const Color(0xFFFF8E53),
+              ]),
 
-            // Gradient Overlay
+            // Smooth romantic gradient overlay
             Positioned.fill(
               child: DecoratedBox(
                 decoration: BoxDecoration(
                   gradient: LinearGradient(
                     begin: Alignment.topCenter,
                     end: Alignment.bottomCenter,
-                    stops: const [0.0, 0.35, 0.65, 1.0],
+                    stops: const [0.0, 0.22, 0.45, 0.70, 1.0],
                     colors: [
-                      Colors.black.withOpacity(0.25),
+                      Colors.black.withValues(alpha: 0.45),
                       Colors.transparent,
-                      Colors.black.withOpacity(0.65),
-                      Colors.black.withOpacity(0.92),
+                      Colors.black.withValues(alpha: 0.15),
+                      Colors.black.withValues(alpha: 0.78),
+                      Colors.black.withValues(alpha: 0.95),
                     ],
                   ),
                 ),
               ),
             ),
 
-            // Top Badges Row
+            // ── Top Badges Row ──────────────────────────────────────────────
             Positioned(
               top: 14,
               left: 14,
@@ -1039,52 +971,89 @@ class _CommunitiesScreenState extends ConsumerState<CommunitiesScreen>
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  // Active now badge
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                    decoration: BoxDecoration(
-                      color: Colors.black.withOpacity(0.65),
-                      borderRadius: BorderRadius.circular(20),
-                      border: Border.all(color: Colors.white12, width: 0.8),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Container(
-                          width: 6,
-                          height: 6,
-                          decoration: BoxDecoration(
-                            color: AppTheme.accentPurple,
-                            shape: BoxShape.circle,
+                  // Active Status Badge
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(20),
+                    child: BackdropFilter(
+                      filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5.5),
+                        decoration: BoxDecoration(
+                          color: Colors.black.withValues(alpha: 0.4),
+                          borderRadius: BorderRadius.circular(20),
+                          border: Border.all(
+                            color: Colors.white.withValues(alpha: 0.18),
+                            width: 0.8,
                           ),
                         ),
-                        const SizedBox(width: 6),
-                        const Text(
-                          'Active now',
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontSize: 11,
-                            fontWeight: FontWeight.w800,
-                          ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Container(
+                              width: 7,
+                              height: 7,
+                              decoration: const BoxDecoration(
+                                color: Color(0xFF00F5D4),
+                                shape: BoxShape.circle,
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: Color(0xFF00F5D4),
+                                    blurRadius: 4,
+                                    spreadRadius: 1,
+                                  ),
+                                ],
+                              ),
+                            ),
+                            const SizedBox(width: 6),
+                            const Text(
+                              'Active now',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontSize: 11,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ],
                         ),
-                      ],
+                      ),
                     ),
                   ),
 
-                  // Match % badge
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                    decoration: BoxDecoration(
-                      color: Colors.black.withOpacity(0.65),
-                      borderRadius: BorderRadius.circular(20),
-                      border: Border.all(color: Colors.white12, width: 0.8),
-                    ),
-                    child: Text(
-                      '$matchScore%',
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 11.5,
-                        fontWeight: FontWeight.w900,
+                  // Compatibility % Pill
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(20),
+                    child: BackdropFilter(
+                      filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5.5),
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            colors: [
+                              const Color(0xFFFF3366).withValues(alpha: 0.7),
+                              const Color(0xFFFF6584).withValues(alpha: 0.7),
+                            ],
+                          ),
+                          borderRadius: BorderRadius.circular(20),
+                          border: Border.all(
+                            color: Colors.white.withValues(alpha: 0.25),
+                            width: 0.8,
+                          ),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Text('💖', style: TextStyle(fontSize: 10.5)),
+                            const SizedBox(width: 4),
+                            Text(
+                              '$matchScore% Match',
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 11.5,
+                                fontWeight: FontWeight.w800,
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
                     ),
                   ),
@@ -1092,7 +1061,7 @@ class _CommunitiesScreenState extends ConsumerState<CommunitiesScreen>
               ),
             ),
 
-            // Bottom Profile info & Action Buttons
+            // ── Bottom Profile Info & Dating Action Buttons ───────────────────
             Positioned(
               left: 16,
               right: 16,
@@ -1101,53 +1070,190 @@ class _CommunitiesScreenState extends ConsumerState<CommunitiesScreen>
                 crossAxisAlignment: CrossAxisAlignment.start,
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Text(
-                    '${user.name}, ${user.age}',
-                    style: const TextStyle(
-                      fontSize: 22,
-                      fontWeight: FontWeight.w900,
-                      color: Colors.white,
-                      letterSpacing: -0.3,
-                    ),
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    vibeLabel,
-                    style: const TextStyle(
-                      fontSize: 12.5,
-                      fontWeight: FontWeight.w600,
-                      color: Color(0xFFC4B5FD),
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-
-                  // Button: Tap in
-                  GestureDetector(
-                    onTap: () => context.push('/profile/view/${user.id}'),
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 9),
+                  // Interest chips
+                  Wrap(
+                    spacing: 6,
+                    runSpacing: 4,
+                    children: interests.map((tag) => Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
                       decoration: BoxDecoration(
-                        gradient: LinearGradient(
-                          colors: [AppTheme.primaryBlue, AppTheme.accentPurple],
+                        color: Colors.white.withValues(alpha: 0.15),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: Colors.white.withValues(alpha: 0.25),
+                          width: 0.8,
                         ),
-                        borderRadius: BorderRadius.circular(18),
-                        boxShadow: [
-                          BoxShadow(
-                            color: AppTheme.primaryBlue.withOpacity(0.35),
-                            blurRadius: 10,
-                            offset: const Offset(0, 3),
-                          ),
-                        ],
                       ),
-                      child: const Text(
-                        'Tap in',
-                        style: TextStyle(
+                      child: Text(
+                        tag,
+                        style: const TextStyle(
                           color: Colors.white,
-                          fontSize: 13,
-                          fontWeight: FontWeight.w800,
+                          fontSize: 11,
+                          fontWeight: FontWeight.w700,
                         ),
+                      ),
+                    )).toList(),
+                  ),
+                  const SizedBox(height: 8),
+
+                  // Name & Age with Verified Badge
+                  Row(
+                    children: [
+                      Flexible(
+                        child: Text(
+                          '${user.name}, ${user.age}',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            fontSize: 25,
+                            fontWeight: FontWeight.w900,
+                            color: Colors.white,
+                            letterSpacing: -0.4,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 6),
+                      const Icon(
+                        Icons.verified_rounded,
+                        color: Color(0xFF3897F0),
+                        size: 20,
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 3),
+
+                  // Distance
+                  Row(
+                    children: [
+                      const Icon(
+                        Icons.location_on_rounded,
+                        color: Color(0xFFFF8E53),
+                        size: 14,
+                      ),
+                      const SizedBox(width: 3),
+                      Text(
+                        '$distanceKm km away',
+                        style: const TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          color: Colors.white70,
+                        ),
+                      ),
+                    ],
+                  ),
+                  if (user.bio != null && user.bio!.isNotEmpty) ...[
+                    const SizedBox(height: 6),
+                    Text(
+                      '"${user.bio}"',
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: 12.5,
+                        fontWeight: FontWeight.w500,
+                        color: Colors.white.withValues(alpha: 0.88),
+                        fontStyle: FontStyle.italic,
                       ),
                     ),
+                  ],
+                  const SizedBox(height: 14),
+
+                  // Romantic Dating Actions: "Say Hi 👋" and "Send Spark 💖"
+                  Row(
+                    children: [
+                      // Say Hi button
+                      Expanded(
+                        child: GestureDetector(
+                          onTap: () {
+                            HapticFeedback.lightImpact();
+                            context.push('/chat/${user.id}');
+                          },
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(18),
+                            child: BackdropFilter(
+                              filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(vertical: 11),
+                                decoration: BoxDecoration(
+                                  color: Colors.white.withValues(alpha: 0.15),
+                                  borderRadius: BorderRadius.circular(18),
+                                  border: Border.all(
+                                    color: Colors.white.withValues(alpha: 0.3),
+                                    width: 1,
+                                  ),
+                                ),
+                                child: const Row(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    Text('👋', style: TextStyle(fontSize: 14)),
+                                    SizedBox(width: 6),
+                                    Text(
+                                      'Say Hi',
+                                      style: TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 13.5,
+                                        fontWeight: FontWeight.w800,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+
+                      // Send Spark button
+                      Expanded(
+                        flex: 1,
+                        child: GestureDetector(
+                          onTap: () {
+                            HapticFeedback.mediumImpact();
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text('Spark sent to ${user.name}! 💖'),
+                                duration: const Duration(seconds: 2),
+                                behavior: SnackBarBehavior.floating,
+                                backgroundColor: const Color(0xFF1E102E),
+                              ),
+                            );
+                            context.push('/profile/view/${user.id}');
+                          },
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(vertical: 11),
+                            decoration: BoxDecoration(
+                              gradient: const LinearGradient(
+                                colors: [Color(0xFFFF3366), Color(0xFFFF6584)],
+                              ),
+                              borderRadius: BorderRadius.circular(18),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: const Color(0xFFFF3366).withValues(alpha: 0.45),
+                                  blurRadius: 14,
+                                  offset: const Offset(0, 4),
+                                ),
+                              ],
+                            ),
+                            child: const Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Icon(Icons.favorite_rounded, color: Colors.white, size: 16),
+                                SizedBox(width: 6),
+                                Text(
+                                  'Spark',
+                                  style: TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 13.5,
+                                    fontWeight: FontWeight.w900,
+                                    letterSpacing: 0.2,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                 ],
               ),
@@ -1158,104 +1264,315 @@ class _CommunitiesScreenState extends ConsumerState<CommunitiesScreen>
     );
   }
 
-  Widget _buildAlsoAroundAvatarItem(UserModel user, UserModel currentUser, bool isDark) {
-    final times = ['now', '5m ago', '12m ago', 'now', '18m ago', '8m ago'];
-    final timeStr = times[user.id.hashCode.abs() % times.length];
-
-    final avatarGrads = [
-      [AppTheme.primaryBlue, AppTheme.accentPurple],
-      [AppTheme.accentPurple, AppTheme.accentPurple],
-      [AppTheme.accentPurple, const Color(0xFF06B6D4)],
-      [const Color(0xFFF59E0B), const Color(0xFFEF4444)],
-    ];
-    final grad = avatarGrads[user.id.hashCode.abs() % avatarGrads.length];
-
+  Widget _buildDatingVisibilityCard(UserModel currentUser, bool isDark, AppPalette palette) {
     return GestureDetector(
-      onTap: () => _showActiveUserModal(user, currentUser),
-      child: Column(
-        children: [
-          Stack(
-            children: [
-              Container(
-                width: 60,
-                height: 60,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  border: Border.all(
-                    color: AppTheme.accentPurple.withOpacity(0.55),
-                    width: 2,
-                  ),
-                ),
-                child: Padding(
-                  padding: const EdgeInsets.all(2.5),
-                  child: ClipOval(
-                    child: user.avatarUrl != null && user.avatarUrl!.isNotEmpty
-                        ? CachedNetworkImage(
-                            imageUrl: user.avatarUrl!,
-                            fit: BoxFit.cover,
-                          )
-                        : Container(
-                            decoration: BoxDecoration(
-                              gradient: LinearGradient(colors: grad),
-                            ),
-                            child: Center(
-                              child: Text(
-                                user.name.isNotEmpty ? user.name[0] : '?',
-                                style: const TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 22,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                            ),
-                          ),
-                  ),
-                ),
+      onTap: () => _toggleLive(currentUser),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        decoration: BoxDecoration(
+          color: isDark ? const Color(0xFF141024) : Colors.white,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(
+            color: _isLiveVisible
+                ? const Color(0xFFFF3366).withValues(alpha: 0.4)
+                : (isDark ? Colors.white12 : Colors.black12),
+            width: 1.2,
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: _isLiveVisible
+                  ? const Color(0xFFFF3366).withValues(alpha: 0.12)
+                  : Colors.black.withValues(alpha: 0.04),
+              blurRadius: 10,
+              offset: const Offset(0, 3),
+            ),
+          ],
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 42,
+              height: 42,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                gradient: _isLiveVisible
+                    ? const LinearGradient(
+                        colors: [Color(0xFFFF3366), Color(0xFFFF6584)],
+                      )
+                    : null,
+                color: _isLiveVisible ? null : (isDark ? Colors.white10 : Colors.black.withValues(alpha: 0.05)),
               ),
-              // Green dot
-              Positioned(
-                right: 2,
-                bottom: 2,
-                child: Container(
-                  width: 12,
-                  height: 12,
-                  decoration: BoxDecoration(
-                    color: AppTheme.accentPurple,
-                    shape: BoxShape.circle,
-                    border: Border.all(
-                      color: isDark ? const Color(0xFF090C15) : Colors.white,
-                      width: 2,
+              child: Icon(
+                _isLiveVisible ? Icons.favorite_rounded : Icons.visibility_off_rounded,
+                color: _isLiveVisible ? Colors.white : (isDark ? Colors.white54 : Colors.black45),
+                size: 20,
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    _isLiveVisible ? 'Dating Visibility: On' : 'Ghost Mode: Hidden',
+                    style: TextStyle(
+                      fontSize: 14.5,
+                      fontWeight: FontWeight.w800,
+                      color: isDark ? Colors.white : const Color(0xFF0F172A),
                     ),
                   ),
+                  const SizedBox(height: 2),
+                  Text(
+                    _isLiveVisible
+                        ? 'Singles nearby can see your profile & say hi'
+                        : 'Only profiles you like first can see you',
+                    style: TextStyle(
+                      fontSize: 11.5,
+                      color: isDark ? Colors.white54 : const Color(0xFF64748B),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Switch.adaptive(
+              value: _isLiveVisible,
+              activeColor: const Color(0xFFFF3366),
+              onChanged: (_) => _toggleLive(currentUser),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDatingRangeCard(bool isDark, AppPalette palette) {
+    final ranges = [3, 5, 10, 25];
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      decoration: BoxDecoration(
+        color: isDark ? const Color(0xFF141024) : Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(
+          color: isDark ? Colors.white12 : Colors.black12,
+          width: 1,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.04),
+            blurRadius: 10,
+            offset: const Offset(0, 3),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(
+                Icons.radar_rounded,
+                size: 18,
+                color: palette.primary,
+              ),
+              const SizedBox(width: 8),
+              Text(
+                'Match Radius',
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w800,
+                  color: isDark ? Colors.white : const Color(0xFF0F172A),
+                ),
+              ),
+              const Spacer(),
+              Text(
+                'Within ${_selectedRangeKm.toInt()} km',
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                  color: palette.primary,
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 6),
-          Text(
-            user.name.split(' ').first,
-            style: TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.w700,
-              color: isDark ? Colors.white : const Color(0xFF0F172A),
-            ),
-          ),
-          Text(
-            timeStr,
-            style: TextStyle(
-              fontSize: 10,
-              color: isDark ? Colors.white38 : const Color(0xFF64748B),
-              fontWeight: FontWeight.w500,
-            ),
+          const SizedBox(height: 12),
+          Row(
+            children: ranges.map((r) {
+              final isSelected = _selectedRangeKm == r;
+              return Expanded(
+                child: GestureDetector(
+                  onTap: () {
+                    HapticFeedback.selectionClick();
+                    setState(() => _selectedRangeKm = r);
+                  },
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 180),
+                    margin: const EdgeInsets.symmetric(horizontal: 3),
+                    padding: const EdgeInsets.symmetric(vertical: 8),
+                    decoration: BoxDecoration(
+                      color: isSelected
+                          ? palette.primary
+                          : (isDark ? Colors.white.withValues(alpha: 0.06) : Colors.black.withValues(alpha: 0.04)),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: isSelected
+                            ? palette.primary
+                            : (isDark ? Colors.white12 : Colors.black12),
+                      ),
+                    ),
+                    child: Center(
+                      child: Text(
+                        '$r km',
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: isSelected ? FontWeight.w800 : FontWeight.w600,
+                          color: isSelected
+                              ? Colors.white
+                              : (isDark ? Colors.white70 : const Color(0xFF475569)),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              );
+            }).toList(),
           ),
         ],
       ),
     );
   }
 
-  // ═══════════════════════════════════════════════════════════════════════════
-  // TAB 2: CONNECTIONS (Strictly Mutual Matches Only)
-  // ═══════════════════════════════════════════════════════════════════════════
+  Widget _buildAlsoAroundAvatarItem(UserModel user, UserModel currentUser, bool isDark) {
+    final distanceKm = ((user.id.hashCode.abs() % 4) + 1);
+
+    return GestureDetector(
+      onTap: () {
+        HapticFeedback.selectionClick();
+        _showActiveUserModal(user, currentUser);
+      },
+      child: SizedBox(
+        width: 72,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            // Circular Avatar with Romantic Sunset Ring
+            Stack(
+              clipBehavior: Clip.none,
+              children: [
+                Container(
+                  width: 60,
+                  height: 60,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    gradient: const LinearGradient(
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                      colors: [
+                        Color(0xFFFF3366),
+                        Color(0xFFFF6584),
+                        Color(0xFFFF8E53),
+                      ],
+                    ),
+                    boxShadow: [
+                      BoxShadow(
+                        color: const Color(0xFFFF3366).withValues(alpha: 0.3),
+                        blurRadius: 8,
+                        offset: const Offset(0, 2),
+                      ),
+                    ],
+                  ),
+                  padding: const EdgeInsets.all(2),
+                  child: ClipOval(
+                    child: user.avatarUrl != null && user.avatarUrl!.isNotEmpty
+                        ? CachedNetworkImage(
+                            imageUrl: user.avatarUrl!,
+                            fit: BoxFit.cover,
+                            memCacheWidth: 200,
+                            errorWidget: (context, url, error) => _buildAvatarFallback(
+                              user,
+                              [const Color(0xFFFF3366), const Color(0xFFFF8E53)],
+                            ),
+                          )
+                        : _buildAvatarFallback(
+                            user,
+                            [const Color(0xFFFF3366), const Color(0xFFFF8E53)],
+                          ),
+                  ),
+                ),
+
+                // Emerald Online Indicator Dot
+                Positioned(
+                  right: 2,
+                  bottom: 2,
+                  child: Container(
+                    width: 14,
+                    height: 14,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF10B981),
+                      shape: BoxShape.circle,
+                      border: Border.all(
+                        color: isDark ? const Color(0xFF090C15) : Colors.white,
+                        width: 2.2,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 7),
+
+            // First Name
+            Text(
+              user.name.split(' ').first,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+                color: isDark ? Colors.white : const Color(0xFF0F172A),
+              ),
+            ),
+            const SizedBox(height: 1),
+
+            // Distance subtitle
+            Text(
+              '$distanceKm km away',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontSize: 10,
+                fontWeight: FontWeight.w500,
+                color: isDark ? Colors.white54 : const Color(0xFF64748B),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildAvatarFallback(UserModel user, List<Color> grad) {
+    return Container(
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: grad,
+        ),
+      ),
+      child: Center(
+        child: Text(
+          user.name.isNotEmpty ? user.name[0].toUpperCase() : '?',
+          style: const TextStyle(
+            color: Colors.white,
+            fontSize: 24,
+            fontWeight: FontWeight.w900,
+          ),
+        ),
+      ),
+    );
+  }
 
   Widget _buildConnectionsTab(List<UserModel> users, UserModel currentUser, bool isDark) {
     // Check for strictly mutual matches or Firestore matches array

@@ -1,6 +1,7 @@
 import 'dart:math';
 import 'dart:async';
 import 'dart:convert';
+import 'dart:typed_data';
 import 'dart:ui';
 import 'package:image_picker/image_picker.dart';
 import '../utils/chat_js_helper.dart';
@@ -50,7 +51,6 @@ class _ChatDetailScreenState extends ConsumerState<ChatDetailScreen>
   bool _isRecording = false;
   int _recordDuration = 0;
   Timer? _recordTimer;
-  bool _isUsingSimulatedMic = false;
 
   // GIPHY integration variables
   String? _customGiphyApiKey;
@@ -486,28 +486,43 @@ class _ChatDetailScreenState extends ConsumerState<ChatDetailScreen>
 
   void _startRecording() async {
     HapticFeedback.heavyImpact();
-    _isUsingSimulatedMic = false;
     
     try {
       final success = await startJsRecording();
-      if (success == false) {
-        _isUsingSimulatedMic = true;
+      if (!success) {
+        if (mounted) {
+          final err = getJsRecordingError();
+          final String message;
+          if (err == 'PERMISSION_DENIED') {
+            message = '🎙️ Microphone access was blocked by browser. Please enable microphone permission.';
+          } else if (err != null && err.isNotEmpty) {
+            message = '🎙️ Microphone issue: $err';
+          } else {
+            message = '🎙️ Microphone unavailable or in use by another app.';
+          }
+
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(message),
+              backgroundColor: Colors.redAccent,
+              duration: const Duration(seconds: 4),
+            ),
+          );
+        }
+        return;
+      }
+    } catch (e) {
+      print('Mic start recording error: $e');
+      if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('🎙️ Sandbox Mode: Simulated voice recording active!'),
-            duration: Duration(seconds: 2),
+          SnackBar(
+            content: Text('🎙️ Could not access microphone: $e'),
+            backgroundColor: Colors.redAccent,
+            duration: const Duration(seconds: 3),
           ),
         );
       }
-    } catch (e) {
-      print('Mic start recording error (falling back to simulation): $e');
-      _isUsingSimulatedMic = true;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('🎙️ Sandbox Mode: Simulated voice recording active!'),
-          duration: Duration(seconds: 2),
-        ),
-      );
+      return;
     }
 
     setState(() {
@@ -551,45 +566,90 @@ class _ChatDetailScreenState extends ConsumerState<ChatDetailScreen>
       _recordDuration = 0;
     });
 
-    if (_isUsingSimulatedMic) {
-      if (duration > 0) {
-        final simulatedAudioUrl = 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3';
-        _sendVoiceNote(duration, simulatedAudioUrl);
-      }
+    if (duration <= 0) {
       return;
     }
 
     try {
-      final localAudioUrl = await stopJsRecording();
-      if (duration > 0 && localAudioUrl != null && localAudioUrl.isNotEmpty) {
-        String finalUrl = localAudioUrl;
-        
+      final rawResult = await stopJsRecording();
+      if (rawResult == null || rawResult.isEmpty) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('⚠️ Voice recording was empty'),
+              duration: Duration(seconds: 2),
+            ),
+          );
+        }
+        return;
+      }
+
+      String? dataUrl;
+      String mimeType = 'audio/webm';
+      Uint8List? audioBytes;
+
+      try {
+        final decoded = jsonDecode(rawResult);
+        if (decoded is Map<String, dynamic>) {
+          if (decoded['error'] != null && decoded['error'].toString().isNotEmpty && decoded['dataUrl'] == null) {
+            print('Recording error: ${decoded['error']}');
+            return;
+          }
+          dataUrl = decoded['dataUrl'] as String?;
+          if (decoded['mimeType'] != null && (decoded['mimeType'] as String).isNotEmpty) {
+            mimeType = decoded['mimeType'] as String;
+          }
+        }
+      } catch (_) {
+        dataUrl = rawResult;
+      }
+
+      if (dataUrl == null || dataUrl.isEmpty) {
+        return;
+      }
+
+      if (dataUrl.startsWith('data:')) {
+        final commaIndex = dataUrl.indexOf(',');
+        if (commaIndex != -1) {
+          final base64Part = dataUrl.substring(commaIndex + 1);
+          audioBytes = base64Decode(base64Part);
+        }
+      } else if (dataUrl.startsWith('http://') || dataUrl.startsWith('https://') || dataUrl.startsWith('blob:')) {
         try {
-          final response = await http.get(Uri.parse(localAudioUrl));
-          final bytes = response.bodyBytes;
+          final response = await http.get(Uri.parse(dataUrl));
+          if (response.bodyBytes.isNotEmpty) {
+            audioBytes = response.bodyBytes;
+          }
+        } catch (e) {
+          print('Fetch audio bytes error: $e');
+        }
+      }
+
+      String finalUrl = dataUrl;
+
+      if (audioBytes != null && audioBytes.isNotEmpty) {
+        try {
+          final ext = mimeType.contains('mp4') ? 'm4a' : (mimeType.contains('ogg') ? 'ogg' : 'webm');
+          final storageRef = FirebaseStorage.instance
+              .ref()
+              .child('chats/${widget.chatId}/voice_${DateTime.now().millisecondsSinceEpoch}.$ext');
           
-          if (bytes.isNotEmpty) {
-            final storageRef = FirebaseStorage.instance
-                .ref()
-                .child('chats/${widget.chatId}/voice_${DateTime.now().millisecondsSinceEpoch}.webm');
-            
-            final uploadTask = storageRef.putData(
-              bytes,
-              SettableMetadata(contentType: 'audio/webm'),
-            );
-            
-            final snapshot = await uploadTask;
-            final downloadUrl = await snapshot.ref.getDownloadURL();
-            if (downloadUrl.isNotEmpty) {
-              finalUrl = downloadUrl;
-            }
+          final uploadTask = storageRef.putData(
+            audioBytes,
+            SettableMetadata(contentType: mimeType),
+          );
+          
+          final snapshot = await uploadTask;
+          final downloadUrl = await snapshot.ref.getDownloadURL();
+          if (downloadUrl.isNotEmpty) {
+            finalUrl = downloadUrl;
           }
         } catch (storageError) {
-          print('Firebase Storage Voice upload error (falling back to local): $storageError');
+          print('Firebase Storage Voice upload error (fallback to local audio): $storageError');
         }
-
-        _sendVoiceNote(duration, finalUrl);
       }
+
+      _sendVoiceNote(duration, finalUrl);
     } catch (e) {
       print('Mic stop recording error: $e');
     }

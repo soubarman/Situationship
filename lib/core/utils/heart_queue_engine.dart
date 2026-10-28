@@ -144,6 +144,7 @@ class ScoredProfile {
   final MatchCategory category;    // Internal classification
   final String matchExplanation;   // Grounded human-readable match reason
   final double conversationScore;  // 0.0–1.0 conversation potential
+  final double distanceKm;         // Geographical proximity in kilometers
   final String debugInfo;          // Developer breakdown
 
   const ScoredProfile({
@@ -153,6 +154,7 @@ class ScoredProfile {
     this.category = MatchCategory.highCompatibility,
     this.matchExplanation = 'Compatible vibe and shared interests',
     this.conversationScore = 0.5,
+    this.distanceKm = 0.0,
     required this.debugInfo,
   });
 }
@@ -323,8 +325,8 @@ class HeartQueueEngine {
       }
     }
 
-    // 11. Distance & location constraints
-    if (!matchIrrespective) {
+    // 11. Distance constraints (if an explicit upper limit is provided; otherwise progressive ranking manages distances)
+    if (!matchIrrespective && maxDistance.isFinite && maxDistance < 99999) {
       final distKm = LocationHelper.getDistanceKm(
         lat1: deviceLat,
         lon1: deviceLon,
@@ -342,24 +344,22 @@ class HeartQueueEngine {
   }
 
   /// Filters an entire candidate list through Stage 1 Hard Eligibility.
-  /// If the candidate pool within the initial local radius has fewer than 2 candidates,
-  /// adaptively widens the radius (first 150 km, then global/irrespective)
-  /// WITHOUT EVER violating hard gender/preference, age, block, or moderation constraints
-  /// (per Requirement #11).
+  /// If maxDistance is infinite, all valid candidates pass through to be
+  /// progressively ranked by distance in Stage 2.
   List<UserModel> filterEligibleCandidates({
     required UserModel currentUser,
     required List<UserModel> candidates,
     required double minAge,
     required double maxAge,
-    required double maxDistance,
-    required bool matchIrrespective,
+    double maxDistance = double.infinity,
+    bool matchIrrespective = false,
     double? deviceLat,
     double? deviceLon,
     Set<String> excludedIds = const {},
     Set<String> unlikedIds = const {},
     String? overrideInterestedIn,
   }) {
-    // 1. Initial attempt with user's configured distance
+    // 1. Initial attempt with candidate eligibility
     final local = candidates.where((candidate) {
       return isCandidateEligible(
         currentUser: currentUser,
@@ -376,8 +376,8 @@ class HeartQueueEngine {
       );
     }).toList();
 
-    // If local pool is healthy (>= 2 candidates) or already unrestricted, return as-is
-    if (local.length >= 2 || matchIrrespective) {
+    // If local pool is healthy, unrestricted, or infinite distance, return as-is
+    if (local.length >= 2 || matchIrrespective || !maxDistance.isFinite) {
       return local;
     }
 
@@ -403,7 +403,6 @@ class HeartQueueEngine {
     }
 
     // 3. Adaptive stage B: Global / Irrespective fallback
-    // (Strict gender preference, age limits, and blocks are STILL 100% active!)
     final global = candidates.where((candidate) {
       return isCandidateEligible(
         currentUser: currentUser,
@@ -555,11 +554,14 @@ class HeartQueueEngine {
       category: category,
       matchExplanation: explanation,
       conversationScore: conversationRatio,
+      distanceKm: distKm,
       debugInfo: buf.toString(),
     );
   }
 
-  /// Ranks candidates strictly through Stage 1 & Stage 2, sorting by compatibility.
+  /// Ranks candidates strictly through Stage 1 & Stage 2 with progressive distance expansion.
+  /// Nearest profiles are surfaced first, then the algorithm gradually expands the distance
+  /// tier by tier automatically without the user needing to manually set a distance filter.
   List<ScoredProfile> rankProfiles({
     required UserModel currentUser,
     required List<UserModel> candidates,
@@ -567,7 +569,7 @@ class HeartQueueEngine {
     double? deviceLon,
     double minAge = 18,
     double maxAge = 35,
-    double maxDistance = 50,
+    double maxDistance = double.infinity,
     bool matchIrrespective = false,
     Set<String> excludedIds = const {},
     Set<String> unlikedIds = const {},
@@ -590,7 +592,7 @@ class HeartQueueEngine {
 
     if (eligible.isEmpty) return [];
 
-    // Stage 2: Calculate deterministic compatibility scores
+    // Stage 2: Calculate deterministic compatibility scores & proximity
     final scored = eligible
         .map((candidate) => scoreProfile(
               currentUser: currentUser,
@@ -600,18 +602,58 @@ class HeartQueueEngine {
               minAge: minAge,
               maxAge: maxAge,
             ))
-        .toList()
-      ..sort((a, b) => b.score.compareTo(a.score));
+        .toList();
+
+    // Stage 2.5: Progressive Proximity Tiering & Compatibility Ordering
+    // Group candidates into smooth progressive distance tiers:
+    // Tier 0: 0–10 km (Immediate Local)
+    // Tier 1: 10–25 km (Near City / Metro)
+    // Tier 2: 25–50 km (Greater Metro)
+    // Tier 3: 50–100 km (Regional Commuter)
+    // Tier 4: 100–200 km (Intercity / State)
+    // Tier 5: 200–500 km (Extended Regional)
+    // Tier 6: 500+ km (Global / Broad)
+    //
+    // Nearest profiles are ALWAYS surfaced first. Within each tier, candidates
+    // are ranked by their compatibility score.
+    // As the user swipes through, the distance expands seamlessly and automatically!
+    final progressiveTiers = <int, List<ScoredProfile>>{};
+
+    int getDistanceTier(double dist) {
+      if (dist < 10.0) return 0;
+      if (dist < 25.0) return 1;
+      if (dist < 50.0) return 2;
+      if (dist < 100.0) return 3;
+      if (dist < 200.0) return 4;
+      if (dist < 500.0) return 5;
+      return 6;
+    }
+
+    for (final sp in scored) {
+      final tier = getDistanceTier(sp.distanceKm);
+      progressiveTiers.putIfAbsent(tier, () => []).add(sp);
+    }
+
+    // Sort tiers in ascending order (0 -> 1 -> 2 -> 3 -> 4 -> 5 -> 6)
+    final sortedTiers = progressiveTiers.keys.toList()..sort();
+    final List<ScoredProfile> rankedProfiles = [];
+
+    for (final tier in sortedTiers) {
+      final tierProfiles = progressiveTiers[tier]!;
+      // Within each proximity tier, rank by highest compatibility score first
+      tierProfiles.sort((a, b) => b.score.compareTo(a.score));
+      rankedProfiles.addAll(tierProfiles);
+    }
 
     // Mark top profiles in anti-repetition tracker
-    for (final sp in scored.take(4)) {
+    for (final sp in rankedProfiles.take(4)) {
       onProfileDisplayed(sp.user.id);
     }
 
-    return scored;
+    return rankedProfiles;
   }
 
-  /// Convenience method returning ordered list of UserModel.
+  /// Convenience method returning ordered list of UserModel with progressive distance expansion.
   List<UserModel> rankedUsers({
     required UserModel currentUser,
     required List<UserModel> candidates,
@@ -619,7 +661,7 @@ class HeartQueueEngine {
     double? deviceLon,
     double minAge = 18,
     double maxAge = 35,
-    double maxDistance = 50,
+    double maxDistance = double.infinity,
     bool matchIrrespective = false,
     Set<String> excludedIds = const {},
     Set<String> unlikedIds = const {},

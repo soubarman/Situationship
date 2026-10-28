@@ -11,9 +11,8 @@ import '../../../core/providers/app_state_provider.dart';
 import '../../../core/providers/firestore_provider.dart';
 import '../../../core/providers/firebase_auth_provider.dart';
 import '../../../shared/widgets/background_orbs.dart';
-import '../../../core/utils/location_helper.dart';
 import '../../../core/utils/heart_queue_engine.dart';
-import '../../../shared/widgets/situationship_logo.dart';
+import '../../../shared/widgets/app_header.dart';
 import '../widgets/discover_tab.dart';
 import '../widgets/soul_mode_tab.dart';
 import '../widgets/nearly_souls_tab.dart';
@@ -160,30 +159,6 @@ class _MatchScreenState extends ConsumerState<MatchScreen>
     } catch (e) {
       debugPrint('Failed to get location: $e');
     }
-  }
-
-  List<UserModel> _filteredUsers(
-    List<UserModel> all,
-    UserModel currentUser,
-    double minAge,
-    double maxAge,
-    double maxDistance,
-    bool matchIrrespective,
-    String interestedInPreference,
-  ) {
-    return _engine.filterEligibleCandidates(
-      currentUser: currentUser,
-      candidates: all,
-      minAge: minAge,
-      maxAge: maxAge,
-      maxDistance: maxDistance,
-      matchIrrespective: matchIrrespective,
-      deviceLat: _deviceLat,
-      deviceLon: _deviceLon,
-      excludedIds: _effectiveExcludedIds,
-      unlikedIds: ref.read(unlikedUserIdsProvider),
-      overrideInterestedIn: interestedInPreference,
-    );
   }
 
   // ──────────────────────────────────────────────────────────────────────────
@@ -558,125 +533,9 @@ class _MatchScreenState extends ConsumerState<MatchScreen>
   // ── Header ─────────────────────────────────────────────────────────────────
 
   Widget _buildHeader(UserModel currentUser, bool isDark) {
-    final sparkCount = currentUser.likedBy.length;
-    final displayStreak = sparkCount > 0 ? sparkCount : 3;
-
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          SituationshipLogo(
-            fontSize: 22,
-            isDark: isDark,
-            showTrademark: true,
-          ),
-
-          // Action buttons: Fire pill, Shop bag, Bell with pink badge, Search
-          Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              // 🔥 Streak flame pill
-              GestureDetector(
-                onTap: () => context.push('/wallet'),
-                child: Container(
-                  height: 35,
-                  padding: const EdgeInsets.symmetric(horizontal: 10),
-                  decoration: BoxDecoration(
-                    color: AppTheme.accentPurple.withValues(alpha: 0.12),
-                    borderRadius: BorderRadius.circular(18),
-                    border: Border.all(
-                      color: AppTheme.accentPurple,
-                      width: 1.4,
-                    ),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(
-                        Icons.local_fire_department_rounded,
-                        color: AppTheme.accentPurple,
-                        size: 16,
-                      ),
-                      const SizedBox(width: 4),
-                      Text(
-                        '$displayStreak',
-                        style: TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w900,
-                          color: AppTheme.accentPurple,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-              const SizedBox(width: 7),
-
-              // Shop / Store bag button (tote bag with handles)
-              _HeaderCircleButton(
-                icon: Icons.shopping_bag_outlined,
-                onTap: () => context.push('/wallet'),
-              ),
-              const SizedBox(width: 7),
-
-              // Filter button 🎛️
-              _HeaderCircleButton(
-                icon: Icons.tune_rounded,
-                onTap: _showFilters,
-              ),
-              const SizedBox(width: 7),
-
-              // Bell with hot pink badge (count = 3)
-              Stack(
-                clipBehavior: Clip.none,
-                children: [
-                  _HeaderCircleButton(
-                    icon: Icons.notifications_none_rounded,
-                    onTap: () => context.push('/notifications'),
-                  ),
-                  Positioned(
-                    top: -2,
-                    right: -2,
-                    child: Container(
-                      width: 16,
-                      height: 16,
-                      decoration: BoxDecoration(
-                        color: AppTheme.primaryBlue,
-                        shape: BoxShape.circle,
-                        border: Border.all(color: const Color(0xFF0B0715), width: 1.5),
-                        boxShadow: [
-                          BoxShadow(
-                            color: AppTheme.primaryBlue.withValues(alpha: 0.6),
-                            blurRadius: 6,
-                          ),
-                        ],
-                      ),
-                      child: const Center(
-                        child: Text(
-                          '3',
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontSize: 9,
-                            fontWeight: FontWeight.w900,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(width: 7),
-
-              // Search icon button
-              _HeaderCircleButton(
-                icon: Icons.search_rounded,
-                onTap: () => context.push('/search'),
-              ),
-            ],
-          ),
-        ],
-      ),
+    return SituationshipHeaderBar(
+      onFilterTap: _showFilters,
+      showSearch: false,
     );
   }
 
@@ -813,59 +672,12 @@ class _MatchScreenState extends ConsumerState<MatchScreen>
     );
   }
 
-  Widget _buildMatchModeToggle() {
-    final matchIrrespective = ref.watch(filterMatchIrrespectiveProvider);
-    return GestureDetector(
-      onTap: () {
-        HapticFeedback.selectionClick();
-        ref.read(filterMatchIrrespectiveProvider.notifier).state =
-            !matchIrrespective;
-      },
-      child: Container(
-        height: 34,
-        padding: const EdgeInsets.symmetric(horizontal: 10),
-        decoration: BoxDecoration(
-          color: Colors.white.withValues(alpha: 0.08),
-          borderRadius: BorderRadius.circular(17),
-          border: Border.all(
-            color: Colors.white.withValues(alpha: 0.18),
-            width: 0.8,
-          ),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              matchIrrespective
-                  ? Icons.public_rounded
-                  : Icons.location_on_rounded,
-              size: 13,
-              color: matchIrrespective
-                  ? AppTheme.primaryGreen
-                  : AppTheme.primaryBlue,
-            ),
-            const SizedBox(width: 4),
-            Text(
-              matchIrrespective ? 'Global' : 'Nearby',
-              style: const TextStyle(
-                fontSize: 11.5,
-                fontWeight: FontWeight.w800,
-                color: Colors.white,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
   // ── Filters Sheet ──────────────────────────────────────────────────────────
 
   void _showFilters() {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final currentMinAge = ref.read(filterMinAgeProvider);
     final currentMaxAge = ref.read(filterMaxAgeProvider);
-    final currentMaxDistance = ref.read(filterMaxDistanceProvider);
     final currentInterestedIn = ref.read(filterInterestedInProvider);
 
     showModalBottomSheet(
@@ -876,7 +688,6 @@ class _MatchScreenState extends ConsumerState<MatchScreen>
       builder: (context) {
         double minAge = currentMinAge;
         double maxAge = currentMaxAge;
-        double maxDistance = currentMaxDistance;
         String selectedInterestedIn = currentInterestedIn;
 
         return StatefulBuilder(
@@ -977,33 +788,7 @@ class _MatchScreenState extends ConsumerState<MatchScreen>
                       });
                     },
                   ),
-                  const SizedBox(height: 12),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text('Max Distance',
-                          style: TextStyle(
-                              fontWeight: FontWeight.w600,
-                              color: isDark ? Colors.white70 : AppTheme.textSecondary)),
-                      Text('${maxDistance.toInt()} km',
-                          style: TextStyle(
-                              color: AppTheme.primaryBlue,
-                              fontWeight: FontWeight.w700)),
-                    ],
-                  ),
-                  Slider(
-                    value: maxDistance,
-                    min: 5,
-                    max: 100,
-                    divisions: 19,
-                    activeColor: AppTheme.primaryGreen,
-                    inactiveColor:
-                        AppTheme.primaryGreen.withValues(alpha: 0.2),
-                    onChanged: (value) {
-                      setModalState(() => maxDistance = value);
-                    },
-                  ),
-                  const SizedBox(height: 20),
+                  const SizedBox(height: 24),
                   Row(
                     children: [
                       Expanded(
@@ -1011,10 +796,9 @@ class _MatchScreenState extends ConsumerState<MatchScreen>
                           onPressed: () {
                             ref.read(filterMinAgeProvider.notifier).state = 18;
                             ref.read(filterMaxAgeProvider.notifier).state = 35;
-                            ref.read(filterMaxDistanceProvider.notifier).state = 50;
                             ref.read(filterInterestedInProvider.notifier).state = 'auto';
                             ref.read(matchQueueProvider.notifier).applyFilters(
-                                  maxDistance: 50,
+                                  maxDistance: double.infinity,
                                   minAge: 18,
                                   maxAge: 35,
                                 );
@@ -1038,7 +822,6 @@ class _MatchScreenState extends ConsumerState<MatchScreen>
                           onPressed: () {
                             ref.read(filterMinAgeProvider.notifier).state = minAge;
                             ref.read(filterMaxAgeProvider.notifier).state = maxAge;
-                            ref.read(filterMaxDistanceProvider.notifier).state = maxDistance;
                             ref.read(filterInterestedInProvider.notifier).state = selectedInterestedIn;
                             
                             // Persist to user profile if logged in
@@ -1052,7 +835,7 @@ class _MatchScreenState extends ConsumerState<MatchScreen>
                             }
 
                             ref.read(matchQueueProvider.notifier).applyFilters(
-                                  maxDistance: maxDistance,
+                                  maxDistance: double.infinity,
                                   minAge: minAge,
                                   maxAge: maxAge,
                                 );
@@ -1066,8 +849,8 @@ class _MatchScreenState extends ConsumerState<MatchScreen>
                           ),
                           child: const Text('Apply Filters',
                               style: TextStyle(
-                                  color: Colors.white,
-                                  fontWeight: FontWeight.w700)),
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.white)),
                         ),
                       ),
                     ],

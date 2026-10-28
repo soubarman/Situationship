@@ -52,10 +52,12 @@ class _Style {
 
 class MediaStreamTrack {
   void stop() {}
+  dynamic applyConstraints([dynamic constraints]) => Future.value(null);
 }
 
 class MediaStream {
   dynamic getTracks() => <MediaStreamTrack>[];
+  dynamic getVideoTracks() => <MediaStreamTrack>[];
 }
 
 class MediaRecorderOptions {

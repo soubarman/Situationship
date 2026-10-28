@@ -29,11 +29,16 @@ class ImageWithFallback extends StatelessWidget {
       return _buildPlaceholder(context, isDark);
     }
 
+    final memWidth = width != null && width!.isFinite ? (width! * 2.5).round() : null;
+    final memHeight = height != null && height!.isFinite ? (height! * 2.5).round() : null;
+
     Widget imageWidget = CachedNetworkImage(
       imageUrl: imageUrl!,
       width: width,
       height: height,
       fit: fit,
+      memCacheWidth: memWidth,
+      memCacheHeight: memHeight,
       placeholder: (context, url) => placeholder ?? _buildShimmer(isDark),
       errorWidget: (context, url, error) => errorWidget ?? _buildPlaceholder(context, isDark),
     );

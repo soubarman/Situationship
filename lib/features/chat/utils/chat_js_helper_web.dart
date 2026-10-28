@@ -1,11 +1,10 @@
-// ignore_for_file: uri_does_not_exist, undefined_function
+// ignore_for_file: avoid_web_libraries_in_flutter
 import 'dart:async';
-import 'dart:js' as js;
 import 'dart:js_util' as js_util;
 
 Future<bool> startJsRecording() async {
   try {
-    final promise = js.context.callMethod('startRecording');
+    final promise = js_util.callMethod<dynamic>(js_util.globalThis, 'startRecording', []);
     final success = await js_util.promiseToFuture<dynamic>(promise);
     return success == true;
   } catch (e) {
@@ -14,11 +13,21 @@ Future<bool> startJsRecording() async {
   }
 }
 
+String? getJsRecordingError() {
+  try {
+    final err = js_util.callMethod<dynamic>(js_util.globalThis, 'getLastRecordingError', []);
+    if (err != null && err.toString().isNotEmpty) {
+      return err.toString();
+    }
+  } catch (_) {}
+  return null;
+}
+
 Future<String?> stopJsRecording() async {
   try {
-    final promise = js.context.callMethod('stopRecording');
-    final url = await js_util.promiseToFuture<dynamic>(promise) as String?;
-    return url;
+    final promise = js_util.callMethod<dynamic>(js_util.globalThis, 'stopRecording', []);
+    final result = await js_util.promiseToFuture<dynamic>(promise);
+    return result?.toString();
   } catch (e) {
     print('Web JS helper stopRecording error: $e');
     return null;
@@ -27,7 +36,7 @@ Future<String?> stopJsRecording() async {
 
 void playJsAudio(String url) {
   try {
-    js.context.callMethod('playAudio', [url]);
+    js_util.callMethod<dynamic>(js_util.globalThis, 'playAudio', [url]);
   } catch (e) {
     print('Web JS helper playAudio error: $e');
   }
@@ -35,7 +44,7 @@ void playJsAudio(String url) {
 
 void pauseJsAudio() {
   try {
-    js.context.callMethod('pauseAudio');
+    js_util.callMethod<dynamic>(js_util.globalThis, 'pauseAudio', []);
   } catch (e) {
     print('Web JS helper pauseAudio error: $e');
   }
@@ -43,7 +52,7 @@ void pauseJsAudio() {
 
 void openJsUrl(String url) {
   try {
-    js.context.callMethod('open', [url]);
+    js_util.callMethod<dynamic>(js_util.globalThis, 'open', [url]);
   } catch (e) {
     print('Web JS helper open error: $e');
   }

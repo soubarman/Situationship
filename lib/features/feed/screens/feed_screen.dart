@@ -20,6 +20,7 @@ import '../../../core/models/notification_model.dart';
 import '../../../core/providers/firestore_provider.dart';
 import '../../../shared/widgets/background_orbs.dart';
 import '../../../shared/widgets/situationship_logo.dart';
+import '../../../shared/widgets/app_header.dart';
 
 // false = All Stories, true = Following Only
 final storiesFilterProvider = StateProvider<bool>((ref) => false);
@@ -256,6 +257,8 @@ class _FeedScreenState extends ConsumerState<FeedScreen> {
       scrolledUnderElevation: 0,
       toolbarHeight: 56,
       backgroundColor: isDark ? palette.backgroundTint : const Color(0xFFF5F5F7),
+      automaticallyImplyLeading: false,
+      titleSpacing: 0,
       bottom: PreferredSize(
         preferredSize: const Size.fromHeight(1),
         child: Divider(
@@ -264,111 +267,7 @@ class _FeedScreenState extends ConsumerState<FeedScreen> {
           color: isDark ? Colors.white12 : Colors.black12,
         ),
       ),
-      title: FittedBox(
-        fit: BoxFit.scaleDown,
-        alignment: Alignment.centerLeft,
-        child: SituationshipLogo(
-          fontSize: 22,
-          isDark: isDark,
-          showTrademark: true,
-        ),
-      ),
-      actions: [
-        _buildCoinBadge(currentUser.coins, isDark, palette),
-        const SizedBox(width: 6),
-        // Bell with notification badge
-        Consumer(
-          builder: (context, ref, child) {
-            final notificationsAsync = ref.watch(notificationsStreamProvider);
-            final notifications = notificationsAsync.asData?.value ?? [];
-            final unreadCount = notifications.where((n) => !n.isRead).length;
-            final hasUnread = unreadCount > 0;
-            final displayCount = unreadCount >= 10 ? '9+' : '$unreadCount';
-
-            return Stack(
-              clipBehavior: Clip.none,
-              children: [
-                GestureDetector(
-                  onTap: () => _showNotificationsSheet(context, currentUser, ref),
-                  child: Container(
-                    width: 32,
-                    height: 32,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      color: isDark ? const Color(0xFF161026) : Colors.black.withValues(alpha: 0.04),
-                      border: Border.all(
-                        color: isDark ? Colors.white.withValues(alpha: 0.14) : Colors.black.withValues(alpha: 0.08),
-                        width: 1.0,
-                      ),
-                    ),
-                    child: Icon(
-                      hasUnread ? Icons.notifications_rounded : Icons.notifications_none_rounded,
-                      size: 16,
-                      color: isDark ? Colors.white.withValues(alpha: 0.85) : Colors.black87,
-                    ),
-                  ),
-                ),
-                if (hasUnread)
-                  Positioned(
-                    top: -2,
-                    right: -2,
-                    child: Container(
-                      width: 14,
-                      height: 14,
-                      decoration: BoxDecoration(
-                        color: palette.primary,
-                        shape: BoxShape.circle,
-                        border: Border.all(color: isDark ? const Color(0xFF0B0715) : Colors.white, width: 1.5),
-                        boxShadow: [
-                          BoxShadow(
-                            color: palette.primary.withValues(alpha: 0.6),
-                            blurRadius: 4,
-                          ),
-                        ],
-                      ),
-                      child: Center(
-                        child: Text(
-                          displayCount,
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 8.5,
-                            fontWeight: FontWeight.w900,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-              ],
-            );
-          },
-        ),
-        const SizedBox(width: 6),
-        // Search icon button
-        GestureDetector(
-          onTap: () => context.push('/search'),
-          child: Container(
-            width: 32,
-            height: 32,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              color: isDark ? const Color(0xFF161026) : Colors.black.withValues(alpha: 0.04),
-              border: Border.all(
-                color: isDark ? Colors.white.withValues(alpha: 0.14) : Colors.black.withValues(alpha: 0.08),
-                width: 1.0,
-              ),
-            ),
-            child: Icon(
-              Icons.search_rounded,
-              size: 16,
-              color: isDark ? Colors.white.withValues(alpha: 0.85) : Colors.black87,
-            ),
-          ),
-        ),
-        const SizedBox(width: 6),
-        // My Profile button on the far right
-        _buildProfileAvatar(currentUser, isDark, palette),
-        const SizedBox(width: 12),
-      ],
+      title: const SituationshipHeaderBar(),
     );
   }
 

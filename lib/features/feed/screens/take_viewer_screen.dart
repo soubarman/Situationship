@@ -1,6 +1,6 @@
 import '../../../core/utils/web_stub.dart' if (dart.library.html) 'package:web/web.dart' as web;
 import '../utils/ui_web_shim.dart' as ui_web;
-import 'dart:ui' as ui;
+import 'dart:ui' show ImageFilter;
 import 'dart:async';
 import '../../../core/utils/js_interop_stub.dart' if (dart.library.js_interop) 'dart:js_interop';
 import 'package:flutter/foundation.dart' show kIsWeb;
@@ -14,6 +14,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:video_player/video_player.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/theme/app_palette.dart';
 import '../../../core/providers/app_state_provider.dart';
 import '../../../core/utils/color_filters.dart';
 
@@ -38,13 +39,23 @@ class TakeViewerScreen extends ConsumerStatefulWidget {
 }
 
 class _TakeViewerScreenState extends ConsumerState<TakeViewerScreen>
-    with SingleTickerProviderStateMixin {
+    with TickerProviderStateMixin {
   late AnimationController _progressCtrl;
   int _currentIndex = 0;
   List<Map<String, dynamic>> _takes = [];
   bool _isMuted = true;
   String _activeTab = 'For you';
   final _tabs = ['For you', 'Following', 'Nearby'];
+
+  // Double-tap heart explosion animation
+  late AnimationController _heartAnimCtrl;
+  late Animation<double> _heartScale;
+  late Animation<double> _heartOpacity;
+  Offset? _doubleTapHeartPosition;
+
+  // Live / Fading pulsing glow animation
+  late AnimationController _pulseCtrl;
+  late Animation<double> _glowPulse;
 
   // Web: keyed by URL
   final Map<String, web.HTMLVideoElement> _webVideoElements = {};
@@ -59,6 +70,7 @@ class _TakeViewerScreenState extends ConsumerState<TakeViewerScreen>
     _countdownTimer = Timer.periodic(const Duration(seconds: 1), (_) {
       if (mounted) setState(() {});
     });
+
     _progressCtrl = AnimationController(
       vsync: this,
       duration: const Duration(seconds: 8),
@@ -73,18 +85,79 @@ class _TakeViewerScreenState extends ConsumerState<TakeViewerScreen>
           }
         }
       });
+
+    _heartAnimCtrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 650),
+    );
+    _heartScale = TweenSequence<double>([
+      TweenSequenceItem(tween: Tween(begin: 0.0, end: 1.35).chain(CurveTween(curve: Curves.easeOutBack)), weight: 45),
+      TweenSequenceItem(tween: Tween(begin: 1.35, end: 1.0).chain(CurveTween(curve: Curves.easeInOut)), weight: 20),
+      TweenSequenceItem(tween: Tween(begin: 1.0, end: 1.2).chain(CurveTween(curve: Curves.easeIn)), weight: 35),
+    ]).animate(_heartAnimCtrl);
+    _heartOpacity = TweenSequence<double>([
+      TweenSequenceItem(tween: Tween(begin: 0.0, end: 1.0), weight: 20),
+      TweenSequenceItem(tween: Tween(begin: 1.0, end: 1.0), weight: 55),
+      TweenSequenceItem(tween: Tween(begin: 1.0, end: 0.0).chain(CurveTween(curve: Curves.easeOut)), weight: 25),
+    ]).animate(_heartAnimCtrl);
+
+    _pulseCtrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1800),
+    )..repeat(reverse: true);
+    _glowPulse = Tween<double>(begin: 0.35, end: 1.0).animate(
+      CurvedAnimation(parent: _pulseCtrl, curve: Curves.easeInOutSine),
+    );
+
     WidgetsBinding.instance.addPostFrameCallback((_) => _loadTakes());
   }
 
-  void _loadTakes() {
+  void _loadTakes({String? tab}) {
+    final activeTab = tab ?? _activeTab;
     final all = ref.read(storiesStreamProvider).asData?.value ?? [];
-    final user = all.where((s) => s['userId'] == widget.initialUserId).toList();
-    if (user.isEmpty) {
+    List<Map<String, dynamic>> filtered = [];
+
+    if (activeTab == 'For you') {
+      filtered = all.where((s) => s['userId'] == widget.initialUserId).toList();
+      if (filtered.isEmpty && all.isNotEmpty) filtered = all;
+    } else if (activeTab == 'Following') {
+      filtered = all.where((s) => s['userId'] == widget.initialUserId).toList();
+      if (filtered.isEmpty && all.isNotEmpty) filtered = all;
+    } else {
+      // Nearby / Explore
+      filtered = all.where((s) => s['userId'] == widget.initialUserId).toList();
+      if (filtered.isEmpty && all.isNotEmpty) filtered = all;
+    }
+
+    if (filtered.isEmpty) {
       if (mounted) context.pop();
       return;
     }
-    setState(() => _takes = user);
+    setState(() {
+      _takes = filtered;
+      _currentIndex = 0;
+    });
     _startTimer();
+  }
+
+  void _switchTab(String tab) {
+    if (_activeTab == tab) return;
+    HapticFeedback.selectionClick();
+    setState(() => _activeTab = tab);
+    _loadTakes(tab: tab);
+  }
+
+  void _triggerDoubleTapHeart(Offset pos, String storyId) {
+    HapticFeedback.heavyImpact();
+    setState(() => _doubleTapHeartPosition = pos);
+    _heartAnimCtrl.forward(from: 0.0);
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    if (uid != null && _takes.isNotEmpty) {
+      final currentLikes = List<String>.from(_takes[_currentIndex]['likes'] ?? []);
+      if (!currentLikes.contains(uid)) {
+        _likeTake(storyId);
+      }
+    }
   }
 
   void _startTimer() {
@@ -112,6 +185,8 @@ class _TakeViewerScreenState extends ConsumerState<TakeViewerScreen>
   void dispose() {
     _countdownTimer?.cancel();
     _progressCtrl.dispose();
+    _heartAnimCtrl.dispose();
+    _pulseCtrl.dispose();
     // Dispose web elements
     for (final v in _webVideoElements.values) {
       v.pause();
@@ -621,7 +696,7 @@ class _TakeViewerScreenState extends ConsumerState<TakeViewerScreen>
             width: 50,
             height: 50,
             decoration: BoxDecoration(
-              color: color.withOpacity(0.15),
+              color: color.withValues(alpha: 0.15),
               shape: BoxShape.circle,
             ),
             child: Icon(icon, color: color),
@@ -637,6 +712,7 @@ class _TakeViewerScreenState extends ConsumerState<TakeViewerScreen>
   Widget build(BuildContext context) {
     final size = MediaQuery.of(context).size;
     final currentUid = FirebaseAuth.instance.currentUser?.uid;
+    final palette = ref.watch(appPaletteProvider);
 
     if (_takes.isEmpty) {
       return Scaffold(
@@ -844,12 +920,23 @@ class _TakeViewerScreenState extends ConsumerState<TakeViewerScreen>
     return Scaffold(
       backgroundColor: Colors.black,
       body: GestureDetector(
-        onTapUp: (d) {
+        behavior: HitTestBehavior.opaque,
+        onDoubleTapDown: (details) {
+          _triggerDoubleTapHeart(details.localPosition, storyId);
+        },
+        onTapUp: (details) {
           _progressCtrl.stop();
-          if (d.localPosition.dx < size.width / 2) {
+          final dx = details.localPosition.dx;
+          if (dx < size.width * 0.35) {
             _prev();
-          } else {
+          } else if (dx > size.width * 0.65) {
             _next();
+          } else {
+            if (_progressCtrl.isAnimating) {
+              _progressCtrl.stop();
+            } else {
+              _progressCtrl.forward();
+            }
           }
         },
         onLongPressStart: (_) => _progressCtrl.stop(),
@@ -857,454 +944,705 @@ class _TakeViewerScreenState extends ConsumerState<TakeViewerScreen>
         child: Stack(
           fit: StackFit.expand,
           children: [
+            // Media and text/emoji overlays
             mediaAndOverlays,
 
-            // ── Gradient overlays ─────────────────────────────────────────
-            const Positioned(
-              top: 0, left: 0, right: 0, height: 200,
-              child: DecoratedBox(
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topCenter,
-                    end: Alignment.bottomCenter,
-                    colors: [Color(0xCC000000), Colors.transparent],
-                  ),
-                ),
-              ),
-            ),
-            const Positioned(
-              bottom: 0, left: 0, right: 0, height: 300,
-              child: DecoratedBox(
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.bottomCenter,
-                    end: Alignment.topCenter,
-                    colors: [Color(0xDD000000), Colors.transparent],
+            // Cinematic Scrim: Top Gradient
+            Positioned(
+              top: 0,
+              left: 0,
+              right: 0,
+              height: 220,
+              child: IgnorePointer(
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                      colors: [
+                        Colors.black.withValues(alpha: 0.82),
+                        Colors.black.withValues(alpha: 0.35),
+                        Colors.transparent,
+                      ],
+                      stops: const [0.0, 0.55, 1.0],
+                    ),
                   ),
                 ),
               ),
             ),
 
-            // ── Main layout ───────────────────────────────────────────────
+            // Cinematic Scrim: Bottom Gradient
+            Positioned(
+              bottom: 0,
+              left: 0,
+              right: 0,
+              height: 380,
+              child: IgnorePointer(
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.bottomCenter,
+                      end: Alignment.topCenter,
+                      colors: [
+                        Colors.black.withValues(alpha: 0.94),
+                        Colors.black.withValues(alpha: 0.55),
+                        Colors.transparent,
+                      ],
+                      stops: const [0.0, 0.6, 1.0],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+
+            // Main UI Overlay
             SafeArea(
               child: Stack(
+                fit: StackFit.expand,
                 children: [
-                  // TOP: Back button + Tabs + Muted
+                  // Top Segmented Progress Bar
                   Positioned(
-                    top: 8,
-                    left: 0,
-                    right: 0,
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 16),
-                      child: Row(
-                        children: [
-                          // Back
-                          GestureDetector(
-                            onTap: () => context.pop(),
-                            child: Container(
-                              width: 36,
-                              height: 36,
-                              decoration: BoxDecoration(
-                                color: Colors.black38,
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                              child: const Icon(Icons.chevron_left_rounded,
-                                  color: Colors.white, size: 28),
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          // Tabs
-                          Expanded(
-                            child: Row(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: _tabs.map((t) {
-                                final sel = _activeTab == t;
-                                return GestureDetector(
-                                  onTap: () => setState(() => _activeTab = t),
-                                  child: Padding(
-                                    padding: const EdgeInsets.symmetric(horizontal: 10),
-                                    child: Column(
-                                      mainAxisSize: MainAxisSize.min,
-                                      children: [
-                                        Text(
-                                          t,
-                                          style: TextStyle(
-                                            color: sel ? Colors.white : Colors.white54,
-                                            fontWeight: sel
-                                                ? FontWeight.bold
-                                                : FontWeight.normal,
-                                            fontSize: 14,
-                                          ),
-                                        ),
-                                        const SizedBox(height: 4),
-                                        if (sel)
-                                          Container(
-                                            width: 4,
-                                            height: 4,
-                                            decoration: const BoxDecoration(
-                                              color: Colors.white,
-                                              shape: BoxShape.circle,
-                                            ),
-                                          ),
-                                      ],
+                    top: 6,
+                    left: 12,
+                    right: 12,
+                    child: _buildTopSegmentedBars(),
+                  ),
+
+                  // Top Header Controls: Floating Back + Frosted Tab Capsule + Sound Toggle
+                  Positioned(
+                    top: 18,
+                    left: 12,
+                    right: 12,
+                    child: Row(
+                      children: [
+                        // Luxury Back Button
+                        ClipOval(
+                          child: BackdropFilter(
+                            filter: ImageFilter.blur(sigmaX: 16, sigmaY: 16),
+                            child: Material(
+                              color: Colors.white.withValues(alpha: 0.12),
+                              child: InkWell(
+                                onTap: () => context.pop(),
+                                child: Container(
+                                  width: 40,
+                                  height: 40,
+                                  decoration: BoxDecoration(
+                                    shape: BoxShape.circle,
+                                    border: Border.all(
+                                      color: Colors.white.withValues(alpha: 0.18),
+                                      width: 1,
                                     ),
                                   ),
-                                );
-                              }).toList(),
+                                  alignment: Alignment.center,
+                                  child: const Icon(
+                                    Icons.arrow_back_ios_new_rounded,
+                                    color: Colors.white,
+                                    size: 18,
+                                  ),
+                                ),
+                              ),
                             ),
                           ),
-                          // Muted
-                          GestureDetector(
-                            onTap: () {
-                              setState(() => _isMuted = !_isMuted);
-                              // Web: update all registered HTML video elements
-                              for (final v in _webVideoElements.values) {
-                                v.muted = _isMuted;
-                              }
-                              // Native: update all video player controllers
-                              for (final ctrl in _nativeVideoControllers.values) {
-                                ctrl.setVolume(_isMuted ? 0.0 : 1.0);
-                              }
-                            },
+                        ),
+
+                        const Spacer(),
+
+                        // Floating Frosted Tab Capsule
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(30),
+                          child: BackdropFilter(
+                            filter: ImageFilter.blur(sigmaX: 16, sigmaY: 16),
+                            child: Container(
+                              padding: const EdgeInsets.all(3),
+                              decoration: BoxDecoration(
+                                color: Colors.black.withValues(alpha: 0.35),
+                                borderRadius: BorderRadius.circular(30),
+                                border: Border.all(
+                                  color: Colors.white.withValues(alpha: 0.15),
+                                  width: 1,
+                                ),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: _tabs.map((t) {
+                                  final isSelected = _activeTab == t;
+                                  return GestureDetector(
+                                    onTap: () => _switchTab(t),
+                                    child: AnimatedContainer(
+                                      duration: const Duration(milliseconds: 220),
+                                      curve: Curves.easeOutCubic,
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 14,
+                                        vertical: 6,
+                                      ),
+                                      decoration: BoxDecoration(
+                                        color: isSelected
+                                            ? Colors.white.withValues(alpha: 0.22)
+                                            : Colors.transparent,
+                                        borderRadius: BorderRadius.circular(20),
+                                        boxShadow: isSelected
+                                            ? [
+                                                BoxShadow(
+                                                  color: Colors.black.withValues(alpha: 0.2),
+                                                  blurRadius: 8,
+                                                )
+                                              ]
+                                            : null,
+                                      ),
+                                      child: Text(
+                                        t,
+                                        style: TextStyle(
+                                          color: isSelected
+                                              ? Colors.white
+                                              : Colors.white.withValues(alpha: 0.65),
+                                          fontSize: 13,
+                                          fontWeight: isSelected
+                                              ? FontWeight.w700
+                                              : FontWeight.w500,
+                                          letterSpacing: -0.2,
+                                        ),
+                                      ),
+                                    ),
+                                  );
+                                }).toList(),
+                              ),
+                            ),
+                          ),
+                        ),
+
+                        const Spacer(),
+
+                        // Sound / Mute Frosted Pill
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(24),
+                          child: BackdropFilter(
+                            filter: ImageFilter.blur(sigmaX: 16, sigmaY: 16),
+                            child: Material(
+                              color: Colors.white.withValues(alpha: 0.12),
+                              child: InkWell(
+                                onTap: () {
+                                  HapticFeedback.selectionClick();
+                                  setState(() => _isMuted = !_isMuted);
+                                  for (final v in _webVideoElements.values) {
+                                    v.muted = _isMuted;
+                                  }
+                                  for (final ctrl in _nativeVideoControllers.values) {
+                                    ctrl.setVolume(_isMuted ? 0.0 : 1.0);
+                                  }
+                                },
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 11,
+                                    vertical: 8,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    borderRadius: BorderRadius.circular(24),
+                                    border: Border.all(
+                                      color: Colors.white.withValues(alpha: 0.18),
+                                      width: 1,
+                                    ),
+                                  ),
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Icon(
+                                        _isMuted
+                                            ? Icons.volume_off_rounded
+                                            : Icons.volume_up_rounded,
+                                        color: Colors.white,
+                                        size: 15,
+                                      ),
+                                      const SizedBox(width: 4),
+                                      Text(
+                                        _isMuted ? 'Muted' : 'Sound',
+                                        style: const TextStyle(
+                                          color: Colors.white,
+                                          fontSize: 11,
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+
+                  // Fading Warning Badge at top center (if < 2 hours)
+                  if (isFading)
+                    Positioned(
+                      top: 72,
+                      left: 0,
+                      right: 0,
+                      child: Center(
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(20),
+                          child: BackdropFilter(
+                            filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
                             child: Container(
                               padding: const EdgeInsets.symmetric(
-                                  horizontal: 10, vertical: 6),
+                                horizontal: 14,
+                                vertical: 6,
+                              ),
                               decoration: BoxDecoration(
-                                color: Colors.black38,
+                                gradient: LinearGradient(
+                                  colors: [
+                                    const Color(0xFFFF2D55).withValues(alpha: 0.85),
+                                    const Color(0xFFFF6A00).withValues(alpha: 0.85),
+                                  ],
+                                ),
                                 borderRadius: BorderRadius.circular(20),
-                                border: Border.all(color: Colors.white24),
+                                border: Border.all(
+                                  color: Colors.white.withValues(alpha: 0.3),
+                                  width: 1,
+                                ),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: const Color(0xFFFF2D55).withValues(alpha: 0.4),
+                                    blurRadius: 16,
+                                    spreadRadius: 2,
+                                  ),
+                                ],
                               ),
                               child: Row(
                                 mainAxisSize: MainAxisSize.min,
                                 children: [
-                                  Icon(
-                                    _isMuted
-                                        ? Icons.volume_off_rounded
-                                        : Icons.volume_up_rounded,
+                                  const Icon(
+                                    Icons.hourglass_bottom_rounded,
                                     color: Colors.white,
                                     size: 14,
                                   ),
-                                  const SizedBox(width: 4),
+                                  const SizedBox(width: 6),
                                   Text(
-                                    _isMuted ? 'Muted' : 'Sound',
+                                    'Fading in $remainingStr',
                                     style: const TextStyle(
-                                        color: Colors.white, fontSize: 11),
+                                      color: Colors.white,
+                                      fontWeight: FontWeight.w700,
+                                      fontSize: 12,
+                                      letterSpacing: -0.2,
+                                    ),
                                   ),
                                 ],
                               ),
                             ),
                           ),
-                        ],
+                        ),
                       ),
                     ),
-                  ),
 
-                  // Fading Pill at top (if fading)
-                  if (isFading)
-                    Positioned(
-                      top: 60,
-                      left: 0,
-                      right: 0,
-                      child: Center(
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFFC33149).withOpacity(0.9),
-                            borderRadius: BorderRadius.circular(20),
-                          ),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
+                  // Right Side Floating Luxury Action Dock
+                  Positioned(
+                    right: 12,
+                    bottom: 84,
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        // Creator Profile Avatar with Iridescent Story Ring
+                        GestureDetector(
+                          onTap: () {
+                            // User profile view or avatar tap
+                          },
+                          child: Stack(
+                            alignment: Alignment.center,
                             children: [
-                              const Icon(Icons.timer_outlined, color: Colors.white, size: 14),
-                              const SizedBox(width: 6),
-                              Text(
-                                'Fading in $remainingStr',
-                                style: const TextStyle(
-                                  color: Colors.white,
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 12,
+                              Container(
+                                width: 52,
+                                height: 52,
+                                decoration: BoxDecoration(
+                                  shape: BoxShape.circle,
+                                  gradient: LinearGradient(
+                                    colors: [
+                                      palette.primary,
+                                      palette.accent,
+                                      const Color(0xFFFF2D55),
+                                    ],
+                                    begin: Alignment.topLeft,
+                                    end: Alignment.bottomRight,
+                                  ),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: palette.primary.withValues(alpha: 0.4),
+                                      blurRadius: 12,
+                                      spreadRadius: 1,
+                                    ),
+                                  ],
+                                ),
+                                padding: const EdgeInsets.all(2.5),
+                                child: Container(
+                                  decoration: const BoxDecoration(
+                                    shape: BoxShape.circle,
+                                    color: Colors.black,
+                                  ),
+                                  clipBehavior: Clip.antiAlias,
+                                  child: userAvatar != null && userAvatar.isNotEmpty
+                                      ? CachedNetworkImage(
+                                          imageUrl: userAvatar,
+                                          fit: BoxFit.cover,
+                                          placeholder: (_, __) => ColoredBox(
+                                            color: Colors.grey.shade900,
+                                            child: const Center(
+                                              child: CircularProgressIndicator(
+                                                strokeWidth: 2,
+                                                color: Colors.white54,
+                                              ),
+                                            ),
+                                          ),
+                                          errorWidget: (_, __, ___) => const Center(
+                                            child: Text('✨', style: TextStyle(fontSize: 20)),
+                                          ),
+                                        )
+                                      : const Center(
+                                          child: Text('✨', style: TextStyle(fontSize: 20)),
+                                        ),
                                 ),
                               ),
+                              if (!isOwner)
+                                Positioned(
+                                  bottom: -1,
+                                  child: Container(
+                                    width: 18,
+                                    height: 18,
+                                    decoration: const BoxDecoration(
+                                      shape: BoxShape.circle,
+                                      gradient: LinearGradient(
+                                        colors: [Color(0xFFFF2D55), Color(0xFFFF5252)],
+                                      ),
+                                    ),
+                                    alignment: Alignment.center,
+                                    child: const Icon(
+                                      Icons.add_rounded,
+                                      color: Colors.white,
+                                      size: 14,
+                                    ),
+                                  ),
+                                ),
                             ],
                           ),
                         ),
-                      ),
-                    ),
 
-                  // RIGHT SIDE: Action buttons
-                  Positioned(
-                    right: 12,
-                    bottom: 120,
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.end,
-                      children: [
-                        // User avatar
-                        Container(
-                          width: 48,
-                          height: 48,
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            border: Border.all(color: Colors.white, width: 2),
-                            image: userAvatar != null
-                                ? DecorationImage(
-                                    image: CachedNetworkImageProvider(userAvatar),
-                                    fit: BoxFit.cover)
-                                : null,
-                          ),
-                          child: userAvatar == null
-                              ? const Center(
-                                  child: Text('😊',
-                                      style: TextStyle(fontSize: 22)))
-                              : null,
-                        ),
-                        const SizedBox(height: 20),
+                        const SizedBox(height: 18),
 
-                        // Like
-                        _actionBtn(
+                        // Like Action Button
+                        _luxuryActionBtn(
                           icon: isLiked
                               ? Icons.favorite_rounded
                               : Icons.favorite_border_rounded,
                           label: '${likes.length}',
-                          color: isLiked ? AppTheme.error : Colors.white,
-                          onTap: () => _likeTake(storyId),
+                          iconColor: isLiked
+                              ? const Color(0xFFFF2D55)
+                              : Colors.white,
+                          glowColor: isLiked
+                              ? const Color(0xFFFF2D55).withValues(alpha: 0.5)
+                              : null,
+                          onTap: () {
+                            HapticFeedback.lightImpact();
+                            _likeTake(storyId);
+                          },
                         ),
-                        const SizedBox(height: 20),
 
-                        // Comment
-                        _actionBtn(
-                          icon: Icons.chat_bubble_outline_rounded,
+                        const SizedBox(height: 16),
+
+                        // Comment Action Button
+                        _luxuryActionBtn(
+                          icon: Icons.chat_bubble_rounded,
                           label: '${take['commentCount'] ?? 0}',
+                          iconColor: Colors.white,
                           onTap: () => _showCommentsBottomSheet(storyId),
                         ),
-                        const SizedBox(height: 20),
 
-                        // Share
-                        _actionBtn(
-                          icon: Icons.reply_rounded,
+                        const SizedBox(height: 16),
+
+                        // Confess / Whisper Button (Signature dating dynamic)
+                        _luxuryActionBtn(
+                          icon: Icons.local_fire_department_rounded,
+                          label: 'Confess',
+                          iconColor: const Color(0xFFFF416C),
+                          glowColor: const Color(0xFFFF416C).withValues(alpha: 0.4),
+                          badgeGradient: const LinearGradient(
+                            colors: [Color(0xFFFF416C), Color(0xFFFF4B2B)],
+                          ),
+                          onTap: () => _showConfessBottomSheet(userName, userAvatar),
+                        ),
+
+                        const SizedBox(height: 16),
+
+                        // Share Action Button
+                        _luxuryActionBtn(
+                          icon: Icons.send_rounded,
                           label: 'Share',
+                          iconColor: Colors.white,
                           onTap: () => _showShareBottomSheet(),
                         ),
-                        const SizedBox(height: 20),
 
-                        // Take back (retake)
-                        _actionBtn(
+                        const SizedBox(height: 16),
+
+                        // Take Studio (Camera) Button
+                        _luxuryActionBtn(
                           icon: Icons.camera_alt_rounded,
                           label: 'Take',
+                          iconColor: const Color(0xFF00E5FF),
+                          glowColor: const Color(0xFF00E5FF).withValues(alpha: 0.3),
                           onTap: () {
                             context.pop();
                             context.push('/take/create');
                           },
                         ),
-                        const SizedBox(height: 20),
 
-                        // Confess
-                        _actionBtn(
-                          icon: Icons.favorite_outline_rounded,
-                          label: 'Confess',
-                          color: AppTheme.accentPink,
-                          onTap: () => _showConfessBottomSheet(userName, userAvatar),
-                        ),
-                        const SizedBox(height: 20),
+                        const SizedBox(height: 16),
 
-                        // More (3 dots) — shows delete for own takes
-                        _actionBtn(
+                        // More (Options & Delete)
+                        _luxuryActionBtn(
                           icon: Icons.more_horiz_rounded,
                           label: '',
+                          iconColor: Colors.white70,
                           onTap: () {
                             _progressCtrl.stop();
-                            showModalBottomSheet(
-                              context: context,
-                              backgroundColor: Colors.transparent,
-                              builder: (ctx) => Container(
-                                decoration: const BoxDecoration(
-                                  color: AppTheme.darkCard,
-                                  borderRadius: BorderRadius.vertical(
-                                      top: Radius.circular(24)),
-                                ),
-                                padding: const EdgeInsets.fromLTRB(20, 8, 20, 32),
-                                child: Column(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    Container(
-                                      width: 40,
-                                      height: 4,
-                                      margin: const EdgeInsets.only(bottom: 16),
-                                      decoration: BoxDecoration(
-                                        color: Colors.white24,
-                                        borderRadius: BorderRadius.circular(4),
-                                      ),
-                                    ),
-                                    if (isOwner) ...[
-                                      ListTile(
-                                        leading: const Icon(Icons.delete_outline_rounded,
-                                            color: AppTheme.error),
-                                        title: const Text('Delete Take',
-                                            style: TextStyle(color: AppTheme.error)),
-                                        onTap: () {
-                                          Navigator.pop(ctx);
-                                          _deleteTake(storyId);
-                                        },
-                                      ),
-                                    ],
-                                    ListTile(
-                                      leading: const Icon(Icons.report_gmailerrorred_rounded,
-                                          color: Colors.white54),
-                                      title: const Text('Report',
-                                          style: TextStyle(color: Colors.white70)),
-                                      onTap: () => Navigator.pop(ctx),
-                                    ),
-                                    ListTile(
-                                      leading: const Icon(Icons.share_rounded,
-                                          color: Colors.white54),
-                                      title: const Text('Share',
-                                          style: TextStyle(color: Colors.white70)),
-                                      onTap: () => Navigator.pop(ctx),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ).then((_) => _progressCtrl.forward());
+                            _showMoreOptionsMenu(storyId, isOwner);
                           },
                         ),
                       ],
                     ),
                   ),
 
-                  // BOTTOM: Username + Caption + Progress bar
+                  // Bottom Creator Info & Modernized Story Card
                   Positioned(
                     bottom: 0,
                     left: 0,
-                    right: 72,
+                    right: 80,
                     child: Padding(
-                      padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
+                      padding: const EdgeInsets.fromLTRB(16, 0, 12, 20),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          // Username
+                          // Creator Handle + Tag + Relative Time
                           Row(
                             children: [
-                              Text(
-                                '@${userName.toLowerCase().replaceAll(' ', '')}',
-                                style: const TextStyle(
-                                  color: Colors.white,
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 15,
+                              Flexible(
+                                child: Text(
+                                  '@${userName.toLowerCase().replaceAll(' ', '')}',
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.w800,
+                                    fontSize: 16,
+                                    letterSpacing: -0.4,
+                                    shadows: [
+                                      Shadow(color: Colors.black87, blurRadius: 10),
+                                    ],
+                                  ),
                                 ),
                               ),
                               const SizedBox(width: 8),
-                              // Emoji badges
+
+                              // HOT TAKE Glass Pill (Replaces ugly emoji badges)
                               Container(
-                                padding: const EdgeInsets.symmetric(
-                                    horizontal: 6, vertical: 2),
+                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                                 decoration: BoxDecoration(
-                                  color: Colors.white.withOpacity(0.15),
-                                  borderRadius: BorderRadius.circular(8),
+                                  gradient: const LinearGradient(
+                                    colors: [Color(0xFFFF3366), Color(0xFFFF6B00)],
+                                  ),
+                                  borderRadius: BorderRadius.circular(12),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: const Color(0xFFFF3366).withValues(alpha: 0.35),
+                                      blurRadius: 8,
+                                    ),
+                                  ],
                                 ),
                                 child: const Row(
                                   mainAxisSize: MainAxisSize.min,
                                   children: [
-                                    Text('🔥', style: TextStyle(fontSize: 12)),
-                                    Text('⚡', style: TextStyle(fontSize: 12)),
+                                    Icon(
+                                      Icons.local_fire_department_rounded,
+                                      color: Colors.white,
+                                      size: 12,
+                                    ),
+                                    SizedBox(width: 3),
+                                    Text(
+                                      'HOT TAKE',
+                                      style: TextStyle(
+                                        color: Colors.white,
+                                        fontWeight: FontWeight.w800,
+                                        fontSize: 9.5,
+                                        letterSpacing: 0.4,
+                                      ),
+                                    ),
                                   ],
                                 ),
                               ),
-                              const SizedBox(width: 6),
+
+                              const SizedBox(width: 8),
+
                               Text(
                                 _timeAgo(createdAt),
-                                style: const TextStyle(
-                                    color: Colors.white54, fontSize: 12),
+                                style: TextStyle(
+                                  color: Colors.white.withValues(alpha: 0.7),
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w500,
+                                  shadows: const [
+                                    Shadow(color: Colors.black87, blurRadius: 8),
+                                  ],
+                                ),
                               ),
                             ],
                           ),
+
                           if (caption.isNotEmpty) ...[
-                            const SizedBox(height: 6),
+                            const SizedBox(height: 8),
                             Text(
                               caption,
+                              maxLines: 3,
+                              overflow: TextOverflow.ellipsis,
                               style: const TextStyle(
                                 color: Colors.white,
-                                fontSize: 14,
-                                height: 1.4,
-                                shadows: [Shadow(color: Colors.black54, blurRadius: 6)],
+                                fontSize: 14.5,
+                                fontWeight: FontWeight.w400,
+                                height: 1.35,
+                                shadows: [
+                                  Shadow(color: Colors.black87, blurRadius: 8, offset: Offset(0, 1)),
+                                ],
                               ),
                             ),
                           ],
+
                           const SizedBox(height: 12),
-                          // "1 take back" badge
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 10, vertical: 5),
-                            decoration: BoxDecoration(
-                              color: const Color(0xFF3B2117), // dark brown
-                              borderRadius: BorderRadius.circular(20),
-                              border: Border.all(color: const Color(0xFFD67341)), // orange border
-                            ),
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                const Icon(Icons.undo_rounded,
-                                    color: Colors.white, size: 12),
-                                const SizedBox(width: 4),
-                                Text(
-                                  '${_takes.length} take back',
-                                  style: const TextStyle(
-                                    color: Colors.white,
-                                    fontSize: 10,
-                                    fontWeight: FontWeight.bold,
+
+                          // Sleek Moment Counter Pill (Replaces the ugly brown "1 take back" badge)
+                          ClipRRect(
+                            borderRadius: BorderRadius.circular(20),
+                            child: BackdropFilter(
+                              filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 10,
+                                  vertical: 5,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: Colors.white.withValues(alpha: 0.12),
+                                  borderRadius: BorderRadius.circular(20),
+                                  border: Border.all(
+                                    color: Colors.white.withValues(alpha: 0.18),
+                                    width: 1,
                                   ),
                                 ),
-                              ],
-                            ),
-                          ),
-                          const SizedBox(height: 12),
-                          // Fading/Live Text Row
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              Text(
-                                isFading ? 'Fading soon' : 'Live',
-                                style: TextStyle(
-                                  color: isFading ? const Color(0xFFFF2D55) : Colors.white70,
-                                  fontSize: 10,
-                                  fontWeight: FontWeight.bold,
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    const Icon(
+                                      Icons.auto_awesome_rounded,
+                                      color: Color(0xFFFFD700),
+                                      size: 13,
+                                    ),
+                                    const SizedBox(width: 5),
+                                    Text(
+                                      'Moment ${_currentIndex + 1} of ${_takes.length}',
+                                      style: const TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 11,
+                                        fontWeight: FontWeight.w600,
+                                        letterSpacing: -0.2,
+                                      ),
+                                    ),
+                                    if (_takes.length > 1) ...[
+                                      const SizedBox(width: 4),
+                                      const Icon(
+                                        Icons.swipe_rounded,
+                                        color: Colors.white60,
+                                        size: 12,
+                                      ),
+                                    ],
+                                  ],
                                 ),
                               ),
+                            ),
+                          ),
+
+                          const SizedBox(height: 10),
+
+                          // Dynamic Live / Fading Status Row
+                          Row(
+                            children: [
+                              // Pulsing status dot
+                              AnimatedBuilder(
+                                animation: _glowPulse,
+                                builder: (context, child) {
+                                  final dotColor = isFading
+                                      ? const Color(0xFFFF2D55)
+                                      : const Color(0xFF00FFB2);
+                                  return Container(
+                                    width: 8,
+                                    height: 8,
+                                    decoration: BoxDecoration(
+                                      shape: BoxShape.circle,
+                                      color: dotColor,
+                                      boxShadow: [
+                                        BoxShadow(
+                                          color: dotColor.withValues(alpha: _glowPulse.value * 0.8),
+                                          blurRadius: 6 * _glowPulse.value,
+                                          spreadRadius: 1 * _glowPulse.value,
+                                        ),
+                                      ],
+                                    ),
+                                  );
+                                },
+                              ),
+                              const SizedBox(width: 6),
+                              Text(
+                                isFading ? 'Fading Soon' : 'Live Take',
+                                style: TextStyle(
+                                  color: isFading
+                                      ? const Color(0xFFFF416C)
+                                      : const Color(0xFF00FFB2),
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w700,
+                                  letterSpacing: -0.1,
+                                ),
+                              ),
+                              const Spacer(),
                               Text(
                                 remainingStr,
                                 style: TextStyle(
-                                  color: isFading ? const Color(0xFFFF2D55) : Colors.white70,
-                                  fontSize: 10,
-                                  fontWeight: FontWeight.bold,
+                                  color: Colors.white.withValues(alpha: 0.75),
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w600,
+                                  letterSpacing: -0.2,
                                 ),
                               ),
                             ],
                           ),
-                          const SizedBox(height: 4),
-                          // Progress Bar & Sign In Button
-                          SizedBox(
-                            height: 36, // height for the button to center on the line
-                            child: Stack(
+
+                          const SizedBox(height: 6),
+
+                          // Modern Gradient Lifetime Bar
+                          ClipRRect(
+                            borderRadius: BorderRadius.circular(4),
+                            child: Container(
+                              height: 3.5,
+                              width: double.infinity,
+                              color: Colors.white.withValues(alpha: 0.15),
                               alignment: Alignment.centerLeft,
-                              children: [
-                                // Thin line background
-                                Container(
-                                  height: 3,
-                                  width: double.infinity,
-                                  decoration: BoxDecoration(
-                                    color: Colors.white24,
-                                    borderRadius: BorderRadius.circular(2),
-                                  ),
-                                ),
-                                // Active line
-                                Container(
-                                  height: 3,
-                                  width: MediaQuery.of(context).size.width * progressVal.clamp(0.0, 1.0),
-                                  decoration: BoxDecoration(
-                                    color: isFading ? const Color(0xFFFF2D55) : const Color(0xFF00E5FF),
-                                    borderRadius: BorderRadius.circular(2),
-                                  ),
-                                ),
-                              ],
+                              child: LayoutBuilder(
+                                builder: (context, constraints) {
+                                  return Container(
+                                    height: 3.5,
+                                    width: constraints.maxWidth * progressVal.clamp(0.0, 1.0),
+                                    decoration: BoxDecoration(
+                                      gradient: LinearGradient(
+                                        colors: isFading
+                                            ? [const Color(0xFFFF2D55), const Color(0xFFFF8A00)]
+                                            : [palette.primary, palette.accent],
+                                      ),
+                                      borderRadius: BorderRadius.circular(4),
+                                    ),
+                                  );
+                                },
+                              ),
                             ),
                           ),
                         ],
@@ -1314,34 +1652,220 @@ class _TakeViewerScreenState extends ConsumerState<TakeViewerScreen>
                 ],
               ),
             ),
+
+            // Double Tap Bursting Heart Overlay
+            if (_doubleTapHeartPosition != null)
+              Positioned(
+                left: _doubleTapHeartPosition!.dx - 50,
+                top: _doubleTapHeartPosition!.dy - 50,
+                child: IgnorePointer(
+                  child: AnimatedBuilder(
+                    animation: _heartAnimCtrl,
+                    builder: (context, child) {
+                      return Opacity(
+                        opacity: _heartOpacity.value.clamp(0.0, 1.0),
+                        child: Transform.scale(
+                          scale: _heartScale.value,
+                          child: Container(
+                            width: 100,
+                            height: 100,
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              boxShadow: [
+                                BoxShadow(
+                                  color: const Color(0xFFFF2D55).withValues(alpha: 0.6),
+                                  blurRadius: 30,
+                                  spreadRadius: 10,
+                                ),
+                              ],
+                            ),
+                            child: const Icon(
+                              Icons.favorite_rounded,
+                              color: Color(0xFFFF2D55),
+                              size: 80,
+                            ),
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                ),
+              ),
           ],
         ),
       ),
     );
   }
 
-  Widget _actionBtn({
+  Widget _buildTopSegmentedBars() {
+    if (_takes.isEmpty) return const SizedBox.shrink();
+    return Row(
+      children: List.generate(_takes.length, (index) {
+        return Expanded(
+          child: Container(
+            height: 2.5,
+            margin: const EdgeInsets.symmetric(horizontal: 2),
+            decoration: BoxDecoration(
+              color: Colors.white.withValues(alpha: 0.22),
+              borderRadius: BorderRadius.circular(2),
+            ),
+            child: index < _currentIndex
+                ? Container(
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  )
+                : index == _currentIndex
+                    ? AnimatedBuilder(
+                        animation: _progressCtrl,
+                        builder: (context, child) {
+                          return FractionallySizedBox(
+                            alignment: Alignment.centerLeft,
+                            widthFactor: _progressCtrl.value.clamp(0.0, 1.0),
+                            child: Container(
+                              decoration: BoxDecoration(
+                                color: Colors.white,
+                                borderRadius: BorderRadius.circular(2),
+                              ),
+                            ),
+                          );
+                        },
+                      )
+                    : const SizedBox.shrink(),
+          ),
+        );
+      }),
+    );
+  }
+
+  Widget _luxuryActionBtn({
     required IconData icon,
     required String label,
-    Color color = Colors.white,
     required VoidCallback onTap,
+    Color iconColor = Colors.white,
+    Color? glowColor,
+    Gradient? badgeGradient,
   }) {
     return GestureDetector(
       onTap: onTap,
+      behavior: HitTestBehavior.opaque,
       child: Column(
+        mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, color: color, size: 30),
+          ClipOval(
+            child: BackdropFilter(
+              filter: ImageFilter.blur(sigmaX: 14, sigmaY: 14),
+              child: Container(
+                width: 44,
+                height: 44,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: Colors.black.withValues(alpha: 0.35),
+                  border: Border.all(
+                    color: glowColor ?? Colors.white.withValues(alpha: 0.16),
+                    width: 1.2,
+                  ),
+                  boxShadow: glowColor != null
+                      ? [
+                          BoxShadow(
+                            color: glowColor,
+                            blurRadius: 14,
+                            spreadRadius: 1,
+                          ),
+                        ]
+                      : null,
+                ),
+                alignment: Alignment.center,
+                child: Icon(
+                  icon,
+                  color: iconColor,
+                  size: 22,
+                ),
+              ),
+            ),
+          ),
           if (label.isNotEmpty) ...[
-            const SizedBox(height: 2),
-            Text(label,
-                style: TextStyle(
-                    color: color,
-                    fontSize: 12,
-                    fontWeight: FontWeight.w500)),
+            const SizedBox(height: 4),
+            Text(
+              label,
+              style: TextStyle(
+                color: Colors.white.withValues(alpha: 0.9),
+                fontSize: 11,
+                fontWeight: FontWeight.w600,
+                letterSpacing: -0.2,
+                shadows: const [
+                  Shadow(
+                    color: Colors.black87,
+                    blurRadius: 6,
+                    offset: Offset(0, 1),
+                  ),
+                ],
+              ),
+            ),
           ],
         ],
       ),
     );
+  }
+
+  void _showMoreOptionsMenu(String storyId, bool isOwner) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => ClipRRect(
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+        child: BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
+          child: Container(
+            decoration: BoxDecoration(
+              color: const Color(0xFF14141E).withValues(alpha: 0.92),
+              borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+              border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
+            ),
+            padding: const EdgeInsets.fromLTRB(20, 10, 20, 32),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: 36,
+                  height: 4,
+                  margin: const EdgeInsets.only(bottom: 16),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.25),
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                ),
+                if (isOwner)
+                  ListTile(
+                    leading: const Icon(Icons.delete_outline_rounded, color: AppTheme.error),
+                    title: const Text('Delete Take', style: TextStyle(color: AppTheme.error, fontWeight: FontWeight.w600)),
+                    onTap: () {
+                      Navigator.pop(ctx);
+                      _deleteTake(storyId);
+                    },
+                  ),
+                ListTile(
+                  leading: const Icon(Icons.report_gmailerrorred_rounded, color: Colors.white70),
+                  title: const Text('Report Take', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w500)),
+                  onTap: () => Navigator.pop(ctx),
+                ),
+                ListTile(
+                  leading: const Icon(Icons.share_rounded, color: Colors.white70),
+                  title: const Text('Share Link', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w500)),
+                  onTap: () {
+                    Navigator.pop(ctx);
+                    _showShareBottomSheet();
+                  },
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    ).then((_) {
+      if (mounted) _progressCtrl.forward();
+    });
   }
 }
 

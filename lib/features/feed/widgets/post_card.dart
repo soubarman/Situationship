@@ -286,8 +286,8 @@ class _PostCardState extends ConsumerState<PostCard>
     final effectiveParticipants = _localParticipants ?? liveParticipants;
     final isJoinedPlan = _localIsJoinedPlan ?? effectiveParticipants.contains(_currentUserId);
 
-    final currentUser = ref.watch(currentUserProvider);
-    final isFollowing = _localIsFollowing ?? currentUser.following.contains(widget.post.userId);
+    final bool isFollowing = (_localIsFollowing ??
+        ref.watch(currentUserProvider.select((u) => u.following.contains(widget.post.userId)))) ?? false;
     final displayLocation = widget.post.location ??
         (widget.post.caption.contains('Where:')
             ? RegExp(r'Where:\s*(.+)').firstMatch(widget.post.caption)?.group(1)?.trim()
@@ -1204,6 +1204,8 @@ class _PostCardState extends ConsumerState<PostCard>
                       radius: 15,
                       backgroundImage: CachedNetworkImageProvider(
                         comment.userAvatar ?? 'https://i.pravatar.cc/100?u=${comment.userId}',
+                        maxWidth: 80,
+                        maxHeight: 80,
                       ),
                       backgroundColor: isDark ? Colors.white10 : Colors.black12,
                     ),
@@ -3586,6 +3588,8 @@ class _PlanThumbnail extends StatelessWidget {
               ? CachedNetworkImage(
                   imageUrl: imageUrl!,
                   fit: BoxFit.cover,
+                  memCacheWidth: 160,
+                  memCacheHeight: 160,
                   errorWidget: (_, __, ___) => _buildSunsetArt(),
                 )
               : _buildSunsetArt(),
@@ -3757,6 +3761,8 @@ class _PlanParticipantAvatar extends ConsumerWidget {
             ? CachedNetworkImage(
                 imageUrl: avatarUrl,
                 fit: BoxFit.cover,
+                memCacheWidth: 80,
+                memCacheHeight: 80,
                 errorWidget: (_, __, ___) => _fallbackAvatar(name, palette),
               )
             : _fallbackAvatar(name, palette),

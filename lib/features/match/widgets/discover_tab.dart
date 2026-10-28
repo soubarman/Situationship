@@ -707,7 +707,6 @@ class _DiscoverTabState extends ConsumerState<DiscoverTab>
 
   Widget _buildEmptyState() {
     final currentPref = ref.watch(filterInterestedInProvider);
-    final matchIrrespective = ref.watch(filterMatchIrrespectiveProvider);
 
     return Center(
       child: SingleChildScrollView(
@@ -749,7 +748,7 @@ class _DiscoverTabState extends ConsumerState<DiscoverTab>
             ),
             const SizedBox(height: 10),
             Text(
-              "Round complete or no new faces in this radius right now.\nExpand search or re-explore to keep the streak going!",
+              "You've caught up on everyone for now!\nRe-explore or check back soon as new faces join.",
               textAlign: TextAlign.center,
               style: TextStyle(
                 fontSize: 13.5,
@@ -807,33 +806,10 @@ class _DiscoverTabState extends ConsumerState<DiscoverTab>
 
             const SizedBox(height: 14),
 
-            // Action 2 & 3: Expand Radius + Filter Settings
+            // Action 2: Filter Settings
             Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                if (!matchIrrespective && widget.onExpandRadius != null) ...[
-                  OutlinedButton.icon(
-                    onPressed: () {
-                      HapticFeedback.lightImpact();
-                      widget.onExpandRadius!();
-                    },
-                    icon: const Icon(Icons.explore_rounded, size: 15, color: Colors.white),
-                    label: const Text(
-                      'Expand Radius 🌍',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 12.5,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                    style: OutlinedButton.styleFrom(
-                      side: BorderSide(color: Colors.white.withValues(alpha: 0.2)),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                ],
                 if (widget.onOpenFilters != null)
                   OutlinedButton.icon(
                     onPressed: () {

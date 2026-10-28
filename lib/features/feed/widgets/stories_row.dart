@@ -323,6 +323,8 @@ class _AddStoryCardState extends ConsumerState<_AddStoryCard>
                                 CachedNetworkImage(
                                   imageUrl: widget.user.avatarUrl!,
                                   fit: BoxFit.cover,
+                                  memCacheWidth: 240,
+                                  memCacheHeight: 320,
                                   errorWidget: (_, __, ___) => Container(
                                     color: widget.isDark ? const Color(0xFF1E1933) : const Color(0xFFECE7FA),
                                     child: Icon(
@@ -612,6 +614,8 @@ class _StoryItemState extends ConsumerState<_StoryItem> {
                         CachedNetworkImage(
                           imageUrl: displayAvatar,
                           fit: BoxFit.cover,
+                          memCacheWidth: 240,
+                          memCacheHeight: 320,
                         ),
                           
                         Container(

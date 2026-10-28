@@ -1255,11 +1255,6 @@ class _UserDetailScreenState extends ConsumerState<UserDetailScreen>
                               crossAxisAlignment: CrossAxisAlignment.stretch,
                               children: [
                                 _buildInfoCard(user, currentUser, existingChat, isFollowing, isDark),
-                                Padding(
-                                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
-                                  child: _buildConfessSwipeBar(currentUser, user, isDark),
-                                ),
-
                                 _buildAboutMeChips(user, isDark),
                                 _buildTabbedSections(user, currentUser, isDark),
                                 const SizedBox(height: 140),
@@ -1562,9 +1557,12 @@ class _UserDetailScreenState extends ConsumerState<UserDetailScreen>
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     _buildGlassIconBtn(Icons.arrow_back_ios_new_rounded, () => context.pop()),
-                    if (user.id == currentUser.id)
-                      GestureDetector(
-                        onTap: () {
+                    PopupMenuButton<String>(
+                      color: isDark ? const Color(0xFF1E1E24) : Colors.white,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                      offset: const Offset(0, 50),
+                      onSelected: (value) {
+                        if (value == 'toggle_view') {
                           setState(() {
                             _simulateVisitorView = !_simulateVisitorView;
                           });
@@ -1581,58 +1579,7 @@ class _UserDetailScreenState extends ConsumerState<UserDetailScreen>
                               behavior: SnackBarBehavior.floating,
                             ),
                           );
-                        },
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
-                          decoration: BoxDecoration(
-                            gradient: LinearGradient(
-                              colors: _simulateVisitorView
-                                  ? [Colors.orange.shade700, Colors.deepOrange]
-                                  : [AppTheme.accentPurple, AppTheme.primaryBlue],
-                            ),
-                            borderRadius: BorderRadius.circular(20),
-                            border: Border.all(
-                              color: Colors.white.withOpacity(0.5),
-                              width: 1.2,
-                            ),
-                            boxShadow: [
-                              BoxShadow(
-                                color: (_simulateVisitorView ? Colors.orange : AppTheme.accentPurple).withOpacity(0.4),
-                                blurRadius: 12,
-                                offset: const Offset(0, 3),
-                              ),
-                            ],
-                          ),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Icon(
-                                _simulateVisitorView ? Icons.visibility_rounded : Icons.remove_red_eye_rounded,
-                                size: 14,
-                                color: Colors.white,
-                              ),
-                              const SizedBox(width: 6),
-                              Text(
-                                _simulateVisitorView ? 'Visitor View 👁️' : 'Owner View 👑',
-                                style: const TextStyle(
-                                  color: Colors.white,
-                                  fontWeight: FontWeight.w900,
-                                  fontSize: 12.5,
-                                  letterSpacing: -0.2,
-                                ),
-                              ),
-                              const SizedBox(width: 4),
-                              const Icon(Icons.swap_vert_rounded, size: 15, color: Colors.white),
-                            ],
-                          ),
-                        ),
-                      ),
-                    PopupMenuButton<String>(
-                      color: isDark ? const Color(0xFF1E1E24) : Colors.white,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                      offset: const Offset(0, 50),
-                      onSelected: (value) {
-                        if (value == 'switch') {
+                        } else if (value == 'switch') {
                           ProfileChoiceSheet.show(context, currentUser, isDark);
                         } else if (value == 'share') {
                           Clipboard.setData(ClipboardData(text: 'https://situatioship.netlify.app/profile/view/${widget.userId}'));
@@ -1644,17 +1591,48 @@ class _UserDetailScreenState extends ConsumerState<UserDetailScreen>
                         }
                       },
                       itemBuilder: (context) => [
-                        if (user.id == currentUser.id)
+                        if (user.id == currentUser.id) ...[
+                          PopupMenuItem(
+                            value: 'toggle_view',
+                            child: Row(
+                              children: [
+                                Icon(
+                                  _simulateVisitorView
+                                      ? Icons.admin_panel_settings_rounded
+                                      : Icons.remove_red_eye_rounded,
+                                  size: 20,
+                                  color: _simulateVisitorView ? Colors.orange : AppTheme.accentPurple,
+                                ),
+                                const SizedBox(width: 12),
+                                Text(
+                                  _simulateVisitorView
+                                      ? 'Switch to Owner View 👑'
+                                      : 'Preview as Visitor 👁️',
+                                  style: TextStyle(
+                                    color: isDark ? Colors.white : Colors.black87,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
                           PopupMenuItem(
                             value: 'switch',
                             child: Row(
                               children: [
                                 Icon(Icons.tune_rounded, size: 20, color: AppTheme.accentPurple),
                                 const SizedBox(width: 12),
-                                Text('Profile Options', style: TextStyle(color: isDark ? Colors.white : Colors.black87, fontWeight: FontWeight.w700)),
+                                Text(
+                                  'Profile Options',
+                                  style: TextStyle(
+                                    color: isDark ? Colors.white : Colors.black87,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
                               ],
                             ),
                           ),
+                        ],
                         PopupMenuItem(
                           value: 'share',
                           child: Row(
@@ -1696,9 +1674,27 @@ class _UserDetailScreenState extends ConsumerState<UserDetailScreen>
                   // Badges
                   Row(
                     children: [
-                      _buildGlassPill('🤝 $compatibilityScore% Match', accent: const Color(0xFFB06EF5)),
+                      if (user.id == currentUser.id && _simulateVisitorView) ...[
+                        GestureDetector(
+                          onTap: () {
+                            setState(() => _simulateVisitorView = false);
+                            HapticFeedback.selectionClick();
+                            ScaffoldMessenger.of(context).removeCurrentSnackBar();
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text('👑 Switched back to Owner View'),
+                                duration: Duration(seconds: 2),
+                                behavior: SnackBarBehavior.floating,
+                              ),
+                            );
+                          },
+                          child: _buildGlassPill('👁️ Preview Mode • Exit ✕', accent: Colors.orange),
+                        ),
+                        const SizedBox(width: 8),
+                      ],
+                      _buildGlassPill('💖 $compatibilityScore% Match', accent: const Color(0xFFFF3366)),
                       const SizedBox(width: 8),
-                      _buildGlassPill('📍 $distance km', accent: const Color(0xFF4FC3F7)),
+                      _buildGlassPill('📍 $distance km', accent: const Color(0xFFFF8A65)),
                       if (photoList.length > 1) ...[
                         const SizedBox(width: 8),
                         _buildGlassPill('📷 ${_currentPhotoIndex + 1}/${photoList.length}'),
@@ -1847,126 +1843,305 @@ class _UserDetailScreenState extends ConsumerState<UserDetailScreen>
             (currentUser.unlockedUserPhones.contains(user.id) ||
                 _locallyUnlockedKeys.contains(user.id)));
     final showPhone = hasPhone && (isSelf || user.isPhonePublic || hasUnlocked);
+    final distance = LocationHelper.getDistanceKm(
+      lat1: _deviceLat, lon1: _deviceLon,
+      loc1: currentUser.location, loc2: user.location,
+      id1: currentUser.id, id2: user.id,
+    );
+    final compatibilityScore = _calculateCompatibilityScore(currentUser, user);
 
     return Container(
       margin: const EdgeInsets.only(top: 0),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Drag handle
+          // Drag handle — gradient pill style
           Center(
             child: Container(
-              margin: const EdgeInsets.only(top: 12, bottom: 20),
-              width: 36, height: 4,
+              margin: const EdgeInsets.only(top: 10, bottom: 18),
+              width: 44, height: 5,
               decoration: BoxDecoration(
-                color: isDark ? Colors.white24 : Colors.black12,
-                borderRadius: BorderRadius.circular(4),
+                gradient: const LinearGradient(
+                  colors: [Color(0xFF9B5DE5), Color(0xFFFF5069)],
+                ),
+                borderRadius: BorderRadius.circular(8),
+                boxShadow: [
+                  BoxShadow(
+                    color: const Color(0xFF9B5DE5).withOpacity(0.5),
+                    blurRadius: 8,
+                    spreadRadius: 0,
+                  ),
+                ],
               ),
             ),
           ),
 
-          // Stats row (followers, posts, mutual)
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 24),
-            child: Row(
-              children: [
-                _buildStatCell('${user.followers.length}', 'Followers', isDark),
-                _buildStatDivider(isDark),
-                _buildStatCell('${user.following.length}', 'Following', isDark),
-                _buildStatDivider(isDark),
-                _buildStatCell('${user.coins}', 'Aura 🪙', isDark),
-              ],
-            ),
-          ),
+          // Owner / Visitor preview switcher (only shown on own profile, placed safely in sheet off the photo)
+          if (user.id == currentUser.id)
+            _buildViewModeToggle(isDark),
 
-          const SizedBox(height: 20),
-
-          // Action buttons
+          // Dating Highlights Row (Romantic & Informative)
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 20),
-            child: Row(
-              children: [
-                // Follow button with bouncing tactile response
-                Expanded(
-                  child: _BouncingButton(
-                    onTap: () => _handleFollow(currentUser, user, isFollowing),
-                    child: Container(
-                      height: 46,
-                      decoration: BoxDecoration(
-                        gradient: isFollowing
-                            ? null
-                            : LinearGradient(
-                                colors: [
-                                  const Color(0xFF9B5DE5).withOpacity(0.24),
-                                  const Color(0xFF6C5CE7).withOpacity(0.18),
-                                ],
-                              ),
-                        color: isFollowing
-                            ? (isDark ? Colors.white.withOpacity(0.08) : const Color(0xFFF1F0FF))
-                            : null,
-                        borderRadius: BorderRadius.circular(23),
-                        border: Border.all(
-                          color: const Color(0xFF9B5DE5).withOpacity(0.4),
-                          width: 1.5,
-                        ),
+            child: isSelf
+                ? Row(
+                    children: [
+                      _buildDatingHighlightCard(
+                        icon: const Icon(Icons.people_alt_rounded, color: Color(0xFF9B5DE5), size: 18),
+                        title: '${user.followers.length}',
+                        subtitle: 'Connections',
+                        gradientColors: const [Color(0xFF9B5DE5), Color(0xFF6C63FF)],
+                        isDark: isDark,
                       ),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(
-                            isFollowing ? Icons.person_remove_rounded : Icons.person_add_alt_1_rounded,
-                            color: const Color(0xFFB06EF5),
-                            size: 18,
-                          ),
-                          const SizedBox(width: 8),
-                          Text(
-                            isFollowing ? 'Following' : 'Follow',
-                            style: const TextStyle(
-                              color: Color(0xFFB06EF5),
-                              fontWeight: FontWeight.w800,
-                              fontSize: 14,
+                      const SizedBox(width: 10),
+                      _buildDatingHighlightCard(
+                        icon: const Icon(Icons.favorite_rounded, color: Color(0xFFFF3366), size: 18),
+                        title: '${user.following.length}',
+                        subtitle: 'Following',
+                        gradientColors: const [Color(0xFFFF3366), Color(0xFFFF6584)],
+                        isDark: isDark,
+                      ),
+                      const SizedBox(width: 10),
+                      _buildDatingHighlightCard(
+                        icon: const Icon(Icons.monetization_on_rounded, color: Color(0xFFFFB300), size: 18),
+                        title: '${user.coins}',
+                        subtitle: 'Coins',
+                        gradientColors: const [Color(0xFFF7971E), Color(0xFFFFD200)],
+                        isDark: isDark,
+                      ),
+                    ],
+                  )
+                : Row(
+                    children: [
+                      _buildDatingHighlightCard(
+                        icon: const Icon(Icons.favorite_rounded, color: Color(0xFFFF3366), size: 18),
+                        title: '$compatibilityScore%',
+                        subtitle: 'Match',
+                        gradientColors: const [Color(0xFFFF3366), Color(0xFFFF6584)],
+                        isDark: isDark,
+                      ),
+                      const SizedBox(width: 10),
+                      _buildDatingHighlightCard(
+                        icon: const Icon(Icons.auto_awesome_rounded, color: Color(0xFF9B5DE5), size: 18),
+                        title: (user.relationshipIntent != null && user.relationshipIntent!.isNotEmpty)
+                            ? user.relationshipIntent!
+                            : 'Dating',
+                        subtitle: 'Looking For',
+                        gradientColors: const [Color(0xFF9B5DE5), Color(0xFF6C63FF)],
+                        isDark: isDark,
+                      ),
+                      const SizedBox(width: 10),
+                      _buildDatingHighlightCard(
+                        icon: const Icon(Icons.location_on_rounded, color: Color(0xFFFF9800), size: 18),
+                        title: '$distance km',
+                        subtitle: 'Nearby',
+                        gradientColors: const [Color(0xFFFF9800), Color(0xFFFFB74D)],
+                        isDark: isDark,
+                      ),
+                    ],
+                  ),
+          ),
+
+          const SizedBox(height: 18),
+
+          // Action buttons — vivid gradient fills
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 20),
+            child: isSelf
+                ? Row(
+                    children: [
+                      // Edit Profile button
+                      Expanded(
+                        child: _BouncingButton(
+                          onTap: () => context.push('/profile/edit'),
+                          child: Container(
+                            height: 50,
+                            decoration: BoxDecoration(
+                              gradient: const LinearGradient(
+                                colors: [Color(0xFF9B5DE5), Color(0xFF6C63FF)],
+                                begin: Alignment.topLeft,
+                                end: Alignment.bottomRight,
+                              ),
+                              borderRadius: BorderRadius.circular(25),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: const Color(0xFF9B5DE5).withOpacity(0.45),
+                                  blurRadius: 16,
+                                  offset: const Offset(0, 6),
+                                ),
+                              ],
+                            ),
+                            child: const Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Icon(Icons.edit_rounded, color: Colors.white, size: 18),
+                                SizedBox(width: 8),
+                                Text(
+                                  'Edit Profile',
+                                  style: TextStyle(
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.w900,
+                                    fontSize: 14.5,
+                                    letterSpacing: 0.3,
+                                  ),
+                                ),
+                              ],
                             ),
                           ),
-                        ],
+                        ),
                       ),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                // Gift button with bouncing tactile response
-                _BouncingButton(
-                  onTap: () => _showGiftDialog(currentUser, user),
-                  child: Container(
-                    height: 46,
-                    padding: const EdgeInsets.symmetric(horizontal: 18),
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        colors: isDark
-                            ? [Colors.amber.withOpacity(0.18), Colors.orange.withOpacity(0.12)]
-                            : [Colors.amber.withOpacity(0.22), Colors.orange.withOpacity(0.14)],
-                      ),
-                      borderRadius: BorderRadius.circular(23),
-                      border: Border.all(color: Colors.amber.withOpacity(0.45), width: 1.5),
-                    ),
-                    child: const Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text('🎁', style: TextStyle(fontSize: 18)),
-                        SizedBox(width: 6),
-                        Text(
-                          'Send Gift',
-                          style: TextStyle(
-                            color: Colors.amber,
-                            fontWeight: FontWeight.w900,
-                            fontSize: 13,
+                      const SizedBox(width: 12),
+                      // Share Profile button
+                      _BouncingButton(
+                        onTap: () {
+                          Clipboard.setData(ClipboardData(text: 'https://situatioship.netlify.app/profile/view/${user.id}'));
+                          HapticFeedback.lightImpact();
+                          _showSuccess('Profile link copied! ✨');
+                        },
+                        child: Container(
+                          height: 50,
+                          padding: const EdgeInsets.symmetric(horizontal: 22),
+                          decoration: BoxDecoration(
+                            gradient: const LinearGradient(
+                              colors: [Color(0xFF36D1DC), Color(0xFF5B86E5)],
+                              begin: Alignment.topLeft,
+                              end: Alignment.bottomRight,
+                            ),
+                            borderRadius: BorderRadius.circular(25),
+                            boxShadow: [
+                              BoxShadow(
+                                color: const Color(0xFF5B86E5).withOpacity(0.45),
+                                blurRadius: 16,
+                                offset: const Offset(0, 6),
+                              ),
+                            ],
+                          ),
+                          child: const Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(Icons.share_rounded, color: Colors.white, size: 18),
+                              SizedBox(width: 7),
+                              Text(
+                                'Share',
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.w900,
+                                  fontSize: 14.5,
+                                  letterSpacing: 0.3,
+                                ),
+                              ),
+                            ],
                           ),
                         ),
-                      ],
-                    ),
+                      ),
+                    ],
+                  )
+                : Row(
+                    children: [
+                      // Follow button
+                      Expanded(
+                        child: _BouncingButton(
+                          onTap: () => _handleFollow(currentUser, user, isFollowing),
+                          child: Container(
+                            height: 50,
+                            decoration: BoxDecoration(
+                              gradient: isFollowing
+                                  ? LinearGradient(
+                                      colors: [
+                                        Colors.white.withOpacity(isDark ? 0.10 : 0.0),
+                                        Colors.white.withOpacity(isDark ? 0.06 : 0.0),
+                                      ],
+                                    )
+                                  : const LinearGradient(
+                                      colors: [Color(0xFF9B5DE5), Color(0xFF6C63FF)],
+                                      begin: Alignment.topLeft,
+                                      end: Alignment.bottomRight,
+                                    ),
+                              color: isFollowing
+                                  ? (isDark ? null : const Color(0xFFF1F0FF))
+                                  : null,
+                              borderRadius: BorderRadius.circular(25),
+                              border: Border.all(
+                                color: isFollowing
+                                    ? const Color(0xFF9B5DE5).withOpacity(0.5)
+                                    : Colors.transparent,
+                                width: 1.5,
+                              ),
+                              boxShadow: isFollowing
+                                  ? []
+                                  : [
+                                      BoxShadow(
+                                        color: const Color(0xFF9B5DE5).withOpacity(0.45),
+                                        blurRadius: 16,
+                                        offset: const Offset(0, 6),
+                                      ),
+                                    ],
+                            ),
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Icon(
+                                  isFollowing ? Icons.check_circle_rounded : Icons.person_add_alt_1_rounded,
+                                  color: isFollowing ? const Color(0xFFB06EF5) : Colors.white,
+                                  size: 18,
+                                ),
+                                const SizedBox(width: 8),
+                                Text(
+                                  isFollowing ? 'Following' : 'Follow',
+                                  style: TextStyle(
+                                    color: isFollowing ? const Color(0xFFB06EF5) : Colors.white,
+                                    fontWeight: FontWeight.w900,
+                                    fontSize: 14.5,
+                                    letterSpacing: 0.3,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      // Gift button
+                      _BouncingButton(
+                        onTap: () => _showGiftDialog(currentUser, user),
+                        child: Container(
+                          height: 50,
+                          padding: const EdgeInsets.symmetric(horizontal: 20),
+                          decoration: BoxDecoration(
+                            gradient: const LinearGradient(
+                              colors: [Color(0xFFF7971E), Color(0xFFFFD200)],
+                              begin: Alignment.topLeft,
+                              end: Alignment.bottomRight,
+                            ),
+                            borderRadius: BorderRadius.circular(25),
+                            boxShadow: [
+                              BoxShadow(
+                                color: const Color(0xFFF7971E).withOpacity(0.45),
+                                blurRadius: 16,
+                                offset: const Offset(0, 6),
+                              ),
+                            ],
+                          ),
+                          child: const Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text('🎁', style: TextStyle(fontSize: 18)),
+                              SizedBox(width: 7),
+                              Text(
+                                'Gift',
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.w900,
+                                  fontSize: 14.5,
+                                  letterSpacing: 0.3,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
-                ),
-              ],
-            ),
           ),
 
           const SizedBox(height: 22),
@@ -1974,27 +2149,27 @@ class _UserDetailScreenState extends ConsumerState<UserDetailScreen>
           // User's active Takes section (appears above Bio)
           _buildUserTakesSection(user, isDark),
 
-          // Bio + Phone in a unified section card
+          // Bio + Phone — premium glowing card
           if (hasBio || showPhone)
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 20),
               child: Container(
                 decoration: BoxDecoration(
                   color: isDark
-                      ? Colors.white.withOpacity(0.05)
-                      : Colors.white.withOpacity(0.7),
+                      ? const Color(0xFF16122A)
+                      : Colors.white.withOpacity(0.92),
                   borderRadius: BorderRadius.circular(24),
                   border: Border.all(
                     color: isDark
-                        ? Colors.white.withOpacity(0.08)
-                        : const Color(0xFFE8E0FF),
+                        ? const Color(0xFFFF5069).withOpacity(0.2)
+                        : const Color(0xFFFFD4DE),
                     width: 1.2,
                   ),
                   boxShadow: [
                     BoxShadow(
-                      color: Colors.black.withOpacity(isDark ? 0.12 : 0.04),
-                      blurRadius: 16,
-                      offset: const Offset(0, 4),
+                      color: const Color(0xFFFF5069).withOpacity(isDark ? 0.12 : 0.06),
+                      blurRadius: 20,
+                      offset: const Offset(0, 6),
                     ),
                   ],
                 ),
@@ -2003,32 +2178,21 @@ class _UserDetailScreenState extends ConsumerState<UserDetailScreen>
                   children: [
                     if (hasBio) ...[
                       Padding(
-                        padding: const EdgeInsets.fromLTRB(18, 18, 18, 14),
+                        padding: const EdgeInsets.fromLTRB(20, 18, 20, 16),
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Row(
                               children: [
-                                Container(
-                                  width: 3,
-                                  height: 16,
-                                  decoration: BoxDecoration(
-                                    gradient: const LinearGradient(
-                                      colors: [Color(0xFF9B5DE5), Color(0xFFFF5069)],
-                                      begin: Alignment.topCenter,
-                                      end: Alignment.bottomCenter,
-                                    ),
-                                    borderRadius: BorderRadius.circular(4),
-                                  ),
-                                ),
+                                const Text('✨', style: TextStyle(fontSize: 14)),
                                 const SizedBox(width: 8),
                                 Text(
-                                  'About',
+                                  'ABOUT ME',
                                   style: TextStyle(
-                                    fontSize: 12,
+                                    fontSize: 11,
                                     fontWeight: FontWeight.w900,
-                                    color: isDark ? Colors.white54 : Colors.black45,
-                                    letterSpacing: 0.8,
+                                    color: isDark ? const Color(0xFFFF758C) : const Color(0xFFFF3366),
+                                    letterSpacing: 1.2,
                                   ),
                                 ),
                               ],
@@ -2038,7 +2202,7 @@ class _UserDetailScreenState extends ConsumerState<UserDetailScreen>
                               user.bio!,
                               style: TextStyle(
                                 fontSize: 15,
-                                color: isDark ? Colors.white.withOpacity(0.88) : Colors.black.withOpacity(0.78),
+                                color: isDark ? Colors.white.withOpacity(0.9) : const Color(0xFF2D3748),
                                 height: 1.6,
                                 fontWeight: FontWeight.w500,
                               ),
@@ -2049,15 +2213,15 @@ class _UserDetailScreenState extends ConsumerState<UserDetailScreen>
                       if (showPhone)
                         Divider(
                           height: 1,
-                          color: isDark ? Colors.white.withOpacity(0.07) : const Color(0xFFEDE8FF),
-                          indent: 18,
-                          endIndent: 18,
+                          color: isDark ? Colors.white10 : const Color(0xFFFFEBF0),
+                          indent: 20,
+                          endIndent: 20,
                         ),
                     ],
                     // Phone Section
                     if (showPhone)
                       Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 4),
+                        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
                         child: _buildPhoneSection(user, currentUser, isDark),
                       ),
                   ],
@@ -2324,6 +2488,293 @@ class _UserDetailScreenState extends ConsumerState<UserDetailScreen>
     );
   }
 
+  Widget _buildViewModeToggle(bool isDark) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 0, 20, 16),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(30),
+        child: BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+          child: Container(
+            padding: const EdgeInsets.all(4),
+            decoration: BoxDecoration(
+              color: isDark ? Colors.white.withOpacity(0.06) : Colors.black.withOpacity(0.04),
+              borderRadius: BorderRadius.circular(30),
+              border: Border.all(
+                color: _simulateVisitorView
+                    ? Colors.orange.withOpacity(0.4)
+                    : (isDark ? const Color(0xFF9B5DE5).withOpacity(0.3) : const Color(0xFFD4C1FF)),
+                width: 1.2,
+              ),
+            ),
+            child: Row(
+              children: [
+                Expanded(
+                  child: _BouncingButton(
+                    onTap: () {
+                      if (_simulateVisitorView) {
+                        setState(() => _simulateVisitorView = false);
+                        HapticFeedback.selectionClick();
+                        ScaffoldMessenger.of(context).removeCurrentSnackBar();
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('👑 Switched back to Owner View'),
+                            duration: Duration(seconds: 2),
+                            behavior: SnackBarBehavior.floating,
+                          ),
+                        );
+                      }
+                    },
+                    child: AnimatedContainer(
+                      duration: const Duration(milliseconds: 220),
+                      padding: const EdgeInsets.symmetric(vertical: 9),
+                      decoration: BoxDecoration(
+                        gradient: !_simulateVisitorView
+                            ? const LinearGradient(
+                                colors: [Color(0xFF9B5DE5), Color(0xFF6C63FF)],
+                              )
+                            : null,
+                        color: !_simulateVisitorView ? null : Colors.transparent,
+                        borderRadius: BorderRadius.circular(24),
+                        boxShadow: !_simulateVisitorView
+                            ? [
+                                BoxShadow(
+                                  color: const Color(0xFF9B5DE5).withOpacity(0.4),
+                                  blurRadius: 10,
+                                  offset: const Offset(0, 3),
+                                ),
+                              ]
+                            : [],
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(
+                            Icons.admin_panel_settings_rounded,
+                            size: 15,
+                            color: !_simulateVisitorView
+                                ? Colors.white
+                                : (isDark ? Colors.white60 : Colors.black54),
+                          ),
+                          const SizedBox(width: 6),
+                          Text(
+                            'Owner View 👑',
+                            style: TextStyle(
+                              color: !_simulateVisitorView
+                                  ? Colors.white
+                                  : (isDark ? Colors.white70 : Colors.black54),
+                              fontWeight: FontWeight.w800,
+                              fontSize: 12.5,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+                Expanded(
+                  child: _BouncingButton(
+                    onTap: () {
+                      if (!_simulateVisitorView) {
+                        setState(() => _simulateVisitorView = true);
+                        HapticFeedback.selectionClick();
+                        ScaffoldMessenger.of(context).removeCurrentSnackBar();
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('👁️ Previewing as Visitor (Public View)'),
+                            duration: Duration(seconds: 2),
+                            behavior: SnackBarBehavior.floating,
+                          ),
+                        );
+                      }
+                    },
+                    child: AnimatedContainer(
+                      duration: const Duration(milliseconds: 220),
+                      padding: const EdgeInsets.symmetric(vertical: 9),
+                      decoration: BoxDecoration(
+                        gradient: _simulateVisitorView
+                            ? LinearGradient(
+                                colors: [Colors.orange.shade700, Colors.deepOrange],
+                              )
+                            : null,
+                        color: _simulateVisitorView ? null : Colors.transparent,
+                        borderRadius: BorderRadius.circular(24),
+                        boxShadow: _simulateVisitorView
+                            ? [
+                                BoxShadow(
+                                  color: Colors.orange.withOpacity(0.4),
+                                  blurRadius: 10,
+                                  offset: const Offset(0, 3),
+                                ),
+                              ]
+                            : [],
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(
+                            Icons.visibility_rounded,
+                            size: 15,
+                            color: _simulateVisitorView
+                                ? Colors.white
+                                : (isDark ? Colors.white60 : Colors.black54),
+                          ),
+                          const SizedBox(width: 6),
+                          Text(
+                            'Visitor View 👁️',
+                            style: TextStyle(
+                              color: _simulateVisitorView
+                                  ? Colors.white
+                                  : (isDark ? Colors.white70 : Colors.black54),
+                              fontWeight: FontWeight.w800,
+                              fontSize: 12.5,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+    Widget _buildDatingHighlightCard({
+    required Widget icon,
+    required String title,
+    required String subtitle,
+    required List<Color> gradientColors,
+    required bool isDark,
+    VoidCallback? onTap,
+  }) {
+    return Expanded(
+      child: _BouncingButton(
+        onTap: onTap ?? () => HapticFeedback.lightImpact(),
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 8),
+          decoration: BoxDecoration(
+            color: isDark ? const Color(0xFF171329) : Colors.white,
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(
+              color: isDark ? gradientColors.first.withOpacity(0.25) : gradientColors.first.withOpacity(0.2),
+              width: 1.2,
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: gradientColors.first.withOpacity(isDark ? 0.12 : 0.08),
+                blurRadius: 14,
+                offset: const Offset(0, 4),
+              ),
+            ],
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: [
+                      gradientColors.first.withOpacity(0.18),
+                      gradientColors.last.withOpacity(0.18),
+                    ],
+                  ),
+                  shape: BoxShape.circle,
+                ),
+                child: icon,
+              ),
+              const SizedBox(height: 8),
+              Text(
+                title,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w800,
+                  color: isDark ? Colors.white : const Color(0xFF1E293B),
+                ),
+              ),
+              const SizedBox(height: 3),
+              Text(
+                subtitle,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
+                  color: isDark ? Colors.white54 : const Color(0xFF64748B),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+Widget _buildStatCard(String value, String label, List<Color> gradientColors, bool isDark) {
+    return Expanded(
+      child: _BouncingButton(
+        onTap: () => HapticFeedback.lightImpact(),
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 10),
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              colors: gradientColors.map((c) => c.withOpacity(isDark ? 0.22 : 0.12)).toList(),
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(
+              color: gradientColors.first.withOpacity(isDark ? 0.35 : 0.25),
+              width: 1.3,
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: gradientColors.first.withOpacity(isDark ? 0.12 : 0.06),
+                blurRadius: 10,
+                offset: const Offset(0, 3),
+              ),
+            ],
+          ),
+          child: Column(
+            children: [
+              ShaderMask(
+                shaderCallback: (b) => LinearGradient(
+                  colors: gradientColors,
+                ).createShader(b),
+                child: Text(
+                  value,
+                  style: const TextStyle(
+                    fontSize: 22,
+                    fontWeight: FontWeight.w900,
+                    color: Colors.white,
+                    letterSpacing: -0.5,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                label,
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w700,
+                  color: isDark ? Colors.white54 : Colors.black45,
+                  letterSpacing: 0.2,
+                ),
+                textAlign: TextAlign.center,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _buildGlassPill(String text, {Color? accent}) {
     return ClipRRect(
       borderRadius: BorderRadius.circular(24),
@@ -2377,6 +2828,7 @@ class _UserDetailScreenState extends ConsumerState<UserDetailScreen>
     final chips = <String>[
       if (user.gender.isNotEmpty) '👤 ${user.gender.substring(0, 1).toUpperCase()}${user.gender.substring(1)}',
       if ((user.zodiacSign ?? '').isNotEmpty) '✨ ${user.zodiacSign}',
+      if ((user.relationshipIntent ?? '').isNotEmpty) '💍 ${user.relationshipIntent}',
       ...user.interests.take(6).map((i) => '🏷️ $i'),
     ];
     if (chips.isEmpty) {
@@ -2452,44 +2904,159 @@ class _UserDetailScreenState extends ConsumerState<UserDetailScreen>
     );
   }
 
+  Widget _buildDatingActionButton({
+    required Widget icon,
+    required VoidCallback onTap,
+    required bool isDark,
+    Color? borderColor,
+    Color? bgColor,
+    List<BoxShadow>? boxShadow,
+    double size = 48,
+  }) {
+    return _BouncingButton(
+      onTap: onTap,
+      child: Container(
+        width: size,
+        height: size,
+        decoration: BoxDecoration(
+          color: bgColor ?? (isDark ? const Color(0xFF1E1B2E) : Colors.white),
+          shape: BoxShape.circle,
+          border: Border.all(
+            color: borderColor ?? (isDark ? Colors.white.withOpacity(0.12) : const Color(0xFFE2E8F0)),
+            width: 1.5,
+          ),
+          boxShadow: boxShadow ?? [
+            BoxShadow(
+              color: Colors.black.withOpacity(isDark ? 0.3 : 0.08),
+              blurRadius: 12,
+              offset: const Offset(0, 4),
+            ),
+          ],
+        ),
+        child: Center(child: icon),
+      ),
+    );
+  }
+
   Widget _buildFloatingReactions(UserModel currentUser, UserModel user, bool isFollowing, bool isDark) {
+    if (user.id == currentUser.id && !_simulateVisitorView) {
+      return const SizedBox.shrink();
+    }
     final bottomInset = MediaQuery.of(context).padding.bottom;
 
     return Padding(
-      padding: EdgeInsets.only(bottom: math.max(bottomInset, 18)),
+      padding: EdgeInsets.only(bottom: math.max(bottomInset, 16)),
       child: Center(
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.end,
-          children: [
-            _AnimatedReactionBtn(
-              emoji: '🥵',
-              label: 'Too Hot',
-              gradientColors: const [Color(0xFFFF6584), Color(0xFFFF416C)],
-              glowColor: const Color(0xFFFF416C),
-              onTap: () => _handleReaction('🥵', currentUser, user, isFollowing),
-              isDark: isDark,
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(40),
+          child: BackdropFilter(
+            filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
+              decoration: BoxDecoration(
+                color: (isDark ? const Color(0xFF140F24) : Colors.white).withOpacity(0.85),
+                borderRadius: BorderRadius.circular(40),
+                border: Border.all(
+                  color: isDark ? Colors.white.withOpacity(0.14) : const Color(0xFFFFD4DE),
+                  width: 1.4,
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: const Color(0xFFFF3366).withOpacity(isDark ? 0.25 : 0.14),
+                    blurRadius: 24,
+                    offset: const Offset(0, 8),
+                  ),
+                ],
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  // Pass Button ✕
+                  _buildDatingActionButton(
+                    icon: const Icon(Icons.close_rounded, color: Color(0xFFFF5252), size: 24),
+                    borderColor: const Color(0xFFFF5252).withOpacity(0.35),
+                    size: 48,
+                    isDark: isDark,
+                    onTap: () {
+                      HapticFeedback.lightImpact();
+                      if (Navigator.of(context).canPop()) {
+                        Navigator.of(context).pop();
+                      } else {
+                        _showSuccess('Passed 👋');
+                      }
+                    },
+                  ),
+                  const SizedBox(width: 14),
+
+                  // Super Like Button ⭐
+                  _buildDatingActionButton(
+                    icon: const Icon(Icons.star_rounded, color: Color(0xFF00C9FF), size: 26),
+                    borderColor: const Color(0xFF00C9FF).withOpacity(0.35),
+                    size: 48,
+                    isDark: isDark,
+                    onTap: () {
+                      HapticFeedback.mediumImpact();
+                      _handleReaction('⭐', currentUser, user, isFollowing);
+                    },
+                  ),
+                  const SizedBox(width: 14),
+
+                  // Hero Like / Spark Button 💖
+                  _BouncingButton(
+                    onTap: () {
+                      HapticFeedback.heavyImpact();
+                      _handleReaction('💖', currentUser, user, isFollowing);
+                    },
+                    child: Container(
+                      width: 62,
+                      height: 62,
+                      decoration: BoxDecoration(
+                        gradient: const LinearGradient(
+                          colors: [Color(0xFFFF3366), Color(0xFFFF6584)],
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                        ),
+                        shape: BoxShape.circle,
+                        boxShadow: [
+                          BoxShadow(
+                            color: const Color(0xFFFF3366).withOpacity(0.55),
+                            blurRadius: 18,
+                            offset: const Offset(0, 6),
+                          ),
+                        ],
+                      ),
+                      child: const Center(
+                        child: Icon(Icons.favorite_rounded, color: Colors.white, size: 30),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 14),
+
+                  // Chat / Say Hi Button 💬
+                  _buildDatingActionButton(
+                    icon: const Icon(Icons.chat_bubble_rounded, color: Color(0xFF9B5DE5), size: 22),
+                    borderColor: const Color(0xFF9B5DE5).withOpacity(0.35),
+                    size: 48,
+                    isDark: isDark,
+                    onTap: () {
+                      HapticFeedback.lightImpact();
+                      final chatId = 'chat_${currentUser.id}_${user.id}';
+                      context.pushNamed('chat-detail', pathParameters: {
+                        'chatId': chatId,
+                      }, extra: {
+                        'otherUserId': user.id,
+                        'name': user.name,
+                        'avatarUrl': user.avatarUrl,
+                        'isOnline': user.isOnline,
+                        'isConfession': false,
+                      });
+                    },
+                  ),
+                ],
+              ),
             ),
-            const SizedBox(width: 24),
-            _AnimatedReactionBtn(
-              emoji: '😍',
-              label: 'Crushing',
-              gradientColors: const [Color(0xFFFF758C), Color(0xFFFF7EB3)],
-              glowColor: const Color(0xFFFF758C),
-              onTap: () => _handleReaction('😍', currentUser, user, isFollowing),
-              isDark: isDark,
-              isMain: true,
-            ),
-            const SizedBox(width: 24),
-            _AnimatedReactionBtn(
-              emoji: '😊',
-              label: 'DM Me',
-              gradientColors: const [Color(0xFF5B86E5), Color(0xFF36D1DC)],
-              glowColor: const Color(0xFF5B86E5),
-              onTap: () => _handleReaction('😊', currentUser, user, isFollowing),
-              isDark: isDark,
-            ),
-          ],
+          ),
         ),
       ),
     );
@@ -2639,7 +3206,7 @@ class _UserDetailScreenState extends ConsumerState<UserDetailScreen>
           ),
           child: Row(
             children: [
-              Expanded(child: _buildTabHeader(0, '🧬 Match', isDark)),
+              Expanded(child: _buildTabHeader(0, '💖 Match', isDark)),
               Expanded(child: _buildTabHeader(1, '🎯 Intent', isDark)),
               Expanded(child: _buildTabHeader(2, '✍️ Posts', isDark)),
             ],
@@ -2789,7 +3356,7 @@ class _UserDetailScreenState extends ConsumerState<UserDetailScreen>
         children: [
           Row(
             children: [
-              const Text('🧬', style: TextStyle(fontSize: 18)),
+              const Text('💖', style: TextStyle(fontSize: 18)),
               const SizedBox(width: 8),
               Text(
                 'Compatibility Vibe',

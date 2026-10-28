@@ -8,6 +8,7 @@ import '../../../core/theme/app_theme.dart';
 import '../../../core/providers/app_state_provider.dart';
 import 'package:timeago/timeago.dart' as timeago;
 import '../../../shared/widgets/background_orbs.dart';
+import '../../../shared/widgets/app_header.dart';
 import '../../verification/presentation/widgets/s_badge_widget.dart';
 
 class ChatsScreen extends ConsumerStatefulWidget {
@@ -91,64 +92,18 @@ class _ChatsScreenState extends ConsumerState<ChatsScreen>
   }
 
   Widget _buildSliverAppBar(BuildContext context, bool isDark) {
-    final currentUser = ref.watch(currentUserProvider);
     return SliverAppBar(
       floating: true,
       snap: true,
       elevation: 0,
       scrolledUnderElevation: 0,
       backgroundColor: Colors.transparent,
-      expandedHeight: 72,
-      flexibleSpace: FlexibleSpaceBar(
-        background: FadeTransition(
-          opacity: _headerFade,
-          child: Padding(
-            padding: EdgeInsets.fromLTRB(
-              20,
-              MediaQuery.of(context).padding.top + 12,
-              16,
-              8,
-            ),
-            child: Row(
-              children: [
-                Expanded(
-                  child: ShaderMask(
-                    shaderCallback: (bounds) => LinearGradient(
-                      colors: [AppTheme.primaryBlue, AppTheme.accentPurple, AppTheme.accentPink],
-                    ).createShader(bounds),
-                    child: const Text(
-                      'Chats ✨',
-                      style: TextStyle(
-                        fontSize: 30,
-                        fontWeight: FontWeight.w900,
-                        letterSpacing: -0.5,
-                        color: Colors.white,
-                      ),
-                    ),
-                  ),
-                ),
-                // Search button
-                _GlassIconButton(
-                  isDark: isDark,
-                  icon: Icons.search_rounded,
-                  onTap: () {},
-                ),
-                const SizedBox(width: 8),
-                // Avatar
-                GestureDetector(
-                  onTap: () => context.push('/profile'),
-                  child: _StoryRingAvatar(
-                    avatarUrl: currentUser.avatarUrl,
-                    isOnline: true,
-                    radius: 20,
-                    showRing: true,
-                    isDark: isDark,
-                  ),
-                ),
-                const SizedBox(width: 4),
-              ],
-            ),
-          ),
+      automaticallyImplyLeading: false,
+      titleSpacing: 0,
+      title: FadeTransition(
+        opacity: _headerFade,
+        child: const SituationshipHeaderBar(
+          showLogo: true,
         ),
       ),
     );

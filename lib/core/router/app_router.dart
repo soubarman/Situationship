@@ -34,6 +34,7 @@ import '../providers/firebase_auth_provider.dart';
 import '../providers/app_state_provider.dart';
 import '../providers/shared_prefs_provider.dart';
 import '../../features/auth/screens/suspended_screen.dart';
+import '../../shared/widgets/notifications_sheet.dart';
 
 final appRouterProvider = Provider<GoRouter>((ref) {
   final router = GoRouter(
@@ -171,6 +172,11 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         path: '/wallet',
         name: 'wallet',
         builder: (context, state) => const WalletScreen(),
+      ),
+      GoRoute(
+        path: '/notifications',
+        name: 'notifications',
+        builder: (context, state) => const NotificationsScreen(),
       ),
       GoRoute(
         path: '/verification',

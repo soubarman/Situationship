@@ -120,36 +120,206 @@
     });
 
     // Native HTML5 Real Microphone Recorder and Player Helpers
-    let mediaRecorder;
+    let mediaRecorder = null;
     let audioChunks = [];
     let currentAudio = null;
+    let activeStream = null;
+    let lastRecordingError = null;
 
-    window.startRecording = async function () {
-      try {
-        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-        mediaRecorder = new MediaRecorder(stream);
-        audioChunks = [];
-        mediaRecorder.ondataavailable = e => audioChunks.push(e.data);
-        mediaRecorder.start();
-        return true;
-      } catch (e) {
-        console.error("Mic access denied or error:", e);
-        return false;
+    function stopAllAudioTracks() {
+      if (activeStream) {
+        try {
+          activeStream.getTracks().forEach(t => t.stop());
+        } catch (_) {}
+        activeStream = null;
       }
+      if (mediaRecorder && mediaRecorder.stream) {
+        try {
+          mediaRecorder.stream.getTracks().forEach(t => t.stop());
+        } catch (_) {}
+      }
+    }
+
+    function getSupportedMimeType() {
+      const types = [
+        'audio/webm;codecs=opus',
+        'audio/webm',
+        'audio/mp4;codecs=mp4a.40.2',
+        'audio/mp4',
+        'audio/aac',
+        'audio/ogg;codecs=opus',
+        'audio/ogg'
+      ];
+      for (const type of types) {
+        try {
+          if (window.MediaRecorder && MediaRecorder.isTypeSupported && MediaRecorder.isTypeSupported(type)) {
+            return type;
+          }
+        } catch (_) {}
+      }
+      return '';
+    }
+
+    window.getLastRecordingError = function () {
+      return lastRecordingError || '';
+    };
+
+    window.startRecording = function () {
+      console.log("[Mic] startRecording called");
+      return new Promise(async (resolve) => {
+        lastRecordingError = null;
+        try {
+          // 1. Clean up any existing stream/tracks first so mic hardware is released
+          stopAllAudioTracks();
+          if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+            try { mediaRecorder.stop(); } catch (_) {}
+          }
+          mediaRecorder = null;
+          audioChunks = [];
+
+          if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+            lastRecordingError = 'Microphone API not supported on this browser or insecure HTTP context.';
+            console.error("[Mic] " + lastRecordingError);
+            resolve(false);
+            return;
+          }
+
+          // 2. Acquire audio stream with automatic constraint fallback
+          let stream = null;
+          console.log("[Mic] Requesting getUserMedia...");
+          try {
+            stream = await navigator.mediaDevices.getUserMedia({
+              audio: {
+                echoCancellation: true,
+                noiseSuppression: true,
+                autoGainControl: true
+              }
+            });
+            console.log("[Mic] Stream acquired with advanced constraints");
+          } catch (constraintErr) {
+            console.warn("[Mic] Advanced constraints failed, trying basic audio: true...", constraintErr);
+            try {
+              stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+              console.log("[Mic] Stream acquired with basic audio: true");
+            } catch (basicErr) {
+              console.error("[Mic] getUserMedia failed completely:", basicErr);
+              const isDenied = basicErr.name === 'NotAllowedError' || basicErr.name === 'PermissionDeniedError';
+              lastRecordingError = isDenied
+                ? 'PERMISSION_DENIED'
+                : (basicErr.name + ': ' + (basicErr.message || 'Microphone hardware unavailable'));
+              stopAllAudioTracks();
+              resolve(false);
+              return;
+            }
+          }
+
+          activeStream = stream;
+
+          // 3. Create MediaRecorder with resilient mimeType fallback
+          const mimeType = getSupportedMimeType();
+          console.log("[Mic] Initializing MediaRecorder with mimeType:", mimeType);
+          try {
+            mediaRecorder = mimeType ? new MediaRecorder(stream, { mimeType }) : new MediaRecorder(stream);
+          } catch (mrErr) {
+            console.warn("[Mic] MediaRecorder with mimeType " + mimeType + " failed, falling back to default:", mrErr);
+            try {
+              mediaRecorder = new MediaRecorder(stream);
+            } catch (mrErr2) {
+              console.error("[Mic] MediaRecorder fallback failed:", mrErr2);
+              lastRecordingError = 'MediaRecorder not supported on this device: ' + (mrErr2.message || mrErr2.name);
+              stopAllAudioTracks();
+              resolve(false);
+              return;
+            }
+          }
+
+          audioChunks = [];
+          mediaRecorder.ondataavailable = e => {
+            if (e.data && e.data.size > 0) {
+              audioChunks.push(e.data);
+            }
+          };
+
+          // 4. Start recording with fallback for browsers rejecting timeslices
+          console.log("[Mic] Starting mediaRecorder...");
+          try {
+            mediaRecorder.start(200);
+          } catch (startErr) {
+            console.warn("[Mic] mediaRecorder.start(200) failed, trying start():", startErr);
+            try {
+              mediaRecorder.start();
+            } catch (startErr2) {
+              console.error("[Mic] mediaRecorder.start() completely failed:", startErr2);
+              lastRecordingError = 'Could not start recording: ' + (startErr2.message || startErr2.name);
+              stopAllAudioTracks();
+              resolve(false);
+              return;
+            }
+          }
+
+          console.log("[Mic] Recording successfully started!");
+          resolve(true);
+        } catch (e) {
+          console.error("[Mic] Top-level start recording error:", e);
+          lastRecordingError = e.message || e.toString();
+          stopAllAudioTracks();
+          resolve(false);
+        }
+      });
     };
 
     window.stopRecording = function () {
       return new Promise((resolve) => {
-        if (mediaRecorder && mediaRecorder.state !== 'inactive') {
-          mediaRecorder.onstop = () => {
-            const blob = new Blob(audioChunks, { type: 'audio/webm' });
-            const url = URL.createObjectURL(blob);
-            resolve(url);
-          };
+        if (!mediaRecorder || mediaRecorder.state === 'inactive') {
+          stopAllAudioTracks();
+          resolve(JSON.stringify({ error: 'Not recording', dataUrl: '', mimeType: '' }));
+          return;
+        }
+
+        mediaRecorder.onstop = () => {
+          try {
+            const recordedType = mediaRecorder.mimeType || getSupportedMimeType() || 'audio/webm';
+            const blob = new Blob(audioChunks, { type: recordedType });
+            
+            if (blob.size === 0) {
+              stopAllAudioTracks();
+              resolve(JSON.stringify({ error: 'Empty recording', dataUrl: '', mimeType: recordedType }));
+              return;
+            }
+
+            const reader = new FileReader();
+            reader.onloadend = () => {
+              stopAllAudioTracks();
+              resolve(JSON.stringify({
+                dataUrl: reader.result,
+                mimeType: recordedType,
+                size: blob.size
+              }));
+            };
+            reader.onerror = (err) => {
+              console.error("FileReader error:", err);
+              const url = URL.createObjectURL(blob);
+              stopAllAudioTracks();
+              resolve(JSON.stringify({
+                dataUrl: url,
+                mimeType: recordedType,
+                size: blob.size
+              }));
+            };
+            reader.readAsDataURL(blob);
+          } catch (e) {
+            console.error("stopRecording error:", e);
+            stopAllAudioTracks();
+            resolve(JSON.stringify({ error: e.toString(), dataUrl: '', mimeType: '' }));
+          }
+        };
+
+        try {
           mediaRecorder.stop();
-          mediaRecorder.stream.getTracks().forEach(t => t.stop());
-        } else {
-          resolve("");
+        } catch (e) {
+          console.error("Error stopping mediaRecorder:", e);
+          stopAllAudioTracks();
+          resolve(JSON.stringify({ error: e.toString(), dataUrl: '', mimeType: '' }));
         }
       });
     };
@@ -157,17 +327,23 @@
     window.playAudio = function (url, callbackId) {
       if (currentAudio) {
         currentAudio.pause();
+        currentAudio = null;
       }
-      currentAudio = new Audio(url);
-      if (callbackId) {
-        currentAudio.onended = () => {
-          // Send callback event to Dart if needed
-          if (window.onAudioEnded) {
-            window.onAudioEnded(callbackId);
-          }
-        };
+      try {
+        currentAudio = new Audio(url);
+        if (callbackId) {
+          currentAudio.onended = () => {
+            if (window.onAudioEnded) {
+              window.onAudioEnded(callbackId);
+            }
+          };
+        }
+        currentAudio.play().catch(e => {
+          console.warn("Audio play error:", e);
+        });
+      } catch (e) {
+        console.error("Audio playback creation error:", e);
       }
-      currentAudio.play();
     };
 
     window.pauseAudio = function () {

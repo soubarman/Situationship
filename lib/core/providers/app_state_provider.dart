@@ -738,7 +738,7 @@ class MatchQueueNotifier extends StateNotifier<List<UserModel>> {
   }
 
   void applyFilters({
-    required double maxDistance,
+    double maxDistance = double.infinity,
     required double minAge,
     required double maxAge,
   }) {
@@ -1284,7 +1284,7 @@ final socialProvider = StateNotifierProvider<SocialNotifier, bool>((ref) {
 
 final filterMinAgeProvider = StateProvider<double>((ref) => 18);
 final filterMaxAgeProvider = StateProvider<double>((ref) => 35);
-final filterMaxDistanceProvider = StateProvider<double>((ref) => 50);
+final filterMaxDistanceProvider = StateProvider<double>((ref) => double.infinity);
 final filterMatchIrrespectiveProvider = StateProvider<bool>((ref) => false);
 /// 'auto' (follow profile), 'female', 'male', or 'all'
 final filterInterestedInProvider = StateProvider<String>((ref) => 'auto');

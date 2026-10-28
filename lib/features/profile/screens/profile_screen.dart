@@ -1,6 +1,7 @@
 import 'dart:math' as math;
 import 'dart:ui';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:shimmer/shimmer.dart';
@@ -20,6 +21,7 @@ import '../../../shared/widgets/background_orbs.dart';
 import '../../wallet/widgets/coin_gate_sheet.dart';
 import '../../../core/utils/image_url_helper.dart';
 import '../../../shared/widgets/profile_choice_sheet.dart';
+import '../../../shared/widgets/situationship_logo.dart';
 
 class ProfileScreen extends ConsumerStatefulWidget {
   const ProfileScreen({super.key});
@@ -162,18 +164,15 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
           CustomScrollView(
             physics: const BouncingScrollPhysics(),
             slivers: [
-              // Header with rotating avatar ring & action buttons
+              // Sticky Frosted Glass AppBar
+              _buildTopAppBar(context, isDark),
+
+              // Profile Identity Hero Card
               SliverToBoxAdapter(
-                child: SafeArea(
-                  bottom: false,
-                  child: Padding(
-                    padding: const EdgeInsets.fromLTRB(20, 56, 20, 0),
-                    child: _buildGlassHeader(context, user, isDark, palette),
-                  ),
-                ),
+                child: _buildProfileHero(context, user, isDark, palette),
               ),
 
-              // Animated Glass Stats Row
+              // 3D Glass Stats Row
               SliverToBoxAdapter(
                 child: _buildStats(user, posts.length, context, isDark, palette),
               ),
@@ -199,206 +198,390 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
               SliverPadding(padding: EdgeInsets.only(bottom: MediaQuery.of(context).padding.bottom + 120)),
             ],
           ),
-
-          // Custom Back Button
-          Positioned(
-            top: MediaQuery.of(context).padding.top + 10,
-            left: 10,
-            child: Container(
-              decoration: BoxDecoration(
-                color: isDark ? Colors.black.withOpacity(0.4) : Colors.white.withOpacity(0.6),
-                shape: BoxShape.circle,
-                border: Border.all(
-                  color: isDark ? Colors.white.withOpacity(0.12) : Colors.black.withOpacity(0.08),
-                ),
-              ),
-              child: IconButton(
-                icon: Icon(Icons.arrow_back_ios_new_rounded, size: 18, color: isDark ? Colors.white : Colors.black87),
-                onPressed: () {
-                  if (context.canPop()) {
-                    context.pop();
-                  } else {
-                    context.go('/feed');
-                  }
-                },
-              ),
-            ),
-          ),
         ],
       ),
     );
   }
 
-  // ─── GLASS HEADER WITH ROTATING RING ───────────────────────────────────────
-  Widget _buildGlassHeader(BuildContext context, UserModel user, bool isDark, AppPalette palette) {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.center,
-      children: [
-        // Avatar with animated rotating rainbow gradient ring
-        GestureDetector(
-          onTap: () => ProfileChoiceSheet.show(context, user, isDark),
-          child: AnimatedBuilder(
-            animation: _ringAnim,
-            builder: (_, __) {
-              return SizedBox(
-                width: 124,
-                height: 124,
-                child: CustomPaint(
-                  painter: _AvatarRingPainter(
-                    angle: _ringAnim.value * 2 * math.pi,
-                    palette: palette,
-                  ),
-                  child: Padding(
-                    padding: const EdgeInsets.all(4.5),
-                    child: ClipOval(
-                      child: Image.network(
-                        ImageUrlHelper.proxy(user.avatarUrl ??
-                            'https://ui-avatars.com/api/?name=${Uri.encodeComponent(user.name)}&size=200&background=6ECBF5&color=fff&rounded=true'),
-                        fit: BoxFit.cover,
-                        errorBuilder: (_, __, ___) => const Icon(Icons.person, color: Colors.white, size: 50),
-                      ),
-                    ),
-                  ),
-                ),
-              );
+  // ─── STICKY TOP APP BAR ─────────────────────────────────────────────────────
+  Widget _buildTopAppBar(BuildContext context, bool isDark) {
+    return SliverAppBar(
+      pinned: true,
+      elevation: 0,
+      scrolledUnderElevation: 0,
+      backgroundColor: (isDark ? AppTheme.darkBg : const Color(0xFFF8FAFC)).withOpacity(0.85),
+      leading: Padding(
+        padding: const EdgeInsets.only(left: 12),
+        child: Center(
+          child: _buildGlassCircleBtn(
+            icon: Icons.arrow_back_ios_new_rounded,
+            onTap: () {
+              if (context.canPop()) {
+                context.pop();
+              } else {
+                context.go('/feed');
+              }
             },
+            isDark: isDark,
           ),
         ),
-        const SizedBox(width: 18),
-
-        // Name, Location, Action Buttons
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      user.name,
-                      style: TextStyle(
-                        color: isDark ? Colors.white : Colors.black87,
-                        fontSize: 22,
-                        fontWeight: FontWeight.w900,
-                        letterSpacing: -0.5,
-                      ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-                  if (user.isVerified) ...[
-                    const SizedBox(width: 6),
-                    const SBadgeWidget(size: 22),
-                  ],
-                ],
-              ),
-              if (user.location != null && user.location!.isNotEmpty) ...[
-                const SizedBox(height: 4),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 3),
-                  decoration: BoxDecoration(
-                    color: isDark ? Colors.white.withOpacity(0.08) : Colors.black.withOpacity(0.05),
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(
-                      color: isDark ? Colors.white.withOpacity(0.1) : Colors.black.withOpacity(0.06),
-                    ),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(Icons.location_on_rounded, size: 12, color: palette.primary),
-                      const SizedBox(width: 4),
-                      Text(
-                        user.location!,
-                        style: TextStyle(
-                          color: isDark ? Colors.white70 : Colors.black87,
-                          fontSize: 12,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-              const SizedBox(height: 14),
-
-              // Action Buttons Row
-              Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  // Edit Profile — icon only
-                  _buildIconButton(
-                    icon: Icons.edit_rounded,
-                    gradientColors: [palette.primary, palette.secondary],
-                    onTap: () => context.push('/profile/edit'),
-                  isDark: isDark,
-                  ),
-                  const SizedBox(width: 8),
-
-                  // View Public Button
-                  _buildIconButton(
-                    icon: Icons.remove_red_eye_rounded,
-                    gradientColors: [palette.primary, palette.secondary],
-                    onTap: () => ProfileChoiceSheet.show(context, user, isDark),
-                    isDark: isDark,
-                  ),
-                  const SizedBox(width: 8),
-
-                  // Settings Button
-                  _buildIconButton(
-                    icon: Icons.settings_rounded,
-                    gradientColors: isDark
-                        ? [Colors.white24, Colors.white10]
-                        : [Colors.black12, Colors.black26],
-                    onTap: () => _showSettingsSheet(context),
-                    isDark: isDark,
-                  ),
-
-                  if (!user.isVerified) ...[
-                    const SizedBox(width: 8),
-                    _buildIconButton(
-                      icon: Icons.verified_user_rounded,
-                      gradientColors: [palette.secondary, palette.primary],
-                      onTap: () => context.push('/verification'),
-                      isDark: isDark,
-                    ),
-                  ],
-                ],
-              ),
-            ],
+      ),
+      centerTitle: true,
+      title: SituationshipLogo(
+        fontSize: 20,
+        isDark: isDark,
+        showTrademark: true,
+      ),
+      actions: [
+        Padding(
+          padding: const EdgeInsets.only(right: 14),
+          child: Center(
+            child: _buildGlassCircleBtn(
+              icon: Icons.settings_rounded,
+              onTap: () => _showSettingsSheet(context),
+              isDark: isDark,
+            ),
           ),
         ),
       ],
     );
   }
 
-  Widget _buildIconButton({
+  // ─── LUXURY PROFILE HERO CARD ───────────────────────────────────────────────
+  Widget _buildProfileHero(BuildContext context, UserModel user, bool isDark, AppPalette palette) {
+    return Container(
+      margin: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+      padding: const EdgeInsets.all(22),
+      decoration: BoxDecoration(
+        color: isDark ? const Color(0xFF161226).withOpacity(0.88) : Colors.white.withOpacity(0.92),
+        borderRadius: BorderRadius.circular(32),
+        border: Border.all(
+          color: isDark ? const Color(0xFF9B5DE5).withOpacity(0.28) : const Color(0xFFD4C1FF).withOpacity(0.85),
+          width: 1.4,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFF9B5DE5).withOpacity(isDark ? 0.22 : 0.08),
+            blurRadius: 28,
+            offset: const Offset(0, 8),
+          ),
+          BoxShadow(
+            color: Colors.black.withOpacity(isDark ? 0.35 : 0.04),
+            blurRadius: 14,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(
+        children: [
+          // Avatar + Outer Ambient Glow + Rotating Ring
+          Center(
+            child: Stack(
+              alignment: Alignment.center,
+              children: [
+                // Outer ambient halo
+                Container(
+                  width: 112,
+                  height: 112,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    boxShadow: [
+                      BoxShadow(
+                        color: palette.primary.withOpacity(isDark ? 0.45 : 0.25),
+                        blurRadius: 26,
+                        spreadRadius: 2,
+                      ),
+                    ],
+                  ),
+                ),
+                // Rotating neon gradient ring
+                AnimatedBuilder(
+                  animation: _ringAnim,
+                  builder: (_, __) {
+                    return SizedBox(
+                      width: 106,
+                      height: 106,
+                      child: CustomPaint(
+                        painter: _AvatarRingPainter(
+                          angle: _ringAnim.value * 2 * math.pi,
+                          palette: palette,
+                        ),
+                        child: Padding(
+                          padding: const EdgeInsets.all(5),
+                          child: GestureDetector(
+                            onTap: () => ProfileChoiceSheet.show(context, user, isDark),
+                            child: ClipOval(
+                              child: Image.network(
+                                ImageUrlHelper.proxy(user.avatarUrl ??
+                                    'https://ui-avatars.com/api/?name=${Uri.encodeComponent(user.name)}&size=200&background=6ECBF5&color=fff&rounded=true'),
+                                fit: BoxFit.cover,
+                                errorBuilder: (_, __, ___) => const Icon(Icons.person, color: Colors.white, size: 44),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    );
+                  },
+                ),
+                // Verified S-Badge overlay on avatar
+                if (user.isVerified)
+                  Positioned(
+                    bottom: 2,
+                    right: 2,
+                    child: Container(
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.4),
+                            blurRadius: 6,
+                          ),
+                        ],
+                      ),
+                      child: const SBadgeWidget(size: 24),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 14),
+
+          // User Name
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Flexible(
+                child: Text(
+                  user.name,
+                  style: TextStyle(
+                    color: isDark ? Colors.white : const Color(0xFF1E1B2E),
+                    fontSize: 24,
+                    fontWeight: FontWeight.w900,
+                    letterSpacing: -0.5,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  textAlign: TextAlign.center,
+                ),
+              ),
+              if (user.isVerified) ...[
+                const SizedBox(width: 6),
+                const SBadgeWidget(size: 22),
+              ],
+            ],
+          ),
+
+          // Location badge
+          if (user.location != null && user.location!.isNotEmpty) ...[
+            const SizedBox(height: 6),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+              decoration: BoxDecoration(
+                color: palette.primary.withOpacity(isDark ? 0.16 : 0.08),
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(
+                  color: palette.primary.withOpacity(isDark ? 0.3 : 0.18),
+                  width: 1,
+                ),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.location_on_rounded, size: 13, color: palette.primary),
+                  const SizedBox(width: 5),
+                  Text(
+                    user.location!,
+                    style: TextStyle(
+                      color: isDark ? Colors.white70 : const Color(0xFF4A4458),
+                      fontSize: 12.5,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+
+          const SizedBox(height: 18),
+
+          // Action Buttons: Edit Profile (Primary) & View as Visitor (Secondary)
+          Row(
+            children: [
+              Expanded(
+                child: _BouncingButton(
+                  onTap: () {
+                    HapticFeedback.lightImpact();
+                    context.push('/profile/edit');
+                  },
+                  child: Container(
+                    height: 48,
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        colors: [palette.primary, palette.secondary],
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                      ),
+                      borderRadius: BorderRadius.circular(24),
+                      boxShadow: [
+                        BoxShadow(
+                          color: palette.primary.withOpacity(0.45),
+                          blurRadius: 16,
+                          offset: const Offset(0, 5),
+                        ),
+                      ],
+                    ),
+                    child: const Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(Icons.edit_rounded, color: Colors.white, size: 17),
+                        SizedBox(width: 8),
+                        Text(
+                          'Edit Profile',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 14,
+                            fontWeight: FontWeight.w900,
+                            letterSpacing: 0.2,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: _BouncingButton(
+                  onTap: () {
+                    HapticFeedback.lightImpact();
+                    ProfileChoiceSheet.show(context, user, isDark);
+                  },
+                  child: Container(
+                    height: 48,
+                    decoration: BoxDecoration(
+                      color: isDark ? Colors.white.withOpacity(0.08) : Colors.white,
+                      borderRadius: BorderRadius.circular(24),
+                      border: Border.all(
+                        color: isDark ? Colors.white.withOpacity(0.18) : const Color(0xFFD4C1FF),
+                        width: 1.3,
+                      ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(isDark ? 0.2 : 0.05),
+                          blurRadius: 10,
+                          offset: const Offset(0, 3),
+                        ),
+                      ],
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(
+                          Icons.visibility_rounded,
+                          size: 17,
+                          color: isDark ? Colors.white : palette.primary,
+                        ),
+                        const SizedBox(width: 8),
+                        Text(
+                          'Visitor View',
+                          style: TextStyle(
+                            color: isDark ? Colors.white : palette.primary,
+                            fontSize: 14,
+                            fontWeight: FontWeight.w900,
+                            letterSpacing: 0.2,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+
+          // If not verified, add a subtle VIP banner to get verified
+          if (!user.isVerified) ...[
+            const SizedBox(height: 12),
+            _BouncingButton(
+              onTap: () {
+                HapticFeedback.lightImpact();
+                context.push('/verification');
+              },
+              child: Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 14),
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: [
+                      const Color(0xFF6C63FF).withOpacity(0.15),
+                      const Color(0xFFFF6584).withOpacity(0.12),
+                    ],
+                  ),
+                  borderRadius: BorderRadius.circular(18),
+                  border: Border.all(
+                    color: const Color(0xFF6C63FF).withOpacity(0.35),
+                    width: 1.2,
+                  ),
+                ),
+                child: const Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Text('🛡️', style: TextStyle(fontSize: 16)),
+                    SizedBox(width: 8),
+                    Text(
+                      'Get Verified Profile Badge',
+                      style: TextStyle(
+                        color: Color(0xFFB06EF5),
+                        fontWeight: FontWeight.w800,
+                        fontSize: 13,
+                      ),
+                    ),
+                    SizedBox(width: 5),
+                    Icon(Icons.arrow_forward_ios_rounded, size: 12, color: Color(0xFFB06EF5)),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  // ─── GLASS CIRCLE BUTTON ───────────────────────────────────────────────────
+  Widget _buildGlassCircleBtn({
     required IconData icon,
-    required List<Color> gradientColors,
     required VoidCallback onTap,
     required bool isDark,
   }) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        width: 38,
-        height: 38,
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(14),
-          gradient: LinearGradient(colors: gradientColors),
-          border: Border.all(
-            color: Colors.white.withOpacity(0.25),
-            width: 1.0,
-          ),
-          boxShadow: [
-            BoxShadow(
-              color: gradientColors.first.withOpacity(0.3),
-              blurRadius: 8,
-              offset: const Offset(0, 3),
+    return _BouncingButton(
+      onTap: () {
+        HapticFeedback.lightImpact();
+        onTap();
+      },
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(16),
+        child: BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+          child: Container(
+            width: 40,
+            height: 40,
+            decoration: BoxDecoration(
+              color: isDark ? Colors.white.withOpacity(0.08) : Colors.black.withOpacity(0.04),
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(
+                color: isDark ? Colors.white.withOpacity(0.14) : Colors.black.withOpacity(0.08),
+                width: 1.2,
+              ),
             ),
-          ],
+            child: Icon(
+              icon,
+              size: 19,
+              color: isDark ? Colors.white : const Color(0xFF1E1B2E),
+            ),
+          ),
         ),
-        child: Icon(icon, size: 18, color: Colors.white),
       ),
     );
   }
@@ -413,66 +596,101 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
     );
   }
 
-  // ─── STATS CARD ─────────────────────────────────────────────────────────────
+  // ─── 3D GLASS STATS ROW ─────────────────────────────────────────────────────
   Widget _buildStats(UserModel user, int postCount, BuildContext context, bool isDark, AppPalette palette) {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 24, 20, 10),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(26),
-        child: BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: 16, sigmaY: 16),
-          child: Container(
-            padding: const EdgeInsets.symmetric(vertical: 18, horizontal: 12),
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: isDark
-                    ? [const Color(0xFF2A1B40).withOpacity(0.7), const Color(0xFF161026).withOpacity(0.7)]
-                    : [Colors.white.withOpacity(0.9), const Color(0xFFF3E8FF).withOpacity(0.8)],
-              ),
-              borderRadius: BorderRadius.circular(26),
-              border: Border.all(
-                color: palette.primary.withOpacity(isDark ? 0.35 : 0.2),
-                width: 1.3,
-              ),
-              boxShadow: [
-                BoxShadow(
-                  color: palette.primary.withOpacity(isDark ? 0.2 : 0.08),
-                  blurRadius: 20,
-                  spreadRadius: 1,
-                  offset: const Offset(0, 6),
-                ),
-              ],
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+      child: Row(
+        children: [
+          _buildStatCard(
+            value: '${user.followers.length}',
+            label: 'Followers',
+            icon: Icons.people_alt_rounded,
+            gradientColors: const [Color(0xFF9B5DE5), Color(0xFF6C63FF)],
+            isDark: isDark,
+          ),
+          const SizedBox(width: 10),
+          _buildStatCard(
+            value: '${user.likedBy.length}',
+            label: 'Likes',
+            icon: Icons.favorite_rounded,
+            gradientColors: const [Color(0xFFFF416C), Color(0xFFFF4B2B)],
+            isDark: isDark,
+          ),
+          const SizedBox(width: 10),
+          _buildStatCard(
+            value: '$postCount',
+            label: 'Posts',
+            icon: Icons.photo_library_rounded,
+            gradientColors: const [Color(0xFF36D1DC), Color(0xFF5B86E5)],
+            isDark: isDark,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildStatCard({
+    required String value,
+    required String label,
+    required IconData icon,
+    required List<Color> gradientColors,
+    required bool isDark,
+  }) {
+    return Expanded(
+      child: _BouncingButton(
+        onTap: () => HapticFeedback.lightImpact(),
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 8),
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              colors: gradientColors.map((c) => c.withOpacity(isDark ? 0.22 : 0.12)).toList(),
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
             ),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-              children: [
-                _StatItem(
-                  icon: Icons.people_alt_rounded,
-                  label: 'Followers',
-                  value: '${user.followers.length}',
-                  color: palette.primary,
-                  isDark: isDark,
-                ),
-                _Divider(isDark: isDark),
-                _StatItem(
-                  icon: Icons.favorite_rounded,
-                  label: 'Likes',
-                  value: '${user.likedBy.length}',
-                  color: palette.secondary,
-                  isDark: isDark,
-                ),
-                _Divider(isDark: isDark),
-                _StatItem(
-                  icon: Icons.photo_library_rounded,
-                  label: 'Posts',
-                  value: '$postCount',
-                  color: palette.accent,
-                  isDark: isDark,
-                ),
-              ],
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(
+              color: gradientColors.first.withOpacity(isDark ? 0.35 : 0.25),
+              width: 1.3,
             ),
+            boxShadow: [
+              BoxShadow(
+                color: gradientColors.first.withOpacity(isDark ? 0.15 : 0.06),
+                blurRadius: 14,
+                offset: const Offset(0, 4),
+              ),
+            ],
+          ),
+          child: Column(
+            children: [
+              Icon(icon, size: 16, color: gradientColors.first),
+              const SizedBox(height: 6),
+              ShaderMask(
+                shaderCallback: (b) => LinearGradient(
+                  colors: gradientColors,
+                ).createShader(b),
+                child: Text(
+                  value,
+                  style: const TextStyle(
+                    fontSize: 22,
+                    fontWeight: FontWeight.w900,
+                    color: Colors.white,
+                    letterSpacing: -0.5,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 3),
+              Text(
+                label,
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w700,
+                  color: isDark ? Colors.white60 : Colors.black54,
+                  letterSpacing: 0.2,
+                ),
+                textAlign: TextAlign.center,
+              ),
+            ],
           ),
         ),
       ),
@@ -504,207 +722,349 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
         final docs = uniqueVisitors.values.toList();
 
         return Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(26),
-            child: BackdropFilter(
-              filter: ImageFilter.blur(sigmaX: 16, sigmaY: 16),
-              child: Container(
-                padding: const EdgeInsets.all(20),
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    colors: isDark
-                        ? [const Color(0xFF231638).withOpacity(0.85), const Color(0xFF140C24).withOpacity(0.85)]
-                        : [Colors.white.withOpacity(0.95), const Color(0xFFF3E8FF).withOpacity(0.9)],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                  ),
-                  borderRadius: BorderRadius.circular(26),
-                  border: Border.all(
-                    color: palette.primary.withOpacity(isDark ? 0.35 : 0.2),
-                    width: 1.3,
-                  ),
-                  boxShadow: [
-                    BoxShadow(
-                      color: palette.primary.withOpacity(isDark ? 0.18 : 0.08),
-                      blurRadius: 20,
-                      spreadRadius: 0,
-                    ),
-                  ],
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          child: Container(
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: isDark
+                    ? [const Color(0xFF1E1433).withOpacity(0.92), const Color(0xFF120B20).withOpacity(0.92)]
+                    : [Colors.white.withOpacity(0.95), const Color(0xFFF6F0FF).withOpacity(0.95)],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+              borderRadius: BorderRadius.circular(28),
+              border: Border.all(
+                color: isDark ? const Color(0xFF9B5DE5).withOpacity(0.3) : const Color(0xFFD4C1FF).withOpacity(0.7),
+                width: 1.3,
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: const Color(0xFF9B5DE5).withOpacity(isDark ? 0.16 : 0.08),
+                  blurRadius: 24,
+                  offset: const Offset(0, 8),
                 ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+              ],
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Header row
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Row(
-                          children: [
-                            Container(
-                              padding: const EdgeInsets.all(7),
-                              decoration: BoxDecoration(
-                                gradient: LinearGradient(
-                                  colors: [palette.primary, palette.secondary],
-                                ),
-                                borderRadius: BorderRadius.circular(10),
-                              ),
-                              child: const Text('👻', style: TextStyle(fontSize: 14)),
+                        Container(
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            gradient: const LinearGradient(
+                              colors: [Color(0xFF9B5DE5), Color(0xFFFF5069)],
+                              begin: Alignment.topLeft,
+                              end: Alignment.bottomRight,
                             ),
-                            const SizedBox(width: 10),
-                            Text(
-                              'Profile Visitors',
-                              style: TextStyle(
-                                color: isDark ? Colors.white : Colors.black87,
-                                fontSize: 16.5,
-                                fontWeight: FontWeight.w900,
-                                letterSpacing: -0.3,
-                              ),
-                            ),
-                            if (docs.isNotEmpty) ...[
-                              const SizedBox(width: 8),
-                              Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                                decoration: BoxDecoration(
-                                  gradient: LinearGradient(
-                                    colors: [palette.primary, palette.secondary],
-                                  ),
-                                  borderRadius: BorderRadius.circular(12),
-                                ),
-                                child: Text(
-                                  '${docs.length}',
-                                  style: const TextStyle(
-                                    color: Colors.white,
-                                    fontSize: 11,
-                                    fontWeight: FontWeight.w900,
-                                  ),
-                                ),
+                            borderRadius: BorderRadius.circular(12),
+                            boxShadow: [
+                              BoxShadow(
+                                color: const Color(0xFF9B5DE5).withOpacity(0.35),
+                                blurRadius: 10,
+                                offset: const Offset(0, 3),
                               ),
                             ],
-                          ],
+                          ),
+                          child: const Text('👻', style: TextStyle(fontSize: 16)),
                         ),
-                        IconButton(
-                          icon: Icon(Icons.arrow_forward_ios_rounded, size: 15, color: isDark ? Colors.white60 : Colors.black54),
-                          onPressed: () => context.push('/profile/visitors'),
-                          padding: EdgeInsets.zero,
-                          constraints: const BoxConstraints(),
+                        const SizedBox(width: 12),
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                Text(
+                                  'Profile Visitors',
+                                  style: TextStyle(
+                                    color: isDark ? Colors.white : Colors.black87,
+                                    fontSize: 17,
+                                    fontWeight: FontWeight.w900,
+                                    letterSpacing: -0.3,
+                                  ),
+                                ),
+                                if (docs.isNotEmpty) ...[
+                                  const SizedBox(width: 8),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                    decoration: BoxDecoration(
+                                      gradient: const LinearGradient(
+                                        colors: [Color(0xFF9B5DE5), Color(0xFFFF5069)],
+                                      ),
+                                      borderRadius: BorderRadius.circular(10),
+                                    ),
+                                    child: Text(
+                                      '${docs.length}',
+                                      style: const TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 11,
+                                        fontWeight: FontWeight.w900,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ],
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              docs.isEmpty ? 'No recent visits' : 'Who checked out your vibe',
+                              style: TextStyle(
+                                color: isDark ? Colors.white60 : Colors.black54,
+                                fontSize: 11.5,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ],
                         ),
                       ],
                     ),
-                    const SizedBox(height: 14),
+                    _BouncingButton(
+                      onTap: () {
+                        HapticFeedback.lightImpact();
+                        context.push('/profile/visitors');
+                      },
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                        decoration: BoxDecoration(
+                          color: isDark ? Colors.white.withOpacity(0.06) : Colors.black.withOpacity(0.04),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(
+                            color: isDark ? Colors.white.withOpacity(0.1) : Colors.black.withOpacity(0.06),
+                          ),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              'See all',
+                              style: TextStyle(
+                                fontSize: 11.5,
+                                fontWeight: FontWeight.w800,
+                                color: isDark ? const Color(0xFFC4B5FD) : const Color(0xFF7C3AED),
+                              ),
+                            ),
+                            const SizedBox(width: 3),
+                            Icon(
+                              Icons.arrow_forward_ios_rounded,
+                              size: 11,
+                              color: isDark ? const Color(0xFFC4B5FD) : const Color(0xFF7C3AED),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 16),
 
-                    if (docs.isEmpty)
-                      Center(
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(vertical: 14),
-                          child: Text(
-                            'No profile views yet! 👻\n(Views by other users will appear here)',
+                if (docs.isEmpty)
+                  Center(
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                      child: Column(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(14),
+                            decoration: BoxDecoration(
+                              color: isDark ? Colors.white.withOpacity(0.04) : Colors.black.withOpacity(0.03),
+                              shape: BoxShape.circle,
+                            ),
+                            child: const Text('✨', style: TextStyle(fontSize: 26)),
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            'No profile views yet',
+                            style: TextStyle(
+                              color: isDark ? Colors.white70 : Colors.black87,
+                              fontSize: 13.5,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                          const SizedBox(height: 3),
+                          Text(
+                            'When someone views your profile, they will appear here.',
                             textAlign: TextAlign.center,
                             style: TextStyle(
-                              color: isDark ? Colors.white60 : Colors.black54,
-                              fontSize: 13,
-                              height: 1.4,
+                              color: isDark ? Colors.white38 : Colors.black45,
+                              fontSize: 11.5,
                               fontWeight: FontWeight.w500,
                             ),
                           ),
-                        ),
-                      )
-                    else
-                      ListView.builder(
-                        shrinkWrap: true,
-                        physics: const NeverScrollableScrollPhysics(),
-                        padding: EdgeInsets.zero,
-                        itemCount: docs.length > 3 ? 3 : docs.length,
-                        itemBuilder: (context, index) {
-                          final data = docs[index].data();
-                          final visitorId = data['viewerId'] as String;
-                          final visitorName = data['viewerName'] as String? ?? 'User';
-                          final visitorAvatar = data['viewerAvatar'] as String?;
+                        ],
+                      ),
+                    ),
+                  )
+                else
+                  ListView.separated(
+                    shrinkWrap: true,
+                    physics: const NeverScrollableScrollPhysics(),
+                    padding: EdgeInsets.zero,
+                    itemCount: docs.length > 3 ? 3 : docs.length,
+                    separatorBuilder: (_, __) => const SizedBox(height: 10),
+                    itemBuilder: (context, index) {
+                      final data = docs[index].data();
+                      final visitorId = data['viewerId'] as String;
+                      final visitorName = data['viewerName'] as String? ?? 'User';
+                      final visitorAvatar = data['viewerAvatar'] as String?;
 
-                          final isUnlocked = currentUser.hasActiveSubscription || currentUser.unlockedVisitors.contains(visitorId);
+                      final isUnlocked = currentUser.hasActiveSubscription || currentUser.unlockedVisitors.contains(visitorId);
 
-                          return Padding(
-                            padding: const EdgeInsets.only(bottom: 10),
-                            child: InkWell(
-                              borderRadius: BorderRadius.circular(16),
-                              onTap: (isUnlocked && visitorId.isNotEmpty)
-                                  ? () => ProfileChoiceSheet.navigateToProfile(context, ref, visitorId)
-                                  : null,
-                              child: Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                                decoration: BoxDecoration(
-                                  color: isDark ? Colors.white.withOpacity(0.04) : Colors.black.withOpacity(0.03),
-                                  borderRadius: BorderRadius.circular(16),
-                                  border: Border.all(
-                                    color: isDark ? Colors.white.withOpacity(0.08) : Colors.black.withOpacity(0.05),
+                      return _BouncingButton(
+                        onTap: (isUnlocked && visitorId.isNotEmpty)
+                            ? () {
+                                HapticFeedback.lightImpact();
+                                ProfileChoiceSheet.navigateToProfile(context, ref, visitorId);
+                              }
+                            : null,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                          decoration: BoxDecoration(
+                            color: isDark ? const Color(0xFF160F26).withOpacity(0.65) : Colors.white.withOpacity(0.7),
+                            borderRadius: BorderRadius.circular(20),
+                            border: Border.all(
+                              color: isDark ? const Color(0xFF9B5DE5).withOpacity(0.18) : const Color(0xFFE9D5FF).withOpacity(0.6),
+                              width: 1,
+                            ),
+                          ),
+                          child: Row(
+                            children: [
+                              // Avatar
+                              if (isUnlocked)
+                                Container(
+                                  width: 44,
+                                  height: 44,
+                                  decoration: BoxDecoration(
+                                    shape: BoxShape.circle,
+                                    border: Border.all(
+                                      color: const Color(0xFF9B5DE5).withOpacity(0.4),
+                                      width: 1.5,
+                                    ),
+                                  ),
+                                  child: ClipOval(
+                                    child: Image.network(
+                                      ImageUrlHelper.proxy(visitorAvatar ?? 'https://ui-avatars.com/api/?name=${Uri.encodeComponent(visitorName)}'),
+                                      fit: BoxFit.cover,
+                                      errorBuilder: (_, __, ___) => const Icon(Icons.person, color: Colors.white60, size: 22),
+                                    ),
+                                  ),
+                                )
+                              else
+                                Container(
+                                  width: 44,
+                                  height: 44,
+                                  decoration: BoxDecoration(
+                                    shape: BoxShape.circle,
+                                    gradient: const RadialGradient(
+                                      colors: [Color(0xFF7928CA), Color(0xFF3B0764)],
+                                    ),
+                                    border: Border.all(
+                                      color: const Color(0xFFFF5069).withOpacity(0.4),
+                                      width: 1.5,
+                                    ),
+                                    boxShadow: [
+                                      BoxShadow(
+                                        color: const Color(0xFF7928CA).withOpacity(0.35),
+                                        blurRadius: 8,
+                                      ),
+                                    ],
+                                  ),
+                                  child: const Center(
+                                    child: Text('👻', style: TextStyle(fontSize: 20)),
                                   ),
                                 ),
-                                child: Row(
+                              const SizedBox(width: 12),
+                              // Info
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
-                                    CircleAvatar(
-                                      radius: 19,
-                                      backgroundImage: NetworkImage(
-                                        isUnlocked
-                                            ? (visitorAvatar ?? 'https://ui-avatars.com/api/?name=${Uri.encodeComponent(visitorName)}')
-                                            : 'https://ui-avatars.com/api/?name=%3F&background=3B0764&color=fff',
+                                    Text(
+                                      isUnlocked ? visitorName : 'Ghost Visitor 👻',
+                                      style: TextStyle(
+                                        color: isDark ? Colors.white : Colors.black87,
+                                        fontSize: 14,
+                                        fontWeight: FontWeight.w800,
                                       ),
                                     ),
-                                    const SizedBox(width: 12),
-                                    Expanded(
-                                      child: Text(
-                                        isUnlocked ? visitorName : 'Ghost Visitor 👻',
-                                        style: TextStyle(
-                                          color: isDark ? Colors.white : Colors.black87,
-                                          fontSize: 13.5,
-                                          fontWeight: FontWeight.w800,
-                                        ),
+                                    const SizedBox(height: 2),
+                                    Text(
+                                      isUnlocked ? 'View profile' : 'Secret admirer • Tap to reveal',
+                                      style: TextStyle(
+                                        color: isUnlocked
+                                            ? (isDark ? const Color(0xFFC4B5FD) : const Color(0xFF7C3AED))
+                                            : (isDark ? Colors.white54 : Colors.black45),
+                                        fontSize: 11,
+                                        fontWeight: FontWeight.w600,
                                       ),
                                     ),
-                                    if (!isUnlocked)
-                                      GestureDetector(
-                                        onTap: () => _unlockGhostView(context, ref, currentUser, visitorId),
-                                        child: Container(
-                                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                                          decoration: BoxDecoration(
-                                            gradient: LinearGradient(
-                                              colors: [palette.primary, palette.secondary],
-                                            ),
-                                            borderRadius: BorderRadius.circular(12),
-                                            boxShadow: [
-                                              BoxShadow(
-                                                color: palette.primary.withOpacity(0.3),
-                                                blurRadius: 8,
-                                              ),
-                                            ],
-                                          ),
-                                          child: const Row(
-                                            mainAxisSize: MainAxisSize.min,
-                                            children: [
-                                              Icon(Icons.lock_open_rounded, size: 13, color: Colors.white),
-                                              SizedBox(width: 4),
-                                              Text(
-                                                'Unlock',
-                                                style: TextStyle(
-                                                  fontSize: 11.5,
-                                                  fontWeight: FontWeight.w900,
-                                                  color: Colors.white,
-                                                ),
-                                              ),
-                                            ],
-                                          ),
-                                        ),
-                                      )
-                                    else
-                                      Icon(Icons.arrow_forward_ios_rounded, color: isDark ? Colors.white38 : Colors.black38, size: 13),
                                   ],
                                 ),
                               ),
-                            ),
-                          );
-                        },
-                      ),
-                  ],
-                ),
-              ),
+                              // Action button
+                              if (!isUnlocked)
+                                _BouncingButton(
+                                  onTap: () {
+                                    HapticFeedback.lightImpact();
+                                    _unlockGhostView(context, ref, currentUser, visitorId);
+                                  },
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                                    decoration: BoxDecoration(
+                                      gradient: const LinearGradient(
+                                        colors: [Color(0xFFFF5069), Color(0xFF9B5DE5)],
+                                      ),
+                                      borderRadius: BorderRadius.circular(16),
+                                      boxShadow: [
+                                        BoxShadow(
+                                          color: const Color(0xFFFF5069).withOpacity(0.35),
+                                          blurRadius: 8,
+                                          offset: const Offset(0, 3),
+                                        ),
+                                      ],
+                                    ),
+                                    child: const Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Icon(Icons.lock_open_rounded, size: 12, color: Colors.white),
+                                        SizedBox(width: 5),
+                                        Text(
+                                          'Unlock',
+                                          style: TextStyle(
+                                            fontSize: 12,
+                                            fontWeight: FontWeight.w900,
+                                            color: Colors.white,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                )
+                              else
+                                Container(
+                                  padding: const EdgeInsets.all(6),
+                                  decoration: BoxDecoration(
+                                    color: isDark ? Colors.white.withOpacity(0.06) : Colors.black.withOpacity(0.04),
+                                    shape: BoxShape.circle,
+                                  ),
+                                  child: Icon(
+                                    Icons.arrow_forward_ios_rounded,
+                                    size: 12,
+                                    color: isDark ? Colors.white60 : Colors.black45,
+                                  ),
+                                ),
+                            ],
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+              ],
             ),
           ),
         );
@@ -741,58 +1101,68 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
     if (user.bio == null || user.bio!.trim().isEmpty) return const SizedBox.shrink();
 
     return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(22),
-        child: Container(
-          width: double.infinity,
-          padding: const EdgeInsets.all(18),
-          decoration: BoxDecoration(
-            color: isDark ? Colors.white.withOpacity(0.05) : Colors.white.withOpacity(0.8),
-            borderRadius: BorderRadius.circular(22),
-            border: Border.all(
-              color: isDark ? Colors.white.withOpacity(0.1) : Colors.black.withOpacity(0.06),
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(
+          color: isDark ? const Color(0xFF161026).withOpacity(0.85) : Colors.white.withOpacity(0.92),
+          borderRadius: BorderRadius.circular(26),
+          border: Border.all(
+            color: isDark ? const Color(0xFF9B5DE5).withOpacity(0.24) : const Color(0xFFD4C1FF).withOpacity(0.7),
+            width: 1.2,
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: const Color(0xFF9B5DE5).withOpacity(isDark ? 0.12 : 0.05),
+              blurRadius: 18,
+              offset: const Offset(0, 4),
             ),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Container(
-                    width: 3,
-                    height: 14,
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        colors: [palette.primary, palette.secondary],
+          ],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  decoration: BoxDecoration(
+                    gradient: const LinearGradient(
+                      colors: [Color(0xFF9B5DE5), Color(0xFFFF5069)],
+                    ),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: const Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        'ABOUT ME',
+                        style: TextStyle(
+                          fontSize: 10.5,
+                          fontWeight: FontWeight.w900,
+                          color: Colors.white,
+                          letterSpacing: 1.0,
+                        ),
                       ),
-                      borderRadius: BorderRadius.circular(2),
-                    ),
+                      SizedBox(width: 4),
+                      Text('✨', style: TextStyle(fontSize: 10)),
+                    ],
                   ),
-                  const SizedBox(width: 8),
-                  Text(
-                    'ABOUT ME',
-                    style: TextStyle(
-                      fontSize: 11,
-                      fontWeight: FontWeight.w900,
-                      color: isDark ? palette.accent : palette.primary,
-                      letterSpacing: 1.1,
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 10),
-              Text(
-                user.bio!,
-                style: TextStyle(
-                  fontSize: 14.5,
-                  height: 1.5,
-                  fontWeight: FontWeight.w600,
-                  color: isDark ? Colors.white.withOpacity(0.92) : Colors.black87,
                 ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            Text(
+              user.bio!,
+              style: TextStyle(
+                fontSize: 15,
+                height: 1.6,
+                fontWeight: FontWeight.w600,
+                color: isDark ? Colors.white.withOpacity(0.92) : const Color(0xFF1E293B),
               ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );
@@ -801,37 +1171,61 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
   Widget _buildInterests(UserModel user, BuildContext context, bool isDark, AppPalette palette) {
     if (user.interests == null || user.interests!.isEmpty) return const SizedBox.shrink();
 
+    // Vibrant curated color palettes for individual interest chips
+    final chipGradients = [
+      const [Color(0xFF9B5DE5), Color(0xFF7928CA)], // Purple
+      const [Color(0xFFFF5069), Color(0xFFFF8E53)], // Coral
+      const [Color(0xFF36D1DC), Color(0xFF5B86E5)], // Cyan-Blue
+      const [Color(0xFF00F260), Color(0xFF0575E6)], // Green-Teal
+      const [Color(0xFFFF007F), Color(0xFF7928CA)], // Neon Pink
+      const [Color(0xFFF7971E), Color(0xFFFFD200)], // Gold-Orange
+    ];
+
     return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 14, 20, 10),
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
       child: Wrap(
         spacing: 8,
         runSpacing: 10,
-        children: user.interests!.map((interest) {
-          final label = interest.toString();
+        children: user.interests!.asMap().entries.map((entry) {
+          final idx = entry.key;
+          final label = entry.value.toString();
           final icon = _getInterestIcon(label);
-          final color = palette.primary;
+          final grad = chipGradients[idx % chipGradients.length];
 
           return Container(
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
             decoration: BoxDecoration(
-              color: color.withOpacity(isDark ? 0.16 : 0.08),
-              borderRadius: BorderRadius.circular(18),
+              color: isDark ? grad[0].withOpacity(0.14) : grad[0].withOpacity(0.08),
+              borderRadius: BorderRadius.circular(22),
               border: Border.all(
-                color: color.withOpacity(isDark ? 0.35 : 0.2),
-                width: 1.2,
+                color: grad[0].withOpacity(isDark ? 0.38 : 0.25),
+                width: 1.3,
               ),
+              boxShadow: [
+                BoxShadow(
+                  color: grad[0].withOpacity(isDark ? 0.12 : 0.04),
+                  blurRadius: 8,
+                ),
+              ],
             ),
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Text(icon, style: const TextStyle(fontSize: 13)),
-                const SizedBox(width: 6),
+                Container(
+                  padding: const EdgeInsets.all(3),
+                  decoration: BoxDecoration(
+                    color: isDark ? Colors.black.withOpacity(0.2) : Colors.white.withOpacity(0.6),
+                    shape: BoxShape.circle,
+                  ),
+                  child: Text(icon, style: const TextStyle(fontSize: 13)),
+                ),
+                const SizedBox(width: 7),
                 Text(
                   label,
                   style: TextStyle(
-                    fontSize: 12.5,
+                    fontSize: 13,
                     fontWeight: FontWeight.w800,
-                    color: isDark ? Colors.white : palette.primary,
+                    color: isDark ? Colors.white : grad[0],
                   ),
                 ),
               ],
@@ -845,60 +1239,76 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
   String _getInterestIcon(String label) {
     final l = label.toLowerCase();
     if (l.contains('music')) return '🎵';
-    if (l.contains('movie')) return '🎬';
-    if (l.contains('book')) return '📚';
+    if (l.contains('movie') || l.contains('film')) return '🎬';
+    if (l.contains('book') || l.contains('read')) return '📚';
     if (l.contains('travel')) return '✈️';
-    if (l.contains('food')) return '🍔';
-    if (l.contains('fitness')) return '🏋️';
+    if (l.contains('food') || l.contains('cook')) return '🍔';
+    if (l.contains('fitness') || l.contains('gym')) return '🏋️';
     if (l.contains('game') || l.contains('gaming')) return '🎮';
     if (l.contains('pet') || l.contains('cat') || l.contains('dog')) return '🐾';
     if (l.contains('dance')) return '💃';
-    if (l.contains('art')) return '🎨';
+    if (l.contains('art') || l.contains('draw')) return '🎨';
+    if (l.contains('photo')) return '📷';
+    if (l.contains('tech') || l.contains('code')) return '💻';
     return '✨';
   }
 
   Widget _buildGridHeader(BuildContext context, bool isDark, int count, AppPalette palette) {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 24, 20, 14),
+      padding: const EdgeInsets.fromLTRB(16, 20, 16, 12),
       child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Container(
-            padding: const EdgeInsets.all(7),
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                colors: [palette.primary, palette.secondary],
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(
+                    colors: [Color(0xFF36D1DC), Color(0xFF5B86E5)],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  ),
+                  borderRadius: BorderRadius.circular(12),
+                  boxShadow: [
+                    BoxShadow(
+                      color: const Color(0xFF36D1DC).withOpacity(0.35),
+                      blurRadius: 10,
+                      offset: const Offset(0, 3),
+                    ),
+                  ],
+                ),
+                child: const Icon(Icons.photo_library_rounded, size: 16, color: Colors.white),
               ),
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: const Icon(Icons.photo_library_rounded, size: 15, color: Colors.white),
-          ),
-          const SizedBox(width: 10),
-          Text(
-            'Photos & Videos',
-            style: TextStyle(
-              fontSize: 17,
-              fontWeight: FontWeight.w900,
-              color: isDark ? Colors.white : Colors.black87,
-              letterSpacing: -0.3,
-            ),
-          ),
-          const SizedBox(width: 8),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 3),
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                colors: [palette.primary, palette.secondary],
+              const SizedBox(width: 10),
+              Text(
+                'Photos & Videos',
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w900,
+                  color: isDark ? Colors.white : Colors.black87,
+                  letterSpacing: -0.4,
+                ),
               ),
-              borderRadius: BorderRadius.circular(20),
-            ),
-            child: Text(
-              '$count',
-              style: const TextStyle(
-                fontSize: 11,
-                fontWeight: FontWeight.w900,
-                color: Colors.white,
+              const SizedBox(width: 8),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 3),
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(
+                    colors: [Color(0xFF36D1DC), Color(0xFF5B86E5)],
+                  ),
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Text(
+                  '$count',
+                  style: const TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w900,
+                    color: Colors.white,
+                  ),
+                ),
               ),
-            ),
+            ],
           ),
         ],
       ),
@@ -909,27 +1319,44 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
   SliverPadding _buildPostsGrid(List<PostModel> posts, BuildContext context, bool isDark) {
     if (posts.isEmpty) {
       return SliverPadding(
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
         sliver: SliverToBoxAdapter(
           child: Container(
-            padding: const EdgeInsets.all(28),
+            padding: const EdgeInsets.all(32),
             decoration: BoxDecoration(
-              color: isDark ? Colors.white.withOpacity(0.04) : Colors.black.withOpacity(0.03),
-              borderRadius: BorderRadius.circular(22),
+              color: isDark ? const Color(0xFF161026).withOpacity(0.6) : Colors.black.withOpacity(0.02),
+              borderRadius: BorderRadius.circular(26),
               border: Border.all(
                 color: isDark ? Colors.white.withOpacity(0.08) : Colors.black.withOpacity(0.05),
               ),
             ),
             child: Column(
               children: [
-                const Icon(Icons.photo_camera_outlined, size: 40, color: Colors.white38),
-                const SizedBox(height: 10),
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: isDark ? Colors.white.withOpacity(0.05) : Colors.black.withOpacity(0.03),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(Icons.photo_camera_outlined, size: 36, color: Colors.white54),
+                ),
+                const SizedBox(height: 12),
                 Text(
-                  'No photos uploaded yet 📸',
+                  'No moments shared yet 📸',
                   style: TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w700,
-                    color: isDark ? Colors.white60 : Colors.black54,
+                    fontSize: 14.5,
+                    fontWeight: FontWeight.w800,
+                    color: isDark ? Colors.white70 : Colors.black87,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  'Your posted photos and videos will appear in this showcase grid.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w500,
+                    color: isDark ? Colors.white38 : Colors.black45,
                   ),
                 ),
               ],
@@ -940,7 +1367,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
     }
 
     return SliverPadding(
-      padding: const EdgeInsets.symmetric(horizontal: 20),
+      padding: const EdgeInsets.symmetric(horizontal: 16),
       sliver: SliverGrid(
         gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
           crossAxisCount: 2,
@@ -953,17 +1380,27 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
             final post = posts[index];
             final mediaUrl = post.imageUrl ?? '';
 
-            return GestureDetector(
-              onTap: () => _showPostDetail(context, post, posts),
+            return _BouncingButton(
+              onTap: () {
+                HapticFeedback.lightImpact();
+                _showPostDetail(context, post, posts);
+              },
               child: ClipRRect(
-                borderRadius: BorderRadius.circular(20),
+                borderRadius: BorderRadius.circular(22),
                 child: Container(
                   decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(20),
+                    borderRadius: BorderRadius.circular(22),
                     border: Border.all(
-                      color: isDark ? Colors.white.withOpacity(0.12) : Colors.black.withOpacity(0.08),
+                      color: isDark ? Colors.white.withOpacity(0.14) : Colors.black.withOpacity(0.08),
                       width: 1.2,
                     ),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(isDark ? 0.35 : 0.06),
+                        blurRadius: 10,
+                        offset: const Offset(0, 4),
+                      ),
+                    ],
                   ),
                   child: Stack(
                     fit: StackFit.expand,
@@ -1001,22 +1438,22 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
                         left: 0,
                         right: 0,
                         bottom: 0,
-                        height: 50,
+                        height: 54,
                         child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                            decoration: BoxDecoration(
-                              gradient: LinearGradient(
-                                begin: Alignment.topCenter,
-                                end: Alignment.bottomCenter,
-                                colors: [Colors.transparent, Colors.black.withOpacity(0.67)],
-                              ),
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                          decoration: BoxDecoration(
+                            gradient: LinearGradient(
+                              begin: Alignment.topCenter,
+                              end: Alignment.bottomCenter,
+                              colors: [Colors.transparent, Colors.black.withOpacity(0.75)],
                             ),
+                          ),
                           child: Row(
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
                               Row(
                                 children: [
-                                  const Icon(Icons.favorite_rounded, size: 14, color: Colors.redAccent),
+                                  const Icon(Icons.favorite_rounded, size: 14, color: Color(0xFFFF416C)),
                                   const SizedBox(width: 4),
                                   Text(
                                     '${post.likes.length}',
@@ -1334,6 +1771,65 @@ class _SettingsSheet extends StatelessWidget {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+// ─── BOUNCING BUTTON ─────────────────────────────────────────────────────────
+class _BouncingButton extends StatefulWidget {
+  final Widget child;
+  final VoidCallback? onTap;
+
+  const _BouncingButton({required this.child, this.onTap});
+
+  @override
+  State<_BouncingButton> createState() => _BouncingButtonState();
+}
+
+class _BouncingButtonState extends State<_BouncingButton> with SingleTickerProviderStateMixin {
+  late final AnimationController _ctrl;
+  late final Animation<double> _scale;
+
+  @override
+  void initState() {
+    super.initState();
+    _ctrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 90),
+      reverseDuration: const Duration(milliseconds: 140),
+    );
+    _scale = Tween<double>(begin: 1.0, end: 0.94).animate(
+      CurvedAnimation(parent: _ctrl, curve: Curves.easeInOut),
+    );
+  }
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (widget.onTap == null) {
+      return widget.child;
+    }
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTapDown: (_) => _ctrl.forward(),
+      onTapUp: (_) {
+        _ctrl.reverse();
+        widget.onTap?.call();
+      },
+      onTapCancel: () => _ctrl.reverse(),
+      child: AnimatedBuilder(
+        animation: _scale,
+        builder: (context, child) => Transform.scale(
+          scale: _scale.value,
+          child: child,
+        ),
+        child: widget.child,
       ),
     );
   }

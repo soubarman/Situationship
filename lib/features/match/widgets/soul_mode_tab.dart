@@ -11,7 +11,7 @@ import '../../../core/providers/app_state_provider.dart';
 import '../../../core/providers/firestore_provider.dart';
 import '../../../core/utils/heart_queue_engine.dart';
 
-// ─── Vibe helpers (same as discover_tab) ─────────────────────────────────────
+// ─── Vibe helpers ────────────────────────────────────────────────────────────
 
 const _vibeLabels = [
   'Soft Chaos',
@@ -57,33 +57,39 @@ class SoulModeTab extends ConsumerStatefulWidget {
 }
 
 class SoulModeTabState extends ConsumerState<SoulModeTab>
-    with SingleTickerProviderStateMixin {
+    with TickerProviderStateMixin {
   int _currentIndex = 0;
   bool _isRevealed = false;
   String? _lastReaction; // 'too_hot' | 'crushing' | 'dm_me'
   bool _isSending = false;
-  // Track whether we're in the 1.4s window after a reaction (before _advance)
   bool _pendingAdvance = false;
 
   late AnimationController _revealController;
   late Animation<double> _revealAnim;
+  late AnimationController _ambientPulseCtrl;
 
   @override
   void initState() {
     super.initState();
     _revealController = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 500),
+      duration: const Duration(milliseconds: 650),
     );
     _revealAnim = CurvedAnimation(
       parent: _revealController,
       curve: Curves.easeOutCubic,
     );
+
+    _ambientPulseCtrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 3200),
+    )..repeat(reverse: true);
   }
 
   @override
   void dispose() {
     _revealController.dispose();
+    _ambientPulseCtrl.dispose();
     super.dispose();
   }
 
@@ -142,7 +148,7 @@ class SoulModeTabState extends ConsumerState<SoulModeTab>
         body: body,
       );
 
-      // 2. Like if it's "too_hot" or "crushing" — delegate to parent which handles follow + match detection
+      // 2. Like if it's "too_hot" or "crushing"
       if (reaction == 'too_hot' || reaction == 'crushing') {
         await widget.onLike(target);
       }
@@ -157,9 +163,9 @@ class SoulModeTabState extends ConsumerState<SoulModeTab>
       if (mounted) setState(() => _isSending = false);
     }
 
-    // Advance after reveal delay (unless it was dm_me which has its own sheet)
+    // Advance after reveal delay (unless it was dm_me)
     if (reaction != 'dm_me') {
-      Future.delayed(const Duration(milliseconds: 1400), () {
+      Future.delayed(const Duration(milliseconds: 1600), () {
         if (mounted && _pendingAdvance) _advance();
       });
     }
@@ -205,341 +211,640 @@ class SoulModeTabState extends ConsumerState<SoulModeTab>
     final vibeColor = _vibeColorFor(target);
     final matchPct = _matchPercent(currentUser, target);
 
-    return Column(
-      children: [
-        // ── Subtitle ───────────────────────────────────────────────────────
-        Padding(
-          padding: const EdgeInsets.fromLTRB(18, 2, 18, 12),
-          child: Row(
-            children: [
-              Text(
-                'Feel first · face unlocks when you react',
-                style: TextStyle(
-                  fontSize: 12.5,
-                  color: isDark
-                      ? Colors.white.withValues(alpha: 0.5)
-                      : AppTheme.textSecondary,
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
-              const Spacer(),
-              // Match % badge
-              Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                decoration: BoxDecoration(
-                  color: isDark
-                      ? Colors.white.withValues(alpha: 0.08)
-                      : Colors.black.withValues(alpha: 0.05),
-                  borderRadius: BorderRadius.circular(20),
-                  border: Border.all(
-                      color: isDark
-                          ? Colors.white.withValues(alpha: 0.15)
-                          : Colors.black.withValues(alpha: 0.08),
-                      width: 0.8),
-                ),
-                child: Text(
-                  '$matchPct%',
-                  style: TextStyle(
-                    color: isDark ? Colors.white : AppTheme.textPrimary,
-                    fontWeight: FontWeight.w800,
-                    fontSize: 13,
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final isShort = constraints.maxHeight < 690;
 
-        // ── Soul Card ──────────────────────────────────────────────────────
-        Expanded(
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 18),
-            child: Container(
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(28),
-                color: const Color(0xFF13152A),
-                border: Border.all(
-                  color: Colors.white.withValues(alpha: 0.08),
-                  width: 1,
-                ),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.4),
-                    blurRadius: 30,
-                    offset: const Offset(0, 12),
+        return Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 440),
+            child: Column(
+              children: [
+                // ── Seductive Header Pill Bar ──────────────────────────────
+                _buildHeader(matchPct, isDark),
+
+                // ── Luxury Velvet Mystery Card ─────────────────────────────
+                Expanded(
+                  child: _buildSoulCard(
+                    target,
+                    currentUser,
+                    vibe,
+                    vibeColor,
+                    isDark,
+                    isShort,
                   ),
+                ),
+
+                SizedBox(height: isShort ? 10 : 16),
+
+                // ── Unified 4-Action Command Console ───────────────────────
+                _buildActionConsole(isDark, isShort),
+
+                SizedBox(height: isShort ? 4 : 8),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  // ─── Header: Ethereal Aura Bar ─────────────────────────────────────────────
+
+  Widget _buildHeader(int matchPct, bool isDark) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 2, 16, 10),
+      child: Row(
+        children: [
+          // Ethereal Soul Mode Capsule
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4.5),
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: [
+                  const Color(0xFFFF2E93).withValues(alpha: isDark ? 0.22 : 0.12),
+                  const Color(0xFF8B5CF6).withValues(alpha: isDark ? 0.26 : 0.14),
                 ],
               ),
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(28),
-                child: Stack(
-                  fit: StackFit.expand,
-                  children: [
-                    // Revealed or blurred photo
-                    AnimatedBuilder(
-                      animation: _revealAnim,
-                      builder: (context, _) {
-                        final blurVal = (14 * (1 - _revealAnim.value)).clamp(0.0, 14.0);
-                        return ImageFiltered(
-                          imageFilter:
-                              ImageFilter.blur(sigmaX: blurVal, sigmaY: blurVal),
-                          child: CachedNetworkImage(
-                            imageUrl: target.avatarUrl ??
-                                'https://i.pravatar.cc/400?u=${target.id}',
-                            fit: BoxFit.cover,
-                            memCacheWidth: 800,
-                          ),
-                        );
-                      },
-                    ),
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(
+                color: const Color(0xFFFF2E93).withValues(alpha: isDark ? 0.45 : 0.3),
+                width: 1,
+              ),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: 7,
+                  height: 7,
+                  decoration: const BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: Color(0xFFFF2E93),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Color(0xFFFF2E93),
+                        blurRadius: 6,
+                        spreadRadius: 1,
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 6),
+                const Text(
+                  'SOUL FREQUENCY',
+                  style: TextStyle(
+                    fontSize: 10.5,
+                    fontWeight: FontWeight.w900,
+                    letterSpacing: 1.1,
+                    color: Color(0xFFFF2E93),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              'Feel first · Face unlocks on reaction',
+              style: TextStyle(
+                fontSize: 11.5,
+                color: isDark ? Colors.white60 : const Color(0xFF64748B),
+                fontWeight: FontWeight.w600,
+              ),
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+          const SizedBox(width: 6),
+          // Chemistry Badge
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4.5),
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: [
+                  const Color(0xFFFF007A).withValues(alpha: isDark ? 0.22 : 0.12),
+                  const Color(0xFF7928CA).withValues(alpha: isDark ? 0.26 : 0.14),
+                ],
+              ),
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(
+                color: const Color(0xFFFF007A).withValues(alpha: isDark ? 0.45 : 0.25),
+                width: 1,
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: const Color(0xFFFF007A).withValues(alpha: isDark ? 0.2 : 0.08),
+                  blurRadius: 8,
+                  offset: const Offset(0, 2),
+                ),
+              ],
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(
+                  Icons.auto_awesome_rounded,
+                  size: 13,
+                  color: Color(0xFFFF007A),
+                ),
+                const SizedBox(width: 4),
+                Text(
+                  '$matchPct% Match',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w900,
+                    fontSize: 12,
+                    letterSpacing: 0.2,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 
-                    // Dark overlay
-                    Positioned.fill(
-                      child: DecoratedBox(
-                        decoration: BoxDecoration(
-                          gradient: LinearGradient(
-                            begin: Alignment.topCenter,
-                            end: Alignment.bottomCenter,
-                            colors: [
-                              Colors.black.withValues(alpha: 0.15),
-                              Colors.black.withValues(alpha: 0.7),
-                            ],
+  // ─── Center: Seductive Soul Mystery Card ───────────────────────────────────
+
+  Widget _buildSoulCard(
+    UserModel target,
+    UserModel currentUser,
+    String vibe,
+    Color vibeColor,
+    bool isDark,
+    bool isShort,
+  ) {
+    return AnimatedBuilder(
+      animation: _ambientPulseCtrl,
+      builder: (context, _) {
+        final pulse = _ambientPulseCtrl.value;
+        final glowSpread = pulse * 4.0;
+
+        return Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          child: Container(
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(32),
+              color: const Color(0xFF0F0C1E),
+              border: Border.all(
+                color: Color.lerp(
+                  vibeColor.withValues(alpha: 0.35),
+                  const Color(0xFFFF2E93).withValues(alpha: 0.55),
+                  pulse,
+                )!,
+                width: 1.5,
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: vibeColor.withValues(alpha: 0.25 + 0.12 * pulse),
+                  blurRadius: 28 + glowSpread,
+                  spreadRadius: -2,
+                  offset: const Offset(0, 10),
+                ),
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.55),
+                  blurRadius: 22,
+                  offset: const Offset(0, 6),
+                ),
+              ],
+            ),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(32),
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
+                  // 1. Background image with animated blur
+                  AnimatedBuilder(
+                    animation: _revealAnim,
+                    builder: (context, _) {
+                      final blurVal = (18 * (1 - _revealAnim.value)).clamp(0.0, 18.0);
+                      return ImageFiltered(
+                        imageFilter: ImageFilter.blur(sigmaX: blurVal, sigmaY: blurVal),
+                        child: CachedNetworkImage(
+                          imageUrl: target.avatarUrl ??
+                              'https://i.pravatar.cc/600?u=${target.id}',
+                          fit: BoxFit.cover,
+                          memCacheWidth: 800,
+                          placeholder: (_, __) => Container(
+                            color: const Color(0xFF161328),
+                            child: const Center(
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: Color(0xFFFF2E93),
+                              ),
+                            ),
                           ),
+                          errorWidget: (_, __, ___) => Container(
+                            decoration: BoxDecoration(
+                              gradient: LinearGradient(
+                                colors: [vibeColor, const Color(0xFF120E29)],
+                                begin: Alignment.topLeft,
+                                end: Alignment.bottomRight,
+                              ),
+                            ),
+                            child: Center(
+                              child: Text(
+                                target.name.isNotEmpty ? target.name[0] : '?',
+                                style: const TextStyle(fontSize: 64, color: Colors.white70),
+                              ),
+                            ),
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+
+                  // 2. Warm Velvet Vignette Overlay
+                  Positioned.fill(
+                    child: DecoratedBox(
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          begin: Alignment.topCenter,
+                          end: Alignment.bottomCenter,
+                          stops: const [0.0, 0.35, 0.68, 1.0],
+                          colors: [
+                            Colors.black.withValues(alpha: 0.4),
+                            const Color(0xFF1B0F2A).withValues(alpha: 0.25),
+                            const Color(0xFF0C071A).withValues(alpha: 0.8),
+                            const Color(0xFF080514).withValues(alpha: 0.96),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+
+                  // 3. Mysterious Hologram Veil Seal (When not revealed)
+                  if (!_isRevealed)
+                    Positioned(
+                      top: 0,
+                      left: 0,
+                      right: 0,
+                      bottom: isShort ? 180 : 210,
+                      child: Center(
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            // Mystic Hologram Crystal Orb
+                            Container(
+                              width: isShort ? 72 : 82,
+                              height: isShort ? 72 : 82,
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                gradient: RadialGradient(
+                                  colors: [
+                                    const Color(0xFFFF2E93).withValues(alpha: 0.35),
+                                    const Color(0xFF180F33).withValues(alpha: 0.85),
+                                  ],
+                                ),
+                                border: Border.all(
+                                  color: Color.lerp(
+                                    const Color(0xFFFF2E93),
+                                    const Color(0xFF00F5D4),
+                                    pulse,
+                                  )!.withValues(alpha: 0.65),
+                                  width: 1.8,
+                                ),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: const Color(0xFFFF2E93).withValues(
+                                      alpha: 0.35 + 0.15 * pulse,
+                                    ),
+                                    blurRadius: 24,
+                                    spreadRadius: 2,
+                                  ),
+                                ],
+                              ),
+                              child: Center(
+                                child: Icon(
+                                  Icons.auto_awesome_rounded,
+                                  color: Colors.white,
+                                  size: isShort ? 32 : 38,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(height: 12),
+                            // Seductive Badge
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 12,
+                                vertical: 4.5,
+                              ),
+                              decoration: BoxDecoration(
+                                gradient: LinearGradient(
+                                  colors: [
+                                    const Color(0xFFFF2E93).withValues(alpha: 0.25),
+                                    const Color(0xFF7928CA).withValues(alpha: 0.35),
+                                  ],
+                                ),
+                                borderRadius: BorderRadius.circular(16),
+                                border: Border.all(
+                                  color: Colors.white.withValues(alpha: 0.25),
+                                  width: 1,
+                                ),
+                              ),
+                              child: const Text(
+                                'SECRET AURA',
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.w900,
+                                  fontSize: 11.5,
+                                  letterSpacing: 1.2,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(height: 6),
+                            Text(
+                              'Tap any reaction below to unveil her gaze ✨',
+                              style: TextStyle(
+                                color: Colors.white.withValues(alpha: 0.75),
+                                fontSize: 12,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                          ],
                         ),
                       ),
                     ),
 
-                    // Lock icon — anchored to top half so it never overlaps the bottom content
-                    if (!_isRevealed)
-                      Positioned(
-                        top: 0,
-                        left: 0,
-                        right: 0,
-                        bottom: 160, // reserves space for bottom profile content
-                        child: Center(
+                  // 4. Soul Profile Floating Glass Island (Bottom)
+                  Positioned(
+                    left: 14,
+                    right: 14,
+                    bottom: 14,
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(24),
+                      child: BackdropFilter(
+                        filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
+                        child: Container(
+                          padding: EdgeInsets.all(isShort ? 12 : 15),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF0D0A1C).withValues(alpha: 0.75),
+                            borderRadius: BorderRadius.circular(24),
+                            border: Border.all(
+                              color: Colors.white.withValues(alpha: 0.14),
+                              width: 1.2,
+                            ),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withValues(alpha: 0.45),
+                                blurRadius: 20,
+                                offset: const Offset(0, 6),
+                              ),
+                            ],
+                          ),
                           child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
                             mainAxisSize: MainAxisSize.min,
                             children: [
-                              Container(
-                                padding: const EdgeInsets.all(18),
-                                decoration: BoxDecoration(
-                                  color: Colors.black.withValues(alpha: 0.55),
-                                  shape: BoxShape.circle,
-                                  border: Border.all(
-                                    color: Colors.white.withValues(alpha: 0.2),
-                                    width: 1.5,
+                              // Row 1: Vibe Tag & Identity
+                              Row(
+                                children: [
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 10,
+                                      vertical: 4.5,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      color: vibeColor.withValues(alpha: 0.22),
+                                      borderRadius: BorderRadius.circular(16),
+                                      border: Border.all(
+                                        color: vibeColor.withValues(alpha: 0.55),
+                                        width: 1,
+                                      ),
+                                    ),
+                                    child: Text(
+                                      vibe,
+                                      style: TextStyle(
+                                        fontSize: 11,
+                                        fontWeight: FontWeight.w800,
+                                        letterSpacing: 0.3,
+                                        color: vibeColor,
+                                      ),
+                                    ),
                                   ),
-                                ),
-                                child: const Icon(
-                                  Icons.lock_rounded,
-                                  color: Colors.white,
-                                  size: 36,
-                                ),
+                                  const SizedBox(width: 8),
+                                  Expanded(
+                                    child: Text(
+                                      _isRevealed
+                                          ? '${target.name}, ${target.age}'
+                                          : 'Mystery Soul · ${target.age}',
+                                      style: TextStyle(
+                                        fontSize: isShort ? 18 : 21,
+                                        fontWeight: FontWeight.w900,
+                                        color: Colors.white,
+                                        letterSpacing: -0.3,
+                                      ),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ),
+                                ],
                               ),
-                              const SizedBox(height: 12),
-                              Text(
-                                'Face locked',
-                                style: TextStyle(
-                                  color: Colors.white.withValues(alpha: 0.8),
-                                  fontWeight: FontWeight.w700,
-                                  fontSize: 15,
-                                ),
-                              ),
-                              const SizedBox(height: 4),
-                              Text(
-                                'React below to unlock',
-                                style: TextStyle(
-                                  color: Colors.white.withValues(alpha: 0.5),
-                                  fontSize: 12.5,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
 
-                    // Content at bottom
-                    Positioned(
-                      left: 16,
-                      right: 16,
-                      bottom: 16,
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          // Vibe + age row
-                          Row(
-                            children: [
+                              SizedBox(height: isShort ? 8 : 10),
+
+                              // Row 2: Editorial Soul Prompt
                               Container(
+                                width: double.infinity,
                                 padding: const EdgeInsets.symmetric(
-                                    horizontal: 10, vertical: 4),
+                                  horizontal: 13,
+                                  vertical: 10,
+                                ),
                                 decoration: BoxDecoration(
-                                  color: vibeColor.withValues(alpha: 0.2),
-                                  borderRadius: BorderRadius.circular(20),
+                                  color: Colors.black.withValues(alpha: 0.5),
+                                  borderRadius: BorderRadius.circular(16),
                                   border: Border.all(
-                                    color: vibeColor.withValues(alpha: 0.4),
+                                    color: vibeColor.withValues(alpha: 0.25),
                                     width: 1,
                                   ),
                                 ),
-                                child: Text(
-                                  vibe,
-                                  style: TextStyle(
-                                    fontSize: 11,
-                                    fontWeight: FontWeight.w700,
-                                    color: vibeColor,
-                                  ),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Row(
+                                      children: [
+                                        Icon(
+                                          Icons.format_quote_rounded,
+                                          size: 15,
+                                          color: vibeColor.withValues(alpha: 0.95),
+                                        ),
+                                        const SizedBox(width: 4),
+                                        Text(
+                                          "I'LL FALL FOR YOU IF...",
+                                          style: TextStyle(
+                                            fontSize: 9.5,
+                                            fontWeight: FontWeight.w900,
+                                            letterSpacing: 0.8,
+                                            color: vibeColor.withValues(alpha: 0.95),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                    const SizedBox(height: 4),
+                                    Text(
+                                      _quoteText(target),
+                                      style: TextStyle(
+                                        fontSize: isShort ? 12.5 : 13.5,
+                                        fontWeight: FontWeight.w500,
+                                        color: Colors.white.withValues(alpha: 0.95),
+                                        fontStyle: FontStyle.italic,
+                                        height: 1.35,
+                                      ),
+                                      maxLines: 2,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ],
                                 ),
                               ),
-                              const SizedBox(width: 8),
-                              Text(
-                                _isRevealed ? '${target.name}, ${target.age}' : '???  ${target.age}',
-                                style: const TextStyle(
-                                  fontSize: 20,
-                                  fontWeight: FontWeight.w900,
-                                  color: Colors.white,
-                                ),
-                              ),
-                            ],
-                          ),
 
-                          const SizedBox(height: 10),
-
-                          // Bio quote card
-                          Container(
-                            padding: const EdgeInsets.all(11),
-                            decoration: BoxDecoration(
-                              color: Colors.black.withValues(alpha: 0.55),
-                              borderRadius: BorderRadius.circular(14),
-                              border: Border.all(
-                                color: Colors.white.withValues(alpha: 0.08),
-                                width: 1,
-                              ),
-                            ),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  "I'LL FALL FOR YOU IF...",
-                                  style: TextStyle(
-                                    fontSize: 9.5,
-                                    fontWeight: FontWeight.w800,
-                                    color: vibeColor.withValues(alpha: 0.85),
-                                    letterSpacing: 0.5,
-                                  ),
-                                ),
-                                const SizedBox(height: 4),
-                                Text(
-                                  _quoteText(target),
-                                  style: const TextStyle(
-                                    fontSize: 12.5,
-                                    fontWeight: FontWeight.w500,
-                                    color: Colors.white,
-                                    fontStyle: FontStyle.italic,
-                                    height: 1.35,
-                                  ),
-                                  maxLines: 2,
-                                  overflow: TextOverflow.ellipsis,
+                              // Row 3: Passions
+                              if (target.interests.isNotEmpty) ...[
+                                SizedBox(height: isShort ? 8 : 10),
+                                Wrap(
+                                  spacing: 6,
+                                  runSpacing: 4,
+                                  children: target.interests
+                                      .take(3)
+                                      .map((i) => _InterestChip(label: i))
+                                      .toList(),
                                 ),
                               ],
-                            ),
+                            ],
                           ),
-
-                          const SizedBox(height: 10),
-
-                          // Interest chips
-                          if (target.interests.isNotEmpty)
-                            Wrap(
-                              spacing: 6,
-                              runSpacing: 4,
-                              children: target.interests
-                                  .take(3)
-                                  .map((i) => _InterestChip(label: i))
-                                  .toList(),
-                            ),
-                        ],
+                        ),
                       ),
                     ),
+                  ),
 
-                    // Reaction overlay flash
-                    if (_isRevealed && _lastReaction != null)
-                      AnimatedBuilder(
-                        animation: _revealAnim,
-                        builder: (context, _) => Positioned(
-                          top: 16,
-                          left: 0,
-                          right: 0,
-                          child: Center(
-                            child: Opacity(
-                              opacity:
-                                  (1 - _revealAnim.value).clamp(0.0, 1.0),
-                              child: Transform.scale(
-                                scale: 0.8 + _revealAnim.value * 0.5,
+                  // 5. Celebration Reaction Bloom
+                  if (_isRevealed && _lastReaction != null)
+                    AnimatedBuilder(
+                      animation: _revealAnim,
+                      builder: (context, _) => Positioned(
+                        top: 28,
+                        left: 0,
+                        right: 0,
+                        child: Center(
+                          child: Opacity(
+                            opacity: (1 - _revealAnim.value).clamp(0.0, 1.0),
+                            child: Transform.scale(
+                              scale: 0.8 + _revealAnim.value * 0.6,
+                              child: Container(
+                                padding: const EdgeInsets.all(18),
+                                decoration: BoxDecoration(
+                                  shape: BoxShape.circle,
+                                  color: Colors.black.withValues(alpha: 0.6),
+                                  border: Border.all(
+                                    color: const Color(0xFFFF2E93).withValues(alpha: 0.7),
+                                    width: 2.2,
+                                  ),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: const Color(0xFFFF2E93).withValues(alpha: 0.6),
+                                      blurRadius: 32,
+                                      spreadRadius: 4,
+                                    ),
+                                  ],
+                                ),
                                 child: Text(
                                   _reactionEmoji(_lastReaction!),
-                                  style: const TextStyle(fontSize: 56),
+                                  style: const TextStyle(fontSize: 48),
                                 ),
                               ),
                             ),
                           ),
                         ),
                       ),
-                  ],
-                ),
+                    ),
+                ],
               ),
             ),
           ),
-        ),
-
-        const SizedBox(height: 16),
-
-        // ── Reaction Buttons ───────────────────────────────────────────────
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 24),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-            children: [
-              _ReactionButton(
-                emoji: '🥵',
-                label: 'Too Hot',
-                isLoading: _isSending && _lastReaction == 'too_hot',
-                onTap: () => _react('too_hot'),
-              ),
-              _ReactionButton(
-                emoji: '😍',
-                label: 'Crushing',
-                isMain: true,
-                isLoading: _isSending && _lastReaction == 'crushing',
-                onTap: () => _react('crushing'),
-              ),
-              _ReactionButton(
-                emoji: '😊',
-                label: 'DM Me',
-                isLoading: _isSending && _lastReaction == 'dm_me',
-                onTap: () => _react('dm_me'),
-              ),
-            ],
-          ),
-        ),
-
-        // ── Skip link ──────────────────────────────────────────────────────
-        TextButton(
-          onPressed: _skip,
-          child: Text(
-            'skip',
-            style: TextStyle(
-              fontSize: 13,
-              color: isDark
-                  ? Colors.white.withValues(alpha: 0.4)
-                  : AppTheme.textSecondary,
-              fontWeight: FontWeight.w500,
-            ),
-          ),
-        ),
-        const SizedBox(height: 4),
-      ],
+        );
+      },
     );
   }
+
+  // ─── Unified 4-Action Command Console ──────────────────────────────────────
+
+  Widget _buildActionConsole(bool isDark, bool isShort) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      child: Container(
+        padding: EdgeInsets.symmetric(
+          horizontal: 10,
+          vertical: isShort ? 8 : 10,
+        ),
+        decoration: BoxDecoration(
+          color: isDark ? const Color(0xFF100C22) : Colors.white,
+          borderRadius: BorderRadius.circular(32),
+          border: Border.all(
+            color: isDark
+                ? Colors.white.withValues(alpha: 0.08)
+                : Colors.black.withValues(alpha: 0.06),
+            width: 1.2,
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: isDark ? 0.45 : 0.08),
+              blurRadius: 22,
+              offset: const Offset(0, 6),
+            ),
+          ],
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+          children: [
+            // 1. Pass Action (Circular Ghost Button)
+            _ActionOrbButton(
+              icon: Icons.close_rounded,
+              label: 'PASS',
+              color: isDark ? Colors.white54 : const Color(0xFF64748B),
+              bgColor: isDark ? Colors.white.withValues(alpha: 0.06) : const Color(0xFFF1F5F9),
+              borderColor: isDark ? Colors.white12 : Colors.black12,
+              onTap: _skip,
+              isShort: isShort,
+            ),
+
+            // 2. Too Hot Action (Warm Sunset Flame)
+            _ActionOrbButton(
+              emoji: '🔥',
+              label: 'TOO HOT',
+              themeGradient: const [Color(0xFFFF416C), Color(0xFFFF4B2B)],
+              isLoading: _isSending && _lastReaction == 'too_hot',
+              onTap: () => _react('too_hot'),
+              isShort: isShort,
+            ),
+
+            // 3. Crushing Action (Hero Rose Heartpiece)
+            _ActionOrbButton(
+              emoji: '💖',
+              label: 'CRUSHING',
+              isMain: true,
+              themeGradient: const [Color(0xFFFF007A), Color(0xFF7928CA)],
+              isLoading: _isSending && _lastReaction == 'crushing',
+              onTap: () => _react('crushing'),
+              isShort: isShort,
+            ),
+
+            // 4. Secret DM Action (Electric Cyan Whisper)
+            _ActionOrbButton(
+              emoji: '💬',
+              label: 'SECRET DM',
+              badgeText: '🪙 10',
+              themeGradient: const [Color(0xFF00F5D4), Color(0xFF6366F1)],
+              isLoading: _isSending && _lastReaction == 'dm_me',
+              onTap: () => _react('dm_me'),
+              isShort: isShort,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ─── Secret DM Confession Sheet ───────────────────────────────────────────
 
   void _showConfessionSheet(UserModel targetUser) {
     final controller = TextEditingController();
@@ -552,10 +857,18 @@ class SoulModeTabState extends ConsumerState<SoulModeTab>
       isScrollControlled: true,
       builder: (sheetContext) => Container(
         padding: EdgeInsets.fromLTRB(
-            24, 24, 24, MediaQuery.of(sheetContext).viewInsets.bottom + 24),
+          24,
+          20,
+          24,
+          MediaQuery.of(sheetContext).viewInsets.bottom + 24,
+        ),
         decoration: BoxDecoration(
-          color: isDark ? AppTheme.darkSurface : Colors.white,
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(30)),
+          color: isDark ? const Color(0xFF100D22) : Colors.white,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(32)),
+          border: Border.all(
+            color: isDark ? Colors.white12 : Colors.black12,
+            width: 1,
+          ),
         ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -563,7 +876,7 @@ class SoulModeTabState extends ConsumerState<SoulModeTab>
           children: [
             Center(
               child: Container(
-                width: 40,
+                width: 44,
                 height: 5,
                 decoration: BoxDecoration(
                   color: Colors.grey.withValues(alpha: 0.3),
@@ -571,18 +884,45 @@ class SoulModeTabState extends ConsumerState<SoulModeTab>
                 ),
               ),
             ),
-            const SizedBox(height: 24),
+            const SizedBox(height: 20),
             Row(
               children: [
-                Icon(Icons.lock_rounded,
-                    size: 20, color: AppTheme.accentPurple),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    'Send a secret DM via Soul Mode',
-                    style: const TextStyle(
-                        fontSize: 18, fontWeight: FontWeight.bold),
-                    overflow: TextOverflow.ellipsis,
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    gradient: const LinearGradient(
+                      colors: [Color(0xFF00F5D4), Color(0xFF6366F1)],
+                    ),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: const Icon(
+                    Icons.lock_rounded,
+                    size: 18,
+                    color: Colors.white,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                const Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Secret Soul DM',
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.w900,
+                          letterSpacing: -0.2,
+                        ),
+                      ),
+                      Text(
+                        '100% Anonymous whisper to their inbox',
+                        style: TextStyle(
+                          fontSize: 11.5,
+                          color: AppTheme.textSecondary,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               ],
@@ -594,53 +934,76 @@ class SoulModeTabState extends ConsumerState<SoulModeTab>
               maxLength: 200,
               decoration: InputDecoration(
                 hintText:
-                    'Type your anonymous message... they won\'t know who sent it! 🤫',
+                    'Whisper something intoxicating... they won\'t know who sent it! 🤫',
                 hintStyle: TextStyle(
-                    color: isDark ? Colors.white30 : Colors.black38,
-                    fontSize: 13),
+                  color: isDark ? Colors.white30 : Colors.black38,
+                  fontSize: 13,
+                ),
                 filled: true,
                 fillColor: isDark
                     ? Colors.white.withValues(alpha: 0.05)
                     : Colors.black.withValues(alpha: 0.03),
                 contentPadding: const EdgeInsets.all(16),
                 border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(16),
+                  borderRadius: BorderRadius.circular(18),
                   borderSide: BorderSide.none,
                 ),
               ),
               style: const TextStyle(fontSize: 14, height: 1.4),
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 12),
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                const Row(
-                  children: [
-                    Text('Cost:',
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: Colors.amber.withValues(alpha: 0.15),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: Colors.amber.withValues(alpha: 0.35),
+                    ),
+                  ),
+                  child: const Row(
+                    children: [
+                      Text(
+                        'Cost: ',
                         style: TextStyle(
-                            fontWeight: FontWeight.bold,
-                            color: AppTheme.textSecondary)),
-                    SizedBox(width: 6),
-                    Text('🪙 10',
+                          fontWeight: FontWeight.w700,
+                          fontSize: 12,
+                          color: Colors.amber,
+                        ),
+                      ),
+                      Text(
+                        '🪙 10 Coins',
                         style: TextStyle(
-                            fontWeight: FontWeight.w900,
-                            color: Colors.amber)),
-                  ],
+                          fontWeight: FontWeight.w900,
+                          fontSize: 12,
+                          color: Colors.amber,
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
                 ElevatedButton.icon(
                   onPressed: () =>
                       _sendConfession(controller.text, targetUser, sheetContext),
-                  icon: const Icon(Icons.send_rounded, size: 18),
-                  label: const Text('Send Secret 🔒',
-                      style: TextStyle(
-                          fontWeight: FontWeight.bold, fontSize: 13)),
+                  icon: const Icon(Icons.send_rounded, size: 16),
+                  label: const Text(
+                    'Send Secret 🔒',
+                    style: TextStyle(fontWeight: FontWeight.w800, fontSize: 13),
+                  ),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: AppTheme.accentPurple,
                     foregroundColor: Colors.white,
                     shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(14)),
+                      borderRadius: BorderRadius.circular(14),
+                    ),
                     padding: const EdgeInsets.symmetric(
-                        horizontal: 20, vertical: 12),
+                      horizontal: 20,
+                      vertical: 12,
+                    ),
+                    elevation: 4,
                   ),
                 ),
               ],
@@ -652,7 +1015,10 @@ class SoulModeTabState extends ConsumerState<SoulModeTab>
   }
 
   Future<void> _sendConfession(
-      String text, UserModel targetUser, BuildContext sheetContext) async {
+    String text,
+    UserModel targetUser,
+    BuildContext sheetContext,
+  ) async {
     final confession = text.trim();
     if (confession.isEmpty) return;
 
@@ -725,7 +1091,7 @@ class SoulModeTabState extends ConsumerState<SoulModeTab>
         'coins': FieldValue.increment(-10),
       });
 
-      if (mounted) Navigator.pop(sheetContext);
+      if (sheetContext.mounted) Navigator.pop(sheetContext);
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -740,74 +1106,112 @@ class SoulModeTabState extends ConsumerState<SoulModeTab>
 
   Widget _buildEmptyState(bool isDark) {
     return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Container(
-            padding: const EdgeInsets.all(22),
-            decoration: BoxDecoration(
-              color: AppTheme.accentPurple.withValues(alpha: 0.12),
-              shape: BoxShape.circle,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 32),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(26),
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [
+                    const Color(0xFFFF007A).withValues(alpha: 0.18),
+                    const Color(0xFF7928CA).withValues(alpha: 0.22),
+                  ],
+                ),
+                shape: BoxShape.circle,
+                border: Border.all(
+                  color: const Color(0xFFFF007A).withValues(alpha: 0.4),
+                  width: 1.5,
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: const Color(0xFFFF007A).withValues(alpha: 0.25),
+                    blurRadius: 24,
+                  ),
+                ],
+              ),
+              child: const Icon(
+                Icons.auto_awesome_rounded,
+                color: Color(0xFFFF007A),
+                size: 48,
+              ),
             ),
-            child: Icon(Icons.lock_open_rounded,
-                color: AppTheme.accentPurple, size: 48),
-          ),
-          const SizedBox(height: 20),
-          Text(
-            'All souls unlocked! ✨',
-            style: TextStyle(
-              fontSize: 22,
-              fontWeight: FontWeight.w900,
-              color: isDark ? Colors.white : const Color(0xFF111827),
+            const SizedBox(height: 22),
+            Text(
+              'All Souls Explored! ✨',
+              style: TextStyle(
+                fontSize: 22,
+                fontWeight: FontWeight.w900,
+                color: isDark ? Colors.white : const Color(0xFF111827),
+                letterSpacing: -0.3,
+              ),
             ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            'Check back soon for new faces.',
-            style: TextStyle(
-              fontSize: 14,
-              color: isDark
-                  ? Colors.white.withValues(alpha: 0.5)
-                  : const Color(0xFF64748B),
+            const SizedBox(height: 8),
+            Text(
+              'You have connected with all frequencies in this orbit. Check back soon for new mysterious faces.',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 13.5,
+                height: 1.4,
+                color: isDark
+                    ? Colors.white.withValues(alpha: 0.5)
+                    : const Color(0xFF64748B),
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
 
   String _reactionEmoji(String reaction) {
     return switch (reaction) {
-      'too_hot' => '🥵',
-      'crushing' => '😍',
+      'too_hot' => '🔥',
+      'crushing' => '💖',
       'dm_me' => '💬',
       _ => '✨',
     };
   }
 }
 
-// ─── Reaction Button ─────────────────────────────────────────────────────────
+// ─── Luxury Action Orb Button ────────────────────────────────────────────────
 
-class _ReactionButton extends StatefulWidget {
-  final String emoji;
+class _ActionOrbButton extends StatefulWidget {
+  final String? emoji;
+  final IconData? icon;
   final String label;
+  final String? badgeText;
+  final List<Color>? themeGradient;
+  final Color? color;
+  final Color? bgColor;
+  final Color? borderColor;
   final bool isLoading;
   final VoidCallback onTap;
   final bool isMain;
+  final bool isShort;
 
-  const _ReactionButton({
-    required this.emoji,
+  const _ActionOrbButton({
+    this.emoji,
+    this.icon,
     required this.label,
-    required this.isLoading,
+    this.badgeText,
+    this.themeGradient,
+    this.color,
+    this.bgColor,
+    this.borderColor,
+    this.isLoading = false,
     required this.onTap,
     this.isMain = false,
+    this.isShort = false,
   });
 
   @override
-  State<_ReactionButton> createState() => _ReactionButtonState();
+  State<_ActionOrbButton> createState() => _ActionOrbButtonState();
 }
 
-class _ReactionButtonState extends State<_ReactionButton>
+class _ActionOrbButtonState extends State<_ActionOrbButton>
     with TickerProviderStateMixin {
   late AnimationController _idleCtrl;
   late AnimationController _tapCtrl;
@@ -818,12 +1222,12 @@ class _ReactionButtonState extends State<_ReactionButton>
     super.initState();
     _idleCtrl = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 2200),
+      duration: const Duration(milliseconds: 2600),
     )..repeat();
 
     _tapCtrl = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 400),
+      duration: const Duration(milliseconds: 360),
     );
 
     _scale = TweenSequence<double>([
@@ -833,12 +1237,12 @@ class _ReactionButtonState extends State<_ReactionButton>
         weight: 25,
       ),
       TweenSequenceItem(
-        tween: Tween(begin: 0.82, end: 1.22)
+        tween: Tween(begin: 0.82, end: 1.18)
             .chain(CurveTween(curve: Curves.easeOutBack)),
         weight: 45,
       ),
       TweenSequenceItem(
-        tween: Tween(begin: 1.22, end: 1.0)
+        tween: Tween(begin: 1.18, end: 1.0)
             .chain(CurveTween(curve: Curves.elasticOut)),
         weight: 30,
       ),
@@ -861,8 +1265,12 @@ class _ReactionButtonState extends State<_ReactionButton>
 
   @override
   Widget build(BuildContext context) {
-    final size = widget.isMain ? 58.0 : 48.0;
-    final fontSize = widget.isMain ? 40.0 : 34.0;
+    final orbSize = widget.isMain
+        ? (widget.isShort ? 54.0 : 60.0)
+        : (widget.isShort ? 44.0 : 48.0);
+    final emojiSize = widget.isMain
+        ? (widget.isShort ? 28.0 : 32.0)
+        : (widget.isShort ? 20.0 : 22.0);
 
     return GestureDetector(
       onTap: _handleTap,
@@ -880,65 +1288,136 @@ class _ReactionButtonState extends State<_ReactionButton>
                 double idleRot = 0.0;
                 double idleOffsetY = 0.0;
 
-                if (widget.emoji == '🥵') {
-                  idleScale = 1.0 + 0.08 * math.sin(t * 2 * math.pi);
-                  idleRot = 0.06 * math.sin(t * 4 * math.pi);
-                } else if (widget.emoji == '😍') {
+                if (widget.isMain) {
                   final beat = math.sin(t * 2 * math.pi);
-                  idleScale = 1.0 + (beat > 0.4 ? (beat - 0.4) * 0.28 : 0.0);
-                } else {
-                  idleOffsetY = -5.0 * math.sin(t * 2 * math.pi);
-                  idleRot = 0.05 * math.cos(t * 2 * math.pi);
+                  idleScale = 1.0 + (beat > 0.3 ? (beat - 0.3) * 0.18 : 0.0);
+                } else if (widget.emoji == '🔥') {
+                  idleScale = 1.0 + 0.05 * math.sin(t * 2 * math.pi);
+                  idleRot = 0.04 * math.sin(t * 4 * math.pi);
+                } else if (widget.emoji == '💬') {
+                  idleOffsetY = -3.0 * math.sin(t * 2 * math.pi);
                 }
 
-                return SizedBox(
-                  width: size,
-                  height: size,
-                  child: widget.isLoading
-                      ? const Center(
-                          child: SizedBox(
-                            width: 20,
-                            height: 20,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              color: Colors.white,
-                            ),
-                          ),
-                        )
-                      : Center(
-                          child: Transform.translate(
-                            offset: Offset(0, idleOffsetY),
-                            child: Transform.rotate(
-                              angle: idleRot,
-                              child: Transform.scale(
-                                scale: idleScale,
-                                child: Text(
-                                  widget.emoji,
-                                  style: TextStyle(fontSize: fontSize, height: 1.0),
+                return Stack(
+                  clipBehavior: Clip.none,
+                  alignment: Alignment.center,
+                  children: [
+                    // Glowing Orb Body
+                    Container(
+                      width: orbSize,
+                      height: orbSize,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: widget.bgColor,
+                        gradient: widget.themeGradient != null
+                            ? LinearGradient(
+                                begin: Alignment.topLeft,
+                                end: Alignment.bottomRight,
+                                colors: [
+                                  widget.themeGradient![0].withValues(alpha: 0.3),
+                                  widget.themeGradient![1].withValues(alpha: 0.18),
+                                ],
+                              )
+                            : null,
+                        border: Border.all(
+                          color: widget.borderColor ??
+                              (widget.themeGradient != null
+                                  ? widget.themeGradient![0].withValues(alpha: 0.55)
+                                  : Colors.white24),
+                          width: widget.isMain ? 1.8 : 1.2,
+                        ),
+                        boxShadow: widget.themeGradient != null
+                            ? [
+                                BoxShadow(
+                                  color: widget.themeGradient![0].withValues(
+                                    alpha: widget.isMain ? 0.4 : 0.22,
+                                  ),
+                                  blurRadius: widget.isMain ? 16 : 10,
+                                  spreadRadius: 0,
+                                ),
+                              ]
+                            : null,
+                      ),
+                      child: widget.isLoading
+                          ? const Center(
+                              child: SizedBox(
+                                width: 16,
+                                height: 16,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  color: Colors.white,
                                 ),
                               ),
+                            )
+                          : Center(
+                              child: widget.icon != null
+                                  ? Icon(
+                                      widget.icon,
+                                      size: widget.isShort ? 20 : 22,
+                                      color: widget.color ?? Colors.white,
+                                    )
+                                  : Transform.translate(
+                                      offset: Offset(0, idleOffsetY),
+                                      child: Transform.rotate(
+                                        angle: idleRot,
+                                        child: Transform.scale(
+                                          scale: idleScale,
+                                          child: Text(
+                                            widget.emoji ?? '',
+                                            style: TextStyle(
+                                              fontSize: emojiSize,
+                                              height: 1.0,
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                            ),
+                    ),
+
+                    // Micro Coin / Badge
+                    if (widget.badgeText != null)
+                      Positioned(
+                        top: -4,
+                        right: -6,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 4.5,
+                            vertical: 1.5,
+                          ),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF131024),
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(
+                              color: Colors.amber.withValues(alpha: 0.6),
+                              width: 0.8,
+                            ),
+                          ),
+                          child: Text(
+                            widget.badgeText!,
+                            style: const TextStyle(
+                              fontSize: 8,
+                              fontWeight: FontWeight.w900,
+                              color: Colors.amber,
                             ),
                           ),
                         ),
+                      ),
+                  ],
                 );
               },
             ),
           ),
-          const SizedBox(height: 4),
+          const SizedBox(height: 5),
           Text(
             widget.label,
-            style: const TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.w700,
-              letterSpacing: 0.3,
-              color: Colors.white,
-              shadows: [
-                Shadow(
-                  color: Colors.black87,
-                  blurRadius: 6,
-                  offset: Offset(0, 1.5),
-                ),
-              ],
+            style: TextStyle(
+              fontSize: widget.isShort ? 8.5 : 9.5,
+              fontWeight: FontWeight.w800,
+              letterSpacing: 0.5,
+              color: widget.isMain
+                  ? const Color(0xFFFF2E93)
+                  : (widget.color ?? Colors.white70),
             ),
           ),
         ],
@@ -956,19 +1435,21 @@ class _InterestChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4.5),
       decoration: BoxDecoration(
         color: Colors.white.withValues(alpha: 0.08),
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(16),
         border: Border.all(
-            color: Colors.white.withValues(alpha: 0.18), width: 0.8),
+          color: Colors.white.withValues(alpha: 0.16),
+          width: 0.8,
+        ),
       ),
       child: Text(
         label,
         style: TextStyle(
           fontSize: 11,
-          fontWeight: FontWeight.w600,
-          color: Colors.white.withValues(alpha: 0.75),
+          fontWeight: FontWeight.w700,
+          color: Colors.white.withValues(alpha: 0.85),
         ),
       ),
     );
@@ -985,9 +1466,9 @@ int _matchPercent(UserModel me, UserModel other) {
 
 String _quoteText(UserModel u) {
   final bio = u.bio?.trim();
-  if (bio != null && bio.isNotEmpty) return '"$bio"';
+  if (bio != null && bio.isNotEmpty) return bio;
   if (u.interests.isNotEmpty) {
-    return '"${u.interests.take(2).join(' & ')}"';
+    return u.interests.take(2).join(' & ');
   }
-  return '"Honestly just vibing rn ✨"';
+  return 'Honestly just vibing rn ✨';
 }

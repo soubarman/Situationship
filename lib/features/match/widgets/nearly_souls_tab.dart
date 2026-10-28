@@ -1,4 +1,3 @@
-import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -212,7 +211,7 @@ class _NearlySoulsTabState extends ConsumerState<NearlySoulsTab> {
           ),
           const SizedBox(height: 8),
           Text(
-            'Be the first in your area!\nExpand your match distance.',
+            'Looking for souls nearby...\nCheck back soon as new people join!',
             textAlign: TextAlign.center,
             style: TextStyle(
               fontSize: 14,
