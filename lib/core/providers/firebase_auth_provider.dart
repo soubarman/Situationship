@@ -1,4 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../services/presence_service.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:image_picker/image_picker.dart';
@@ -276,6 +277,7 @@ class AuthController extends StateNotifier<AsyncValue<User?>> {
   // ── Sign Out ────────────────────────────────────────────────────────────────
 
   Future<void> signOut() async {
+    await PresenceService.instance.markOffline();
     await _auth.signOut();
     state = const AsyncValue.data(null);
   }

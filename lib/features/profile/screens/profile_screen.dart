@@ -325,7 +325,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
                   },
                 ),
                 // Verified S-Badge overlay on avatar
-                if (user.isVerified)
+                if (user.isReallyVerified)
                   Positioned(
                     bottom: 2,
                     right: 2,
@@ -365,7 +365,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
                   textAlign: TextAlign.center,
                 ),
               ),
-              if (user.isVerified) ...[
+              if (user.isReallyVerified) ...[
                 const SizedBox(width: 6),
                 const SBadgeWidget(size: 22),
               ],
@@ -501,7 +501,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
           ),
 
           // If not verified, add a subtle VIP banner to get verified
-          if (!user.isVerified) ...[
+          if (!user.isReallyVerified) ...[
             const SizedBox(height: 12),
             _BouncingButton(
               onTap: () {

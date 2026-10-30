@@ -20,7 +20,8 @@ service cloud.firestore {
       // Admin can update or delete any user.
       // Self can update their document EXCEPT privileged administrative fields:
       //   (isVerified, verifiedBadge, verificationStatus, isSuspended, suspensionReason, suspendedUntil)
-      // Other authenticated users can ONLY update followers and likedBy (for social follows and likes)
+      // Other authenticated users can update social interaction fields (followers, likedBy, superLikedBy, superLikeNotes)
+      // but CANNOT touch administrative or sensitive private fields (verification, suspension, coins, credentials)
       allow update: if isAdmin() || (
         isAuthenticated() && request.auth.uid == userId &&
         !request.resource.data.diff(resource.data).affectedKeys().hasAny([
@@ -29,7 +30,11 @@ service cloud.firestore {
         ])
       ) || (
         isAuthenticated() &&
-        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['followers', 'likedBy'])
+        !request.resource.data.diff(resource.data).affectedKeys().hasAny([
+          'isVerified', 'verifiedBadge', 'verificationStatus',
+          'isSuspended', 'suspensionReason', 'suspendedUntil',
+          'coins', 'email', 'phoneNumber', 'role'
+        ])
       );
       allow delete: if isAdmin() || (isAuthenticated() && request.auth.uid == userId);
     }

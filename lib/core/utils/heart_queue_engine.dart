@@ -239,8 +239,8 @@ class HeartQueueEngine {
     Set<String> unlikedIds = const {},
     String? overrideInterestedIn, // 'auto' | 'male' | 'female' | 'all'
   }) {
-    // 1. Never show yourself or invalid candidate
-    if (candidate.id.isEmpty || candidate.id == currentUser.id) {
+    // 1. Never show yourself, invalid candidate, or demo/test placeholder accounts
+    if (candidate.id.isEmpty || candidate.id == currentUser.id || candidate.isDemoOrTestAccount) {
       return false;
     }
 

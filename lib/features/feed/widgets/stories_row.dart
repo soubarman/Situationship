@@ -667,7 +667,7 @@ class _StoryItemState extends ConsumerState<_StoryItem> {
                 ),
 
                 // Verification Badge
-                if (liveAuthor.asData?.value?.isVerified ?? false)
+                if (liveAuthor.asData?.value?.isReallyVerified ?? false)
                   const Positioned(
                     bottom: -4,
                     right: -4,

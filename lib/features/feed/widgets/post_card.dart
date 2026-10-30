@@ -341,7 +341,7 @@ class _PostCardState extends ConsumerState<PostCard>
             palette,
             displayName,
             displayAvatar,
-            liveAuthor.asData?.value?.isVerified ?? widget.post.isUserVerified,
+            liveAuthor.asData?.value?.isReallyVerified ?? widget.post.isUserVerified,
             isFollowing,
             displayLocation,
           ),
@@ -529,21 +529,9 @@ class _PostCardState extends ConsumerState<PostCard>
   }
 
   Widget _buildVerifiedBadge(AppPalette palette) {
-    return Container(
-      width: 15,
-      height: 15,
-      margin: const EdgeInsets.only(left: 4),
-      decoration: BoxDecoration(
-        shape: BoxShape.circle,
-        color: palette.verifiedBadgeBg,
-      ),
-      child: Center(
-        child: Icon(
-          palette.verifiedIcon,
-          color: palette.verifiedIconColor,
-          size: 10,
-        ),
-      ),
+    return const Padding(
+      padding: EdgeInsets.only(left: 4),
+      child: SBadgeWidget(size: 15, showTooltip: false),
     );
   }
 
@@ -3956,7 +3944,7 @@ class _PlanParticipantsSheet extends ConsumerWidget {
                         ? (rawName.isNotEmpty ? '$rawName (You)' : 'You (You)')
                         : (rawName.isNotEmpty ? rawName : 'Member');
                     final avatarUrl = user?.avatarUrl;
-                    final isVerified = user?.isVerified ?? false;
+                    final isVerified = user?.isReallyVerified ?? false;
 
                     return Container(
                       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
@@ -4005,7 +3993,7 @@ class _PlanParticipantsSheet extends ConsumerWidget {
                                     ),
                                     if (isVerified) ...[
                                       const SizedBox(width: 4),
-                                      Icon(Icons.verified_rounded, size: 15, color: palette.primary),
+                                      const SBadgeWidget(size: 15, showTooltip: false),
                                     ],
                                   ],
                                 ),

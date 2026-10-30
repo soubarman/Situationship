@@ -17,6 +17,8 @@ class UserModel {
   final List<String> followers;
   final List<String> following;
   final List<String> likedBy;
+  final List<String> superLikedBy;
+  final Map<String, String> superLikeNotes;
   final List<String> matches;
   final List<String> dislikedUsers; // persisted unlikes — never re-shown
   final int postCount;
@@ -86,6 +88,8 @@ class UserModel {
     this.followers = const [],
     this.following = const [],
     this.likedBy = const [],
+    this.superLikedBy = const [],
+    this.superLikeNotes = const {},
     this.matches = const [],
     this.dislikedUsers = const [],
     this.postCount = 0,
@@ -170,6 +174,121 @@ class UserModel {
       isSuspended &&
       (suspendedUntil == null || suspendedUntil!.isAfter(DateTime.now()));
 
+  /// True only when user has passed verification checks and is approved
+  bool get isReallyVerified {
+    if (!isVerified) return false;
+    if (verificationStatus != null && verificationStatus != 'approved') return false;
+    return true;
+  }
+
+  /// Effective last seen timestamp strictly from Firestore `lastSeen` or `lastLoginDate`.
+  /// Returns null if user has no recorded presence in Firestore.
+  DateTime? get effectiveLastSeen {
+    if (lastSeen != null) return lastSeen;
+    if (lastLoginDate != null) {
+      final parsed = DateTime.tryParse(lastLoginDate!);
+      if (parsed != null) return parsed;
+    }
+    return null;
+  }
+
+  /// Real-time active status: true ONLY if user is online in Firestore AND has sent a heartbeat within the last 5 minutes.
+  bool get isActuallyActive {
+    if (!isOnline) return false;
+    if (lastSeen == null) return false;
+    final diff = DateTime.now().difference(lastSeen!);
+    return diff.inMinutes >= 0 && diff.inMinutes <= 5;
+  }
+
+  /// Strictly real human-friendly active status string:
+  /// - 'Active now' if genuinely online right now (< 5m heartbeat)
+  /// - 'Active X minutes/hours/days ago' from real Firestore timestamp
+  /// - 'Offline' if no recent activity recorded in Firestore
+  String get activeStatusText {
+    if (isActuallyActive) return 'Active now';
+    final seen = effectiveLastSeen;
+    if (seen != null) {
+      final diff = DateTime.now().difference(seen);
+      if (diff.isNegative) return 'Active now';
+      final minutes = diff.inMinutes;
+      final hours = diff.inHours;
+      final days = diff.inDays;
+
+      if (minutes < 1) return 'Active just now';
+      if (minutes < 60) {
+        return 'Active $minutes ${minutes == 1 ? "minute" : "minutes"} ago';
+      }
+      if (hours < 24) {
+        return 'Active $hours ${hours == 1 ? "hour" : "hours"} ago';
+      }
+      if (days < 30) {
+        return 'Active $days ${days == 1 ? "day" : "days"} ago';
+      }
+      final months = (days / 30).floor();
+      if (months < 12) {
+        return 'Active $months ${months == 1 ? "month" : "months"} ago';
+      }
+      return 'Recently online';
+    }
+    return 'Recently online';
+  }
+
+  /// Strictly real compact active status string:
+  /// - 'Active now', 'Xm ago', 'Xh ago', 'Xd ago', or 'Offline'
+  String get activeStatusCompact {
+    if (isActuallyActive) return 'Active now';
+    final seen = effectiveLastSeen;
+    if (seen != null) {
+      final diff = DateTime.now().difference(seen);
+      if (diff.isNegative) return 'Active now';
+      final minutes = diff.inMinutes;
+      final hours = diff.inHours;
+      final days = diff.inDays;
+
+      if (minutes < 1) return 'Just now';
+      if (minutes < 60) return '${minutes}m ago';
+      if (hours < 24) return '${hours}h ago';
+      if (days < 30) return '${days}d ago';
+      final months = (days / 30).floor();
+      if (months < 12) return '${months}mo ago';
+      return 'Recently';
+    }
+    return 'Recently';
+  }
+
+  /// True if account is flagged as a test, demo, or placeholder account
+  bool get isDemoOrTestAccount {
+    final lowerName = name.trim().toLowerCase();
+    final lowerEmail = email.trim().toLowerCase();
+    final lowerId = id.trim().toLowerCase();
+
+    if (lowerId.contains('sample') || lowerId.contains('dummy') || lowerId.startsWith('mock_')) {
+      return true;
+    }
+
+    if (lowerName.isEmpty ||
+        lowerName == 'demo' ||
+        lowerName.startsWith('demo ') ||
+        lowerName.endsWith(' demo') ||
+        lowerName.contains('demo user') ||
+        lowerName == 'test' ||
+        lowerName.startsWith('test ') ||
+        lowerName.contains('test user') ||
+        RegExp(r'^[0-9]+$').hasMatch(lowerName) ||
+        lowerName == 'sample') {
+      return true;
+    }
+
+    if (lowerEmail.contains('@sample.com') ||
+        lowerEmail.contains('@test.com') ||
+        lowerEmail.contains('@example.com') ||
+        lowerEmail.startsWith('demo@')) {
+      return true;
+    }
+
+    return false;
+  }
+
   factory UserModel.fromMap(Map<String, dynamic> map) {
     return UserModel(
       id: map['id'] ?? '',
@@ -185,13 +304,26 @@ class UserModel {
       verifiedBadge: map['verifiedBadge'],
       verificationStatus: map['verificationStatus'],
       isOnline: map['isOnline'] ?? false,
-      lastSeen: map['lastSeen'] != null
-          ? DateTime.fromMillisecondsSinceEpoch(map['lastSeen'])
-          : null,
+      lastSeen: () {
+        final val = map['lastSeen'];
+        if (val == null) return null;
+        if (val is int) return DateTime.fromMillisecondsSinceEpoch(val);
+        if (val is DateTime) return val;
+        if (val is String) return DateTime.tryParse(val);
+        try {
+          final dynamic dyn = val;
+          if (dyn.toDate is Function) {
+            return dyn.toDate() as DateTime;
+          }
+        } catch (_) {}
+        return null;
+      }(),
       zodiacSign: map['zodiacSign'],
       followers: List<String>.from(map['followers'] ?? []),
       following: List<String>.from(map['following'] ?? []),
       likedBy: List<String>.from(map['likedBy'] ?? []),
+      superLikedBy: List<String>.from(map['superLikedBy'] ?? []),
+      superLikeNotes: Map<String, String>.from(map['superLikeNotes'] ?? {}),
       matches: List<String>.from(map['matches'] ?? []),
       dislikedUsers: List<String>.from(map['dislikedUsers'] ?? []),
       postCount: map['postCount'] ?? 0,
@@ -250,6 +382,8 @@ class UserModel {
       'followers': followers,
       'following': following,
       'likedBy': likedBy,
+      'superLikedBy': superLikedBy,
+      'superLikeNotes': superLikeNotes,
       'matches': matches,
       'dislikedUsers': dislikedUsers,
       'postCount': postCount,
@@ -303,6 +437,8 @@ class UserModel {
     List<String>? followers,
     List<String>? following,
     List<String>? likedBy,
+    List<String>? superLikedBy,
+    Map<String, String>? superLikeNotes,
     List<String>? matches,
     List<String>? dislikedUsers,
     int? postCount,
@@ -354,6 +490,8 @@ class UserModel {
       followers: followers ?? this.followers,
       following: following ?? this.following,
       likedBy: likedBy ?? this.likedBy,
+      superLikedBy: superLikedBy ?? this.superLikedBy,
+      superLikeNotes: superLikeNotes ?? this.superLikeNotes,
       matches: matches ?? this.matches,
       dislikedUsers: dislikedUsers ?? this.dislikedUsers,
       postCount: postCount ?? this.postCount,

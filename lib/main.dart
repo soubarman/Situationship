@@ -10,6 +10,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'core/providers/shared_prefs_provider.dart';
+import 'core/services/presence_service.dart';
 
 import 'core/theme/app_palette.dart';
 
@@ -48,6 +49,8 @@ void main() async {
     persistenceEnabled: true,
     cacheSizeBytes: Settings.CACHE_SIZE_UNLIMITED,
   );
+
+  PresenceService.instance.initialize();
 
   final prefs = await SharedPreferences.getInstance();
 

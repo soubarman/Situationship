@@ -1,6 +1,9 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
+import 'package:cached_network_image/cached_network_image.dart';
+import '../../core/models/notification_model.dart';
 import '../../core/models/user_model.dart';
 import '../../core/providers/app_state_provider.dart';
 import '../../core/theme/app_theme.dart';
@@ -118,79 +121,15 @@ void showNotificationsSheet(BuildContext context, UserModel currentUser, WidgetR
                             separatorBuilder: (_, __) => const SizedBox(height: 10),
                             itemBuilder: (context, index) {
                               final item = list[index];
-                              IconData icon;
-                              Color iconColor;
-
-                              if (item.type == 'reaction') {
-                                icon = Icons.favorite_rounded;
-                                iconColor = Colors.pinkAccent;
-                              } else if (item.type == 'gift') {
-                                icon = Icons.card_giftcard_rounded;
-                                iconColor = Colors.amber;
-                              } else {
-                                icon = Icons.chat_bubble_rounded;
-                                iconColor = AppTheme.primaryBlue;
-                              }
-
-                              return Container(
-                                padding: const EdgeInsets.all(14),
-                                decoration: BoxDecoration(
-                                  color: isDark
-                                      ? Colors.white.withValues(alpha: 0.05)
-                                      : Colors.white.withValues(alpha: 0.85),
-                                  borderRadius: BorderRadius.circular(18),
-                                  border: Border.all(
-                                    color: isDark
-                                        ? Colors.white.withValues(alpha: 0.07)
-                                        : Colors.black.withValues(alpha: 0.04),
-                                  ),
-                                ),
-                                child: Row(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Container(
-                                      padding: const EdgeInsets.all(10),
-                                      decoration: BoxDecoration(
-                                        color: iconColor.withValues(alpha: 0.12),
-                                        shape: BoxShape.circle,
-                                      ),
-                                      child: Icon(icon, color: iconColor, size: 20),
-                                    ),
-                                    const SizedBox(width: 14),
-                                    Expanded(
-                                      child: Column(
-                                        crossAxisAlignment: CrossAxisAlignment.start,
-                                        children: [
-                                          Text(
-                                            item.title,
-                                            style: const TextStyle(
-                                              fontWeight: FontWeight.w900,
-                                              fontSize: 14.5,
-                                            ),
-                                          ),
-                                          const SizedBox(height: 4),
-                                          Text(
-                                            item.body,
-                                            style: TextStyle(
-                                              fontSize: 13,
-                                              fontWeight: FontWeight.w500,
-                                              color: isDark ? Colors.white70 : AppTheme.textSecondary,
-                                            ),
-                                          ),
-                                          const SizedBox(height: 6),
-                                          Text(
-                                            _formatTime(item.createdAt),
-                                            style: const TextStyle(
-                                              fontSize: 10.5,
-                                              color: AppTheme.textTertiary,
-                                              fontWeight: FontWeight.bold,
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                  ],
-                                ),
+                              return _NotificationTile(
+                                item: item,
+                                isDark: isDark,
+                                onTap: () {
+                                  Navigator.of(context, rootNavigator: true).pop();
+                                  if (item.senderId.isNotEmpty) {
+                                    context.push('/profile/view/${item.senderId}');
+                                  }
+                                },
                               );
                             },
                           );
@@ -265,79 +204,14 @@ class NotificationsScreen extends ConsumerWidget {
             separatorBuilder: (_, __) => const SizedBox(height: 10),
             itemBuilder: (context, index) {
               final item = list[index];
-              IconData icon;
-              Color iconColor;
-
-              if (item.type == 'reaction') {
-                icon = Icons.favorite_rounded;
-                iconColor = Colors.pinkAccent;
-              } else if (item.type == 'gift') {
-                icon = Icons.card_giftcard_rounded;
-                iconColor = Colors.amber;
-              } else {
-                icon = Icons.chat_bubble_rounded;
-                iconColor = AppTheme.primaryBlue;
-              }
-
-              return Container(
-                padding: const EdgeInsets.all(14),
-                decoration: BoxDecoration(
-                  color: isDark
-                      ? Colors.white.withValues(alpha: 0.05)
-                      : Colors.white,
-                  borderRadius: BorderRadius.circular(18),
-                  border: Border.all(
-                    color: isDark
-                        ? Colors.white.withValues(alpha: 0.07)
-                        : Colors.black.withValues(alpha: 0.06),
-                  ),
-                ),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.all(10),
-                      decoration: BoxDecoration(
-                        color: iconColor.withValues(alpha: 0.12),
-                        shape: BoxShape.circle,
-                      ),
-                      child: Icon(icon, color: iconColor, size: 20),
-                    ),
-                    const SizedBox(width: 14),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            item.title,
-                            style: const TextStyle(
-                              fontWeight: FontWeight.w900,
-                              fontSize: 14.5,
-                            ),
-                          ),
-                          const SizedBox(height: 4),
-                          Text(
-                            item.body,
-                            style: TextStyle(
-                              fontSize: 13,
-                              fontWeight: FontWeight.w500,
-                              color: isDark ? Colors.white70 : AppTheme.textSecondary,
-                            ),
-                          ),
-                          const SizedBox(height: 6),
-                          Text(
-                            _formatTime(item.createdAt),
-                            style: const TextStyle(
-                              fontSize: 10.5,
-                              color: AppTheme.textTertiary,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
+              return _NotificationTile(
+                item: item,
+                isDark: isDark,
+                onTap: () {
+                  if (item.senderId.isNotEmpty) {
+                    context.push('/profile/view/${item.senderId}');
+                  }
+                },
               );
             },
           );
@@ -355,4 +229,240 @@ String _formatTime(DateTime time) {
   if (diff.inMinutes < 60) return '${diff.inMinutes}m ago';
   if (diff.inHours < 24) return '${diff.inHours}h ago';
   return '${diff.inDays}d ago';
+}
+
+class _NotificationTile extends StatelessWidget {
+  final NotificationModel item;
+  final bool isDark;
+  final VoidCallback onTap;
+
+  const _NotificationTile({
+    required this.item,
+    required this.isDark,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final isSuperLike = item.type == 'superlike';
+    final isLike = item.type == 'like' || item.type == 'reaction';
+    final isGift = item.type == 'gift';
+    final isConfession = item.type == 'confession';
+
+    IconData icon;
+    Color iconColor;
+    Gradient? cardGradient;
+    Border? cardBorder;
+
+    if (isSuperLike) {
+      icon = Icons.star_rounded;
+      iconColor = const Color(0xFF00C9FF);
+      cardGradient = LinearGradient(
+        begin: Alignment.topLeft,
+        end: Alignment.bottomRight,
+        colors: isDark
+            ? [
+                const Color(0xFF002B49).withValues(alpha: 0.7),
+                const Color(0xFF0F1B2B).withValues(alpha: 0.8),
+              ]
+            : [
+                const Color(0xFFE0F7FF),
+                const Color(0xFFF0FDF4),
+              ],
+      );
+      cardBorder = Border.all(
+        color: const Color(0xFF00C9FF).withValues(alpha: 0.6),
+        width: 1.5,
+      );
+    } else if (isLike) {
+      icon = Icons.favorite_rounded;
+      iconColor = const Color(0xFFFF3366);
+      cardBorder = Border.all(
+        color: const Color(0xFFFF3366).withValues(alpha: isDark ? 0.35 : 0.22),
+        width: 1.0,
+      );
+    } else if (isGift) {
+      icon = Icons.card_giftcard_rounded;
+      iconColor = Colors.amber;
+      cardBorder = Border.all(
+        color: Colors.amber.withValues(alpha: isDark ? 0.35 : 0.22),
+        width: 1.0,
+      );
+    } else if (isConfession) {
+      icon = Icons.lock_rounded;
+      iconColor = const Color(0xFFC084FC);
+      cardBorder = Border.all(
+        color: const Color(0xFFC084FC).withValues(alpha: isDark ? 0.35 : 0.22),
+        width: 1.0,
+      );
+    } else {
+      icon = Icons.chat_bubble_rounded;
+      iconColor = AppTheme.primaryBlue;
+      cardBorder = Border.all(
+        color: isDark ? Colors.white.withValues(alpha: 0.08) : Colors.black.withValues(alpha: 0.06),
+        width: 1.0,
+      );
+    }
+
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: cardGradient == null
+              ? (isDark ? Colors.white.withValues(alpha: 0.05) : Colors.white)
+              : null,
+          gradient: cardGradient,
+          borderRadius: BorderRadius.circular(18),
+          border: cardBorder,
+          boxShadow: isSuperLike
+              ? [
+                  BoxShadow(
+                    color: const Color(0xFF00C9FF).withValues(alpha: 0.20),
+                    blurRadius: 14,
+                    offset: const Offset(0, 4),
+                  ),
+                ]
+              : [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: isDark ? 0.2 : 0.03),
+                    blurRadius: 8,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Sender Avatar or Type Icon
+            Stack(
+              clipBehavior: Clip.none,
+              children: [
+                if (item.senderAvatar != null && item.senderAvatar!.isNotEmpty)
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(22),
+                    child: CachedNetworkImage(
+                      imageUrl: item.senderAvatar!,
+                      width: 44,
+                      height: 44,
+                      fit: BoxFit.cover,
+                      errorWidget: (_, __, ___) => Container(
+                        width: 44,
+                        height: 44,
+                        color: iconColor.withValues(alpha: 0.15),
+                        child: Icon(icon, color: iconColor, size: 22),
+                      ),
+                    ),
+                  )
+                else
+                  Container(
+                    width: 44,
+                    height: 44,
+                    decoration: BoxDecoration(
+                      color: iconColor.withValues(alpha: 0.15),
+                      shape: BoxShape.circle,
+                    ),
+                    child: Icon(icon, color: iconColor, size: 22),
+                  ),
+
+                // Mini Badge on Avatar corner
+                Positioned(
+                  right: -3,
+                  bottom: -3,
+                  child: Container(
+                    padding: const EdgeInsets.all(3.5),
+                    decoration: BoxDecoration(
+                      color: iconColor,
+                      shape: BoxShape.circle,
+                      border: Border.all(
+                        color: isDark ? const Color(0xFF140F22) : Colors.white,
+                        width: 1.5,
+                      ),
+                    ),
+                    child: Icon(
+                      isSuperLike ? Icons.star_rounded : icon,
+                      color: isSuperLike ? Colors.black : Colors.white,
+                      size: 11,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          item.title,
+                          style: TextStyle(
+                            fontWeight: FontWeight.w900,
+                            fontSize: 14.5,
+                            color: isDark ? Colors.white : const Color(0xFF0F172A),
+                          ),
+                        ),
+                      ),
+                      if (isSuperLike)
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2.5),
+                          decoration: BoxDecoration(
+                            gradient: const LinearGradient(
+                              colors: [Color(0xFF00C9FF), Color(0xFF92FE9D)],
+                            ),
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: const Text(
+                            'VIP ⭐',
+                            style: TextStyle(
+                              fontSize: 9.5,
+                              fontWeight: FontWeight.w900,
+                              color: Colors.black,
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    item.body,
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w500,
+                      color: isDark ? Colors.white70 : AppTheme.textSecondary,
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  Row(
+                    children: [
+                      Text(
+                        _formatTime(item.createdAt),
+                        style: const TextStyle(
+                          fontSize: 10.5,
+                          color: AppTheme.textTertiary,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      const Spacer(),
+                      Text(
+                        isSuperLike ? 'View Profile ✨' : 'View Profile →',
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w700,
+                          color: isSuperLike ? const Color(0xFF00C9FF) : AppTheme.primaryBlue,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 }

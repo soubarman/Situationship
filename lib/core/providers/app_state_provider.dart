@@ -655,7 +655,7 @@ class DiscoveryNotifier extends StateNotifier<AsyncValue<List<UserModel>>> {
       final following = ref.read(currentUserProvider).following;
       final users = snapshot.docs
           .map((doc) => UserModel.fromMap(doc.data()))
-          .where((u) => u.id != _currentUserId)
+          .where((u) => u.id != _currentUserId && !u.isDemoOrTestAccount && u.isDiscoverable && !u.isCurrentlySuspended)
           .toList();
 
       _lastDoc = snapshot.docs.isNotEmpty ? snapshot.docs.last : null;
@@ -683,7 +683,7 @@ class DiscoveryNotifier extends StateNotifier<AsyncValue<List<UserModel>>> {
       final following = ref.read(currentUserProvider).following;
       final newUsers = snapshot.docs
           .map((doc) => UserModel.fromMap(doc.data()))
-          .where((u) => u.id != _currentUserId)
+          .where((u) => u.id != _currentUserId && !u.isDemoOrTestAccount && u.isDiscoverable && !u.isCurrentlySuspended)
           .toList();
 
       _lastDoc = snapshot.docs.isNotEmpty ? snapshot.docs.last : null;

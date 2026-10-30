@@ -250,7 +250,7 @@ class _ChatsScreenState extends ConsumerState<ChatsScreen>
             itemBuilder: (context, index) {
               final chat = onlineChats[index];
               final otherUser = ref.watch(otherUserProvider(chat.otherUserId)).valueOrNull;
-              final isVerified = otherUser?.isVerified ?? false;
+              final isVerified = otherUser?.isReallyVerified ?? false;
 
               return Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 6),
@@ -612,7 +612,7 @@ class _ChatTileState extends ConsumerState<_ChatTile>
   @override
   Widget build(BuildContext context) {
     final otherUser = ref.watch(otherUserProvider(widget.chat.otherUserId)).valueOrNull;
-    final isVerified = !widget.isConfessionView && (otherUser?.isVerified ?? false);
+    final isVerified = !widget.isConfessionView && (otherUser?.isReallyVerified ?? false);
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final timeStr = timeago.format(widget.chat.lastMessageTime, allowFromNow: true);
     final currentUser = ref.watch(currentUserProvider);
@@ -745,6 +745,26 @@ class _ChatTileState extends ConsumerState<_ChatTile>
                                         const SizedBox(width: 4),
                                         const SBadgeWidget(size: 14, showTooltip: false),
                                       ],
+                                      if (widget.isRequest && widget.chat.lastMessage.startsWith('⭐')) ...[
+                                        const SizedBox(width: 6),
+                                        Container(
+                                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                          decoration: BoxDecoration(
+                                            gradient: const LinearGradient(
+                                              colors: [Color(0xFF00C9FF), Color(0xFF92FE9D)],
+                                            ),
+                                            borderRadius: BorderRadius.circular(8),
+                                          ),
+                                          child: const Text(
+                                            'SUPER LIKE ⭐',
+                                            style: TextStyle(
+                                              fontSize: 8.5,
+                                              fontWeight: FontWeight.w900,
+                                              color: Colors.black,
+                                            ),
+                                          ),
+                                        ),
+                                      ],
                                     ],
                                   ),
                                 ),
@@ -772,7 +792,9 @@ class _ChatTileState extends ConsumerState<_ChatTile>
                                         widget.isRequest
                                             ? (isSentByMe
                                                 ? 'Waiting for response...'
-                                                : 'Wants to start a conversation ✨')
+                                                : (widget.chat.lastMessage.startsWith('⭐')
+                                                    ? widget.chat.lastMessage
+                                                    : 'Wants to start a conversation ✨'))
                                             : widget.chat.lastMessage,
                                         style: TextStyle(
                                           fontSize: 13,

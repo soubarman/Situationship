@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import '../../../core/utils/image_url_helper.dart';
@@ -22,6 +23,8 @@ import '../../wallet/widgets/coin_gate_sheet.dart';
 import '../../../core/providers/access_provider.dart';
 import '../../../core/providers/firestore_provider.dart';
 import '../../../shared/widgets/profile_choice_sheet.dart';
+import '../../../shared/widgets/say_hi_premium_modal.dart';
+import '../../../shared/widgets/super_like_dialog.dart';
 import '../../../core/utils/heart_queue_engine.dart';
 
 class UserDetailScreen extends ConsumerStatefulWidget {
@@ -47,6 +50,7 @@ class _UserDetailScreenState extends ConsumerState<UserDetailScreen>
   double? _deviceLon;
   bool _hasAskedChoice = false;
   bool _simulateVisitorView = false;
+  bool _hasSuperLikedThisSession = false;
   final Set<String> _locallyUnlockedKeys = {};
 
   // Animation controllers
@@ -164,6 +168,137 @@ class _UserDetailScreenState extends ConsumerState<UserDetailScreen>
     _scrollController.dispose();
     _photoPageController.dispose();
     super.dispose();
+  }
+
+  void _handleHeroSpark(UserModel currentUser, UserModel targetUser) async {
+    HapticFeedback.heavyImpact();
+    try {
+      final isCurrentlyFollowing = currentUser.following.contains(targetUser.id);
+      await ref.read(socialProvider.notifier).toggleFollow(
+        currentUserId: currentUser.id,
+        targetUserId: targetUser.id,
+        isCurrentlyFollowing: isCurrentlyFollowing,
+      );
+
+      // Cache profile in likes history immediately
+      ref.read(likedUsersCacheProvider.notifier).update((m) => {...m, targetUser.id: targetUser});
+      ref.read(sessionLikedUserIdsProvider.notifier).update((list) => [targetUser.id, ...list.where((id) => id != targetUser.id)]);
+
+      if (!isCurrentlyFollowing) {
+        await sendNotification(
+          userId: targetUser.id,
+          senderId: currentUser.id,
+          senderName: currentUser.name,
+          senderAvatar: currentUser.avatarUrl,
+          type: 'like',
+          title: 'New Spark! 💖',
+          body: '${currentUser.name} sparked with your profile!',
+        );
+      }
+
+      if (mounted) {
+        _showSuccess(isCurrentlyFollowing
+            ? 'Unsparked with ${targetUser.name.split(" ").first}'
+            : '💖 Sparked with ${targetUser.name.split(" ").first}!');
+      }
+    } catch (e) {
+      if (mounted) _showError('Could not send spark: $e');
+    }
+  }
+
+  void _handleSuperLike(UserModel currentUser, UserModel targetUser, {String? note}) async {
+    HapticFeedback.heavyImpact();
+    final authUser = FirebaseAuth.instance.currentUser;
+    final currentUserId = authUser?.uid ?? (currentUser.id.isNotEmpty && currentUser.id != '1' ? currentUser.id : null);
+
+    if (currentUserId == null) {
+      _showError('Please sign in to send a Super Like!');
+      return;
+    }
+
+    try {
+      // Record Super Like atomically in Firestore for priority discovery and recipient badge
+      final batch = FirebaseFirestore.instance.batch();
+      final targetRef = FirebaseFirestore.instance.collection('users').doc(targetUser.id);
+      final currentRef = FirebaseFirestore.instance.collection('users').doc(currentUserId);
+
+      final Map<String, dynamic> targetUpdates = {
+        'followers': FieldValue.arrayUnion([currentUserId]),
+        'likedBy': FieldValue.arrayUnion([currentUserId]),
+        'superLikedBy': FieldValue.arrayUnion([currentUserId]),
+      };
+      if (note != null && note.trim().isNotEmpty) {
+        targetUpdates['superLikeNotes.${currentUserId}'] = note.trim();
+      }
+      batch.set(targetRef, targetUpdates, SetOptions(merge: true));
+
+      batch.set(currentRef, {
+        'following': FieldValue.arrayUnion([targetUser.id]),
+      }, SetOptions(merge: true));
+
+      // Direct the Super Like text note straight into Chat Requests!
+      final superLikeText = (note != null && note.trim().isNotEmpty)
+          ? note.trim()
+          : '⭐ Super Liked your profile!';
+
+      final chatId = 'chat_${currentUserId}_${targetUser.id}';
+      final chatRef = FirebaseFirestore.instance.collection('chats').doc(chatId);
+      final messageRef = chatRef.collection('messages').doc();
+
+      batch.set(chatRef, {
+        'id': chatId,
+        'participants': [currentUserId, targetUser.id],
+        'status': 'requested',
+        'requestSenderId': currentUserId,
+        'senderId': currentUserId,
+        'senderName': currentUser.name,
+        'senderAvatar': currentUser.avatarUrl,
+        'receiverId': targetUser.id,
+        'receiverName': targetUser.name,
+        'receiverAvatar': targetUser.avatarUrl,
+        'lastMessage': '⭐ $superLikeText',
+        'lastMessageTime': FieldValue.serverTimestamp(),
+        'unreadCount': 1,
+        'isExpired': false,
+        'isConfession': false,
+      }, SetOptions(merge: true));
+
+      batch.set(messageRef, {
+        'id': messageRef.id,
+        'senderId': currentUserId,
+        'text': '⭐ Super Like: "$superLikeText"',
+        'createdAt': DateTime.now().millisecondsSinceEpoch,
+        'isRead': false,
+        'type': 'text',
+      });
+
+      await batch.commit();
+
+      ref.read(likedUsersCacheProvider.notifier).update((m) => {...m, targetUser.id: targetUser});
+      ref.read(sessionLikedUserIdsProvider.notifier).update((list) => [targetUser.id, ...list.where((id) => id != targetUser.id)]);
+
+      final firstName = targetUser.name.split(" ").first;
+      await sendNotification(
+        userId: targetUser.id,
+        senderId: currentUserId,
+        senderName: currentUser.name,
+        senderAvatar: currentUser.avatarUrl,
+        type: 'superlike',
+        title: '⭐ Super Like received!',
+        body: (note != null && note.trim().isNotEmpty)
+            ? '${currentUser.name}: "${note.trim()}"'
+            : '${currentUser.name} Super Liked your profile!',
+      );
+
+      if (mounted) {
+        setState(() {
+          _hasSuperLikedThisSession = true;
+        });
+        _showSuccess('⭐ Super Liked $firstName with priority starlight!');
+      }
+    } catch (e) {
+      if (mounted) _showError('Could not send Super Like: $e');
+    }
   }
 
   void _handleFollow(UserModel currentUser, UserModel targetUser, bool isFollowing) async {
@@ -760,8 +895,263 @@ class _UserDetailScreenState extends ConsumerState<UserDetailScreen>
     );
   }
 
-  void _openConfessionBottomSheet(UserModel currentUser, UserModel targetUser, bool isDark) {
-    _confessionController.clear();
+  Widget _buildQuickPromptPill(String label, String prompt, bool isDark, StateSetter setModalState) {
+    return GestureDetector(
+      onTap: () {
+        HapticFeedback.lightImpact();
+        _confessionController.text = prompt;
+        _confessionController.selection = TextSelection.fromPosition(
+          TextPosition(offset: _confessionController.text.length),
+        );
+        setModalState(() {});
+      },
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 6),
+        decoration: BoxDecoration(
+          color: isDark ? const Color(0xFF261845) : const Color(0xFFF3E8FF),
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(
+            color: const Color(0xFF9333EA).withValues(alpha: isDark ? 0.4 : 0.25),
+            width: 1,
+          ),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.w700,
+            color: isDark ? const Color(0xFFD8B4FE) : const Color(0xFF7E22CE),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSecretConfessionCard(UserModel targetUser, UserModel currentUser, bool isDark) {
+    if (targetUser.id == currentUser.id) return const SizedBox.shrink();
+
+    final screenW = MediaQuery.of(context).size.width;
+    final isCompact = screenW < 380;
+
+    final promptSuggestions = [
+      'I have had a secret crush on you...',
+      'Your smile is completely intoxicating ✨',
+      'You have the most alluring vibe 💫',
+      'We would look amazing together ☕',
+    ];
+
+    return Padding(
+      padding: EdgeInsets.fromLTRB(isCompact ? 14 : 20, 4, isCompact ? 14 : 20, 18),
+      child: Container(
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(24),
+          gradient: LinearGradient(
+            colors: isDark
+                ? [
+                    const Color(0xFF1E1035).withValues(alpha: 0.95),
+                    const Color(0xFF2D124D).withValues(alpha: 0.85),
+                    const Color(0xFF160B29).withValues(alpha: 0.95),
+                  ]
+                : [
+                    const Color(0xFFFAF5FF),
+                    const Color(0xFFF3E8FF),
+                    const Color(0xFFFDF4FF),
+                  ],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          ),
+          border: Border.all(
+            color: isDark ? const Color(0xFF9333EA).withValues(alpha: 0.4) : const Color(0xFFD8B4FE),
+            width: 1.4,
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: const Color(0xFF9333EA).withValues(alpha: isDark ? 0.22 : 0.08),
+              blurRadius: 20,
+              offset: const Offset(0, 6),
+            ),
+          ],
+        ),
+        padding: EdgeInsets.all(isCompact ? 14 : 18),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Top Badge & Lock Icon with flexible wrapping
+            Wrap(
+              alignment: WrapAlignment.spaceBetween,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              spacing: 8,
+              runSpacing: 6,
+              children: [
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF9333EA).withValues(alpha: 0.2),
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(
+                      color: const Color(0xFF9333EA).withValues(alpha: 0.45),
+                      width: 1,
+                    ),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Text('🤫', style: TextStyle(fontSize: 12)),
+                      const SizedBox(width: 5),
+                      Text(
+                        'SECRET CONFESSION',
+                        style: TextStyle(
+                          fontSize: 10,
+                          fontWeight: FontWeight.w900,
+                          letterSpacing: 0.8,
+                          color: isDark ? const Color(0xFFD8B4FE) : const Color(0xFF7E22CE),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3.5),
+                  decoration: BoxDecoration(
+                    color: isDark ? Colors.white.withValues(alpha: 0.08) : Colors.black.withValues(alpha: 0.05),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Text(
+                    '100% Anonymous',
+                    style: TextStyle(
+                      fontSize: 10.5,
+                      fontWeight: FontWeight.w700,
+                      color: isDark ? Colors.white70 : const Color(0xFF6B21A8),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 14),
+
+            // Title & Subtitle
+            Text(
+              'Confess to ${targetUser.name.split(" ").first} anonymously 💌',
+              style: TextStyle(
+                fontSize: 17,
+                fontWeight: FontWeight.w800,
+                letterSpacing: -0.3,
+                color: isDark ? Colors.white : const Color(0xFF1E1035),
+              ),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              'Send a secret locked note directly to their inbox. Your name and profile remain completely hidden unless you choose to reveal yourself later.',
+              style: TextStyle(
+                fontSize: 13,
+                height: 1.45,
+                fontWeight: FontWeight.w400,
+                color: isDark ? Colors.white70 : const Color(0xFF4C1D95),
+              ),
+            ),
+            const SizedBox(height: 14),
+
+            // Quick Prompt Ideas
+            Text(
+              'Tap an idea to start writing:',
+              style: TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w700,
+                color: isDark ? const Color(0xFFC084FC) : const Color(0xFF7E22CE),
+                letterSpacing: 0.2,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: promptSuggestions.map((prompt) {
+                return GestureDetector(
+                  onTap: () {
+                    HapticFeedback.lightImpact();
+                    _openConfessionBottomSheet(currentUser, targetUser, isDark, initialPrompt: prompt);
+                  },
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+                    decoration: BoxDecoration(
+                      color: isDark ? Colors.white.withValues(alpha: 0.06) : Colors.white,
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(
+                        color: isDark ? Colors.white.withValues(alpha: 0.12) : const Color(0xFFE9D5FF),
+                        width: 1,
+                      ),
+                    ),
+                    child: Text(
+                      prompt,
+                      style: TextStyle(
+                        fontSize: 11.5,
+                        fontWeight: FontWeight.w500,
+                        color: isDark ? Colors.white.withValues(alpha: 0.9) : const Color(0xFF3B0764),
+                      ),
+                    ),
+                  ),
+                );
+              }).toList(),
+            ),
+            const SizedBox(height: 16),
+
+            // Main CTA Button
+            GestureDetector(
+              onTap: () {
+                HapticFeedback.mediumImpact();
+                _openConfessionBottomSheet(currentUser, targetUser, isDark);
+              },
+              child: Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(vertical: 13),
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(
+                    colors: [Color(0xFF9333EA), Color(0xFFFF3366)],
+                    begin: Alignment.centerLeft,
+                    end: Alignment.centerRight,
+                  ),
+                  borderRadius: BorderRadius.circular(16),
+                  boxShadow: [
+                    BoxShadow(
+                      color: const Color(0xFF9333EA).withValues(alpha: 0.4),
+                      blurRadius: 16,
+                      offset: const Offset(0, 4),
+                    ),
+                  ],
+                ),
+                child: const Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(Icons.lock_rounded, color: Colors.white, size: 17),
+                    SizedBox(width: 8),
+                    Text(
+                      'Write Secret Confession',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 14,
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: 0.2,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _openConfessionBottomSheet(UserModel currentUser, UserModel targetUser, bool isDark, {String? initialPrompt}) {
+    if (initialPrompt != null && initialPrompt.isNotEmpty) {
+      _confessionController.text = initialPrompt;
+      _confessionController.selection = TextSelection.fromPosition(
+        TextPosition(offset: _confessionController.text.length),
+      );
+    } else {
+      _confessionController.clear();
+    }
 
     showModalBottomSheet(
       context: context,
@@ -895,12 +1285,50 @@ class _UserDetailScreenState extends ConsumerState<UserDetailScreen>
                   // Body
                   Padding(
                     padding: EdgeInsets.fromLTRB(
-                      20, 20, 20,
+                      20, 16, 20,
                       MediaQuery.of(context).viewInsets.bottom + 24,
                     ),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
+                        // Quick prompt inspiration chips
+                        SingleChildScrollView(
+                          scrollDirection: Axis.horizontal,
+                          physics: const BouncingScrollPhysics(),
+                          child: Row(
+                            children: [
+                              _buildQuickPromptPill(
+                                '💭 Secret Crush',
+                                'I have had a secret crush on you for a while... ✨',
+                                isDark,
+                                setModalState,
+                              ),
+                              const SizedBox(width: 8),
+                              _buildQuickPromptPill(
+                                '✨ Compliment',
+                                'Your smile is literally the most alluring thing I have seen today 🥰',
+                                isDark,
+                                setModalState,
+                              ),
+                              const SizedBox(width: 8),
+                              _buildQuickPromptPill(
+                                '☕ Coffee Date',
+                                'Would love to invite you for a cozy coffee chat sometime ☕💫',
+                                isDark,
+                                setModalState,
+                              ),
+                              const SizedBox(width: 8),
+                              _buildQuickPromptPill(
+                                '🔥 Great Vibe',
+                                'You have such a magnetic, captivating vibe! 💖',
+                                isDark,
+                                setModalState,
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+
                         // Text field
                         Container(
                           decoration: BoxDecoration(
@@ -1256,6 +1684,7 @@ class _UserDetailScreenState extends ConsumerState<UserDetailScreen>
                               children: [
                                 _buildInfoCard(user, currentUser, existingChat, isFollowing, isDark),
                                 _buildAboutMeChips(user, isDark),
+                                _buildSecretConfessionCard(user, currentUser, isDark),
                                 _buildTabbedSections(user, currentUser, isDark),
                                 const SizedBox(height: 140),
                               ],
@@ -1357,7 +1786,9 @@ class _UserDetailScreenState extends ConsumerState<UserDetailScreen>
       id1: currentUser.id, id2: user.id,
     );
     final screenH = MediaQuery.of(context).size.height;
-    final heroHeight = isWide ? 520.0 : math.min(screenH * 0.62, 540.0);
+    final screenW = MediaQuery.of(context).size.width;
+    final isSmall = screenW < 380;
+    final heroHeight = isWide ? 520.0 : math.min(screenH * 0.60, 520.0);
 
     int compatibilityScore = _calculateCompatibilityScore(currentUser, user);
 
@@ -1666,57 +2097,71 @@ class _UserDetailScreenState extends ConsumerState<UserDetailScreen>
           Positioned(
             left: 0, right: 0, bottom: 0,
             child: Padding(
-              padding: const EdgeInsets.fromLTRB(22, 0, 22, 28),
+              padding: EdgeInsets.fromLTRB(isSmall ? 16 : 22, 0, isSmall ? 16 : 22, isSmall ? 20 : 28),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  // Badges
-                  Row(
-                    children: [
-                      if (user.id == currentUser.id && _simulateVisitorView) ...[
-                        GestureDetector(
-                          onTap: () {
-                            setState(() => _simulateVisitorView = false);
-                            HapticFeedback.selectionClick();
-                            ScaffoldMessenger.of(context).removeCurrentSnackBar();
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                content: Text('👑 Switched back to Owner View'),
-                                duration: Duration(seconds: 2),
-                                behavior: SnackBarBehavior.floating,
-                              ),
-                            );
-                          },
-                          child: _buildGlassPill('👁️ Preview Mode • Exit ✕', accent: Colors.orange),
-                        ),
+                  // Badges (smooth horizontal scrolling prevents right-edge overflow on all mobile screens)
+                  SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    physics: const BouncingScrollPhysics(),
+                    child: Row(
+                      children: [
+                        if (user.id == currentUser.id && _simulateVisitorView) ...[
+                          GestureDetector(
+                            onTap: () {
+                              setState(() => _simulateVisitorView = false);
+                              HapticFeedback.selectionClick();
+                              ScaffoldMessenger.of(context).removeCurrentSnackBar();
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text('👑 Switched back to Owner View'),
+                                  duration: Duration(seconds: 2),
+                                  behavior: SnackBarBehavior.floating,
+                                ),
+                              );
+                            },
+                            child: _buildGlassPill('👁️ Preview Mode • Exit ✕', accent: Colors.orange),
+                          ),
+                          const SizedBox(width: 8),
+                        ],
+                        _buildGlassPill('💖 $compatibilityScore% Match', accent: const Color(0xFFFF3366)),
                         const SizedBox(width: 8),
+                        _buildGlassPill('📍 $distance km', accent: const Color(0xFFFF8A65)),
+                        if (user.id != currentUser.id) ...[
+                          const SizedBox(width: 8),
+                          GestureDetector(
+                            onTap: () {
+                              HapticFeedback.selectionClick();
+                              _openConfessionBottomSheet(currentUser, user, isDark);
+                            },
+                            child: _buildGlassPill('🤫 Confess', accent: const Color(0xFFC084FC)),
+                          ),
+                        ],
+                        if (photoList.length > 1) ...[
+                          const SizedBox(width: 8),
+                          _buildGlassPill('📷 ${_currentPhotoIndex + 1}/${photoList.length}'),
+                        ],
                       ],
-                      _buildGlassPill('💖 $compatibilityScore% Match', accent: const Color(0xFFFF3366)),
-                      const SizedBox(width: 8),
-                      _buildGlassPill('📍 $distance km', accent: const Color(0xFFFF8A65)),
-                      if (photoList.length > 1) ...[
-                        const SizedBox(width: 8),
-                        _buildGlassPill('📷 ${_currentPhotoIndex + 1}/${photoList.length}'),
-                      ],
-                    ],
+                    ),
                   ),
                   const SizedBox(height: 14),
 
-                  // Online indicator
+                  // Real-time Activity status indicator
                   Row(
                     children: [
                       AnimatedBuilder(
                         animation: _pulseAnim,
                         builder: (context, _) => Transform.scale(
-                          scale: user.isOnline ? _pulseAnim.value : 1.0,
+                          scale: user.isActuallyActive ? _pulseAnim.value : 1.0,
                           child: Container(
                             width: 9,
                             height: 9,
                             decoration: BoxDecoration(
-                              color: user.isOnline ? const Color(0xFF10B981) : Colors.grey.shade500,
+                              color: user.isActuallyActive ? const Color(0xFF10B981) : (user.effectiveLastSeen != null ? const Color(0xFF94A3B8) : Colors.grey.shade500),
                               shape: BoxShape.circle,
-                              boxShadow: user.isOnline ? [
+                              boxShadow: user.isActuallyActive ? [
                                 BoxShadow(color: const Color(0xFF10B981).withOpacity(0.8), blurRadius: 8, spreadRadius: 2),
                               ] : [],
                             ),
@@ -1725,9 +2170,9 @@ class _UserDetailScreenState extends ConsumerState<UserDetailScreen>
                       ),
                       const SizedBox(width: 7),
                       Text(
-                        user.isOnline ? 'Active now' : 'Offline',
+                        user.activeStatusText,
                         style: TextStyle(
-                          color: Colors.white.withOpacity(0.9),
+                          color: user.isActuallyActive ? Colors.white.withOpacity(0.95) : Colors.white.withOpacity(0.6),
                           fontSize: 13,
                           fontWeight: FontWeight.w700,
                           letterSpacing: 0.2,
@@ -1736,27 +2181,27 @@ class _UserDetailScreenState extends ConsumerState<UserDetailScreen>
                     ],
                   ),
                   const SizedBox(height: 8),
-                  // Name + age
+                  // Name + age (responsive typography)
                   Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       Flexible(
                         child: Text(
                           '${user.name}, ${user.age}',
-                          style: const TextStyle(
+                          style: TextStyle(
                             color: Colors.white,
-                            fontSize: 34,
+                            fontSize: isWide ? 30 : (isSmall ? 25 : 28),
                             fontWeight: FontWeight.w900,
-                            letterSpacing: -1,
-                            height: 1.1,
-                            shadows: [Shadow(color: Colors.black45, blurRadius: 14)],
+                            letterSpacing: -0.6,
+                            height: 1.15,
+                            shadows: const [Shadow(color: Colors.black54, blurRadius: 14)],
                           ),
                           overflow: TextOverflow.ellipsis,
                         ),
                       ),
-                      if (user.isVerified) ...[
+                      if (user.isReallyVerified) ...[
                         const SizedBox(width: 8),
-                        const SBadgeWidget(size: 26),
+                        SBadgeWidget(size: isSmall ? 22 : 26),
                       ],
                     ],
                   ),
@@ -1849,6 +2294,10 @@ class _UserDetailScreenState extends ConsumerState<UserDetailScreen>
       id1: currentUser.id, id2: user.id,
     );
     final compatibilityScore = _calculateCompatibilityScore(currentUser, user);
+    final screenW = MediaQuery.of(context).size.width;
+    final isCompact = screenW < 380;
+    final hPad = isCompact ? 14.0 : 20.0;
+    final cardGap = isCompact ? 6.0 : 10.0;
 
     return Container(
       margin: const EdgeInsets.only(top: 0),
@@ -1880,9 +2329,12 @@ class _UserDetailScreenState extends ConsumerState<UserDetailScreen>
           if (user.id == currentUser.id)
             _buildViewModeToggle(isDark),
 
+          // Super Like Priority Banner (if target Super Liked me, or I Super Liked target)
+          _buildSuperLikeBanner(user, currentUser, isDark),
+
           // Dating Highlights Row (Romantic & Informative)
           Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 20),
+            padding: EdgeInsets.symmetric(horizontal: hPad),
             child: isSelf
                 ? Row(
                     children: [
@@ -1893,7 +2345,7 @@ class _UserDetailScreenState extends ConsumerState<UserDetailScreen>
                         gradientColors: const [Color(0xFF9B5DE5), Color(0xFF6C63FF)],
                         isDark: isDark,
                       ),
-                      const SizedBox(width: 10),
+                      SizedBox(width: cardGap),
                       _buildDatingHighlightCard(
                         icon: const Icon(Icons.favorite_rounded, color: Color(0xFFFF3366), size: 18),
                         title: '${user.following.length}',
@@ -1901,7 +2353,7 @@ class _UserDetailScreenState extends ConsumerState<UserDetailScreen>
                         gradientColors: const [Color(0xFFFF3366), Color(0xFFFF6584)],
                         isDark: isDark,
                       ),
-                      const SizedBox(width: 10),
+                      SizedBox(width: cardGap),
                       _buildDatingHighlightCard(
                         icon: const Icon(Icons.monetization_on_rounded, color: Color(0xFFFFB300), size: 18),
                         title: '${user.coins}',
@@ -1920,7 +2372,7 @@ class _UserDetailScreenState extends ConsumerState<UserDetailScreen>
                         gradientColors: const [Color(0xFFFF3366), Color(0xFFFF6584)],
                         isDark: isDark,
                       ),
-                      const SizedBox(width: 10),
+                      SizedBox(width: cardGap),
                       _buildDatingHighlightCard(
                         icon: const Icon(Icons.auto_awesome_rounded, color: Color(0xFF9B5DE5), size: 18),
                         title: (user.relationshipIntent != null && user.relationshipIntent!.isNotEmpty)
@@ -1930,7 +2382,7 @@ class _UserDetailScreenState extends ConsumerState<UserDetailScreen>
                         gradientColors: const [Color(0xFF9B5DE5), Color(0xFF6C63FF)],
                         isDark: isDark,
                       ),
-                      const SizedBox(width: 10),
+                      SizedBox(width: cardGap),
                       _buildDatingHighlightCard(
                         icon: const Icon(Icons.location_on_rounded, color: Color(0xFFFF9800), size: 18),
                         title: '$distance km',
@@ -1946,7 +2398,7 @@ class _UserDetailScreenState extends ConsumerState<UserDetailScreen>
 
           // Action buttons — vivid gradient fills
           Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 20),
+            padding: EdgeInsets.symmetric(horizontal: hPad),
             child: isSelf
                 ? Row(
                     children: [
@@ -2152,7 +2604,7 @@ class _UserDetailScreenState extends ConsumerState<UserDetailScreen>
           // Bio + Phone — premium glowing card
           if (hasBio || showPhone)
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20),
+              padding: EdgeInsets.symmetric(horizontal: hPad),
               child: Container(
                 decoration: BoxDecoration(
                   color: isDark
@@ -2651,14 +3103,17 @@ class _UserDetailScreenState extends ConsumerState<UserDetailScreen>
     required bool isDark,
     VoidCallback? onTap,
   }) {
+    final screenW = MediaQuery.of(context).size.width;
+    final isCompact = screenW < 380;
+
     return Expanded(
       child: _BouncingButton(
         onTap: onTap ?? () => HapticFeedback.lightImpact(),
         child: Container(
-          padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 8),
+          padding: EdgeInsets.symmetric(vertical: isCompact ? 11 : 13, horizontal: isCompact ? 5 : 8),
           decoration: BoxDecoration(
             color: isDark ? const Color(0xFF171329) : Colors.white,
-            borderRadius: BorderRadius.circular(20),
+            borderRadius: BorderRadius.circular(18),
             border: Border.all(
               color: isDark ? gradientColors.first.withOpacity(0.25) : gradientColors.first.withOpacity(0.2),
               width: 1.2,
@@ -2675,7 +3130,7 @@ class _UserDetailScreenState extends ConsumerState<UserDetailScreen>
             mainAxisSize: MainAxisSize.min,
             children: [
               Container(
-                padding: const EdgeInsets.all(8),
+                padding: EdgeInsets.all(isCompact ? 6.5 : 8),
                 decoration: BoxDecoration(
                   gradient: LinearGradient(
                     colors: [
@@ -2687,24 +3142,26 @@ class _UserDetailScreenState extends ConsumerState<UserDetailScreen>
                 ),
                 child: icon,
               ),
-              const SizedBox(height: 8),
-              Text(
-                title,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  fontSize: 15,
-                  fontWeight: FontWeight.w800,
-                  color: isDark ? Colors.white : const Color(0xFF1E293B),
+              SizedBox(height: isCompact ? 6 : 8),
+              FittedBox(
+                fit: BoxFit.scaleDown,
+                child: Text(
+                  title,
+                  maxLines: 1,
+                  style: TextStyle(
+                    fontSize: isCompact ? 13.5 : 14.5,
+                    fontWeight: FontWeight.w800,
+                    color: isDark ? Colors.white : const Color(0xFF1E293B),
+                  ),
                 ),
               ),
-              const SizedBox(height: 3),
+              const SizedBox(height: 2),
               Text(
                 subtitle,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: TextStyle(
-                  fontSize: 11,
+                  fontSize: isCompact ? 10 : 11,
                   fontWeight: FontWeight.w600,
                   color: isDark ? Colors.white54 : const Color(0xFF64748B),
                 ),
@@ -2825,6 +3282,10 @@ Widget _buildStatCard(String value, String label, List<Color> gradientColors, bo
   }
 
   Widget _buildAboutMeChips(UserModel user, bool isDark) {
+    final screenW = MediaQuery.of(context).size.width;
+    final isCompact = screenW < 380;
+    final hPad = isCompact ? 14.0 : 20.0;
+
     final chips = <String>[
       if (user.gender.isNotEmpty) '👤 ${user.gender.substring(0, 1).toUpperCase()}${user.gender.substring(1)}',
       if ((user.zodiacSign ?? '').isNotEmpty) '✨ ${user.zodiacSign}',
@@ -2836,7 +3297,7 @@ Widget _buildStatCard(String value, String label, List<Color> gradientColors, bo
     }
 
     return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 20, 20, 8),
+      padding: EdgeInsets.fromLTRB(hPad, 18, hPad, 8),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -2938,11 +3399,192 @@ Widget _buildStatCard(String value, String label, List<Color> gradientColors, bo
     );
   }
 
+  Widget _buildSuperLikeBanner(UserModel user, UserModel currentUser, bool isDark) {
+    final bool theySuperLikedMe = currentUser.superLikedBy.contains(user.id);
+    final bool iSuperLikedThem = user.superLikedBy.contains(currentUser.id) || _hasSuperLikedThisSession;
+    final String? note = currentUser.superLikeNotes[user.id];
+
+    if (!theySuperLikedMe && !iSuperLikedThem) {
+      return const SizedBox.shrink();
+    }
+
+    final screenW = MediaQuery.of(context).size.width;
+    final isCompact = screenW < 380;
+    final hPad = isCompact ? 14.0 : 20.0;
+    final firstName = user.name.split(' ').first;
+
+    if (theySuperLikedMe) {
+      return Padding(
+        padding: EdgeInsets.fromLTRB(hPad, 0, hPad, 16),
+        child: Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: isDark
+                  ? [
+                      const Color(0xFF003859).withOpacity(0.85),
+                      const Color(0xFF0D1B2A).withOpacity(0.92),
+                    ]
+                  : [
+                      const Color(0xFFE0F7FF),
+                      const Color(0xFFF0FDF4),
+                    ],
+            ),
+            borderRadius: BorderRadius.circular(22),
+            border: Border.all(
+              color: const Color(0xFF00C9FF).withOpacity(0.6),
+              width: 1.5,
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: const Color(0xFF00C9FF).withOpacity(isDark ? 0.25 : 0.15),
+                blurRadius: 18,
+                offset: const Offset(0, 6),
+              ),
+            ],
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4.5),
+                    decoration: BoxDecoration(
+                      gradient: const LinearGradient(
+                        colors: [Color(0xFF00C9FF), Color(0xFF92FE9D)],
+                      ),
+                      borderRadius: BorderRadius.circular(20),
+                      boxShadow: [
+                        BoxShadow(
+                          color: const Color(0xFF00C9FF).withOpacity(0.4),
+                          blurRadius: 8,
+                        ),
+                      ],
+                    ),
+                    child: const Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text('⭐', style: TextStyle(fontSize: 12)),
+                        SizedBox(width: 5),
+                        Text(
+                          'SUPER LIKED YOU',
+                          style: TextStyle(
+                            color: Colors.black,
+                            fontSize: 11,
+                            fontWeight: FontWeight.w900,
+                            letterSpacing: 0.6,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const Spacer(),
+                  const Text(
+                    '✨ Priority Match',
+                    style: TextStyle(
+                      fontSize: 11,
+                      color: Color(0xFF00C9FF),
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 10),
+              Text(
+                '$firstName sent you a Super Like to make sure you see their profile first!',
+                style: TextStyle(
+                  fontSize: 13,
+                  height: 1.35,
+                  color: isDark ? Colors.white.withOpacity(0.9) : const Color(0xFF1E293B),
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+              if (note != null && note.trim().isNotEmpty) ...[
+                const SizedBox(height: 10),
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                  decoration: BoxDecoration(
+                    color: isDark ? Colors.black.withOpacity(0.35) : Colors.white.withOpacity(0.85),
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(
+                      color: const Color(0xFF00C9FF).withOpacity(0.3),
+                    ),
+                  ),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text('💌 ', style: TextStyle(fontSize: 15)),
+                      Expanded(
+                        child: Text(
+                          '"${note.trim()}"',
+                          style: TextStyle(
+                            fontSize: 13.5,
+                            fontStyle: FontStyle.italic,
+                            color: isDark ? const Color(0xFFE2E8F0) : const Color(0xFF0F172A),
+                            fontWeight: FontWeight.w600,
+                            height: 1.3,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
+      );
+    } else {
+      // Current user Super Liked this profile
+      return Padding(
+        padding: EdgeInsets.fromLTRB(hPad, 0, hPad, 16),
+        child: Container(
+          width: double.infinity,
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+          decoration: BoxDecoration(
+            color: const Color(0xFF00C9FF).withOpacity(isDark ? 0.12 : 0.08),
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: const Color(0xFF00C9FF).withOpacity(0.35),
+            ),
+          ),
+          child: Row(
+            children: [
+              const Text('⭐', style: TextStyle(fontSize: 16)),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  'You Super Liked $firstName — your profile is prioritized at the top of their discovery stack!',
+                  style: TextStyle(
+                    fontSize: 12.5,
+                    color: isDark ? const Color(0xFF90E0EF) : const Color(0xFF0077B6),
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+  }
+
   Widget _buildFloatingReactions(UserModel currentUser, UserModel user, bool isFollowing, bool isDark) {
     if (user.id == currentUser.id && !_simulateVisitorView) {
       return const SizedBox.shrink();
     }
     final bottomInset = MediaQuery.of(context).padding.bottom;
+    final screenW = MediaQuery.of(context).size.width;
+    final isCompact = screenW < 380;
+    final double sideBtnSize = isCompact ? 42.0 : 48.0;
+    final double centerBtnSize = isCompact ? 54.0 : 62.0;
+    final double gap = isCompact ? 8.0 : 12.0;
+    final double hPad = isCompact ? 12.0 : 18.0;
 
     return Padding(
       padding: EdgeInsets.only(bottom: math.max(bottomInset, 16)),
@@ -2952,7 +3594,7 @@ Widget _buildStatCard(String value, String label, List<Color> gradientColors, bo
           child: BackdropFilter(
             filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
             child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
+              padding: EdgeInsets.symmetric(horizontal: hPad, vertical: isCompact ? 8 : 10),
               decoration: BoxDecoration(
                 color: (isDark ? const Color(0xFF140F24) : Colors.white).withOpacity(0.85),
                 borderRadius: BorderRadius.circular(40),
@@ -2972,14 +3614,15 @@ Widget _buildStatCard(String value, String label, List<Color> gradientColors, bo
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
-                  // Pass Button ✕
-                  _buildDatingActionButton(
-                    icon: const Icon(Icons.close_rounded, color: Color(0xFFFF5252), size: 24),
-                    borderColor: const Color(0xFFFF5252).withOpacity(0.35),
-                    size: 48,
+                  // Pass Button ✕ (Animated with particles)
+                  _FloatingReactionItem(
+                    icon: Icon(Icons.close_rounded, color: const Color(0xFFFF5252), size: isCompact ? 21 : 24),
+                    borderColor: const Color(0xFFFF5252).withOpacity(0.4),
+                    size: sideBtnSize,
                     isDark: isDark,
+                    particleEmojis: const ['✕', '💨', '👋'],
                     onTap: () {
-                      HapticFeedback.lightImpact();
+                      HapticFeedback.mediumImpact();
                       if (Navigator.of(context).canPop()) {
                         Navigator.of(context).pop();
                       } else {
@@ -2987,70 +3630,88 @@ Widget _buildStatCard(String value, String label, List<Color> gradientColors, bo
                       }
                     },
                   ),
-                  const SizedBox(width: 14),
+                  SizedBox(width: gap),
 
-                  // Super Like Button ⭐
-                  _buildDatingActionButton(
-                    icon: const Icon(Icons.star_rounded, color: Color(0xFF00C9FF), size: 26),
-                    borderColor: const Color(0xFF00C9FF).withOpacity(0.35),
-                    size: 48,
+                  // Super Like Button ⭐ (Animated Star with Particles & Real Firestore Like)
+                  _FloatingReactionItem(
+                    icon: Icon(Icons.star_rounded, color: const Color(0xFF00C9FF), size: isCompact ? 22 : 26),
+                    borderColor: const Color(0xFF00C9FF).withOpacity(0.45),
+                    size: sideBtnSize,
                     isDark: isDark,
+                    particleEmojis: const ['⭐', '🌟', '💫', '✨'],
                     onTap: () {
-                      HapticFeedback.mediumImpact();
-                      _handleReaction('⭐', currentUser, user, isFollowing);
+                      SuperLikeDialog.show(
+                        context: context,
+                        targetUser: user,
+                        currentUser: currentUser,
+                        onConfirmed: (note) => _handleSuperLike(currentUser, user, note: note),
+                      );
                     },
                   ),
-                  const SizedBox(width: 14),
+                  SizedBox(width: gap),
 
-                  // Hero Like / Spark Button 💖
-                  _BouncingButton(
-                    onTap: () {
-                      HapticFeedback.heavyImpact();
-                      _handleReaction('💖', currentUser, user, isFollowing);
-                    },
-                    child: Container(
-                      width: 62,
-                      height: 62,
-                      decoration: BoxDecoration(
-                        gradient: const LinearGradient(
-                          colors: [Color(0xFFFF3366), Color(0xFFFF6584)],
-                          begin: Alignment.topLeft,
-                          end: Alignment.bottomRight,
-                        ),
-                        shape: BoxShape.circle,
-                        boxShadow: [
-                          BoxShadow(
-                            color: const Color(0xFFFF3366).withOpacity(0.55),
-                            blurRadius: 18,
-                            offset: const Offset(0, 6),
-                          ),
-                        ],
-                      ),
-                      child: const Center(
-                        child: Icon(Icons.favorite_rounded, color: Colors.white, size: 30),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 14),
-
-                  // Chat / Say Hi Button 💬
-                  _buildDatingActionButton(
-                    icon: const Icon(Icons.chat_bubble_rounded, color: Color(0xFF9B5DE5), size: 22),
-                    borderColor: const Color(0xFF9B5DE5).withOpacity(0.35),
-                    size: 48,
+                  // Hero Like / Spark Button 💖 (Continuous Living Heartbeat Pulse & Floating Particles)
+                  _FloatingReactionItem(
+                    icon: Icon(Icons.favorite_rounded, color: Colors.white, size: isCompact ? 26 : 30),
+                    borderColor: const Color(0xFFFF3366),
+                    gradientColors: const [Color(0xFFFF3366), Color(0xFFFF6584)],
+                    size: centerBtnSize,
+                    isMain: true,
                     isDark: isDark,
+                    particleEmojis: const ['💖', '❤️', '💕', '✨'],
+                    onTap: () => _handleHeroSpark(currentUser, user),
+                  ),
+                  SizedBox(width: gap),
+
+                  // Anonymous Confession Button 🤫 (Playful Aura & Particles)
+                  _FloatingReactionItem(
+                    icon: Text('🤫', style: TextStyle(fontSize: isCompact ? 17 : 20)),
+                    borderColor: const Color(0xFF9333EA).withOpacity(0.45),
+                    size: sideBtnSize,
+                    isDark: isDark,
+                    particleEmojis: const ['🤫', '💌', '✨', '🔒'],
+                    onTap: () => _openConfessionBottomSheet(currentUser, user, isDark),
+                  ),
+                  SizedBox(width: gap),
+
+                  // Chat / Say Hi Button 💬 (Checks Premium & Opens Direct Chat)
+                  _FloatingReactionItem(
+                    icon: Icon(Icons.chat_bubble_rounded, color: const Color(0xFF9B5DE5), size: isCompact ? 19 : 22),
+                    borderColor: const Color(0xFF9B5DE5).withOpacity(0.4),
+                    size: sideBtnSize,
+                    isDark: isDark,
+                    particleEmojis: const ['💬', '💭', '✨', '👋'],
                     onTap: () {
-                      HapticFeedback.lightImpact();
-                      final chatId = 'chat_${currentUser.id}_${user.id}';
-                      context.pushNamed('chat-detail', pathParameters: {
-                        'chatId': chatId,
-                      }, extra: {
-                        'otherUserId': user.id,
-                        'name': user.name,
-                        'avatarUrl': user.avatarUrl,
-                        'isOnline': user.isOnline,
-                        'isConfession': false,
-                      });
+                      if (currentUser.hasActiveSubscription) {
+                        final chatId = 'chat_${currentUser.id}_${user.id}';
+                        context.pushNamed('chat-detail', pathParameters: {
+                          'chatId': chatId,
+                        }, extra: {
+                          'otherUserId': user.id,
+                          'name': user.name,
+                          'avatarUrl': user.avatarUrl,
+                          'isOnline': user.isOnline,
+                          'isConfession': false,
+                        });
+                      } else {
+                        SayHiPremiumModal.show(
+                          context: context,
+                          targetUser: user,
+                          currentUser: currentUser,
+                          onUnlocked: () {
+                            final chatId = 'chat_${currentUser.id}_${user.id}';
+                            context.pushNamed('chat-detail', pathParameters: {
+                              'chatId': chatId,
+                            }, extra: {
+                              'otherUserId': user.id,
+                              'name': user.name,
+                              'avatarUrl': user.avatarUrl,
+                              'isOnline': user.isOnline,
+                              'isConfession': false,
+                            });
+                          },
+                        );
+                      }
                     },
                   ),
                 ],
@@ -3190,10 +3851,14 @@ Widget _buildStatCard(String value, String label, List<Color> gradientColors, bo
   }
 
   Widget _buildTabbedSections(UserModel user, UserModel currentUser, bool isDark) {
+    final screenW = MediaQuery.of(context).size.width;
+    final isCompact = screenW < 380;
+    final hPad = isCompact ? 14.0 : 20.0;
+
     return Column(
       children: [
         Container(
-          margin: const EdgeInsets.symmetric(horizontal: 20),
+          margin: EdgeInsets.symmetric(horizontal: hPad),
           height: 50,
           padding: const EdgeInsets.all(4),
           decoration: BoxDecoration(
@@ -3332,10 +3997,12 @@ Widget _buildStatCard(String value, String label, List<Color> gradientColors, bo
         ? common.map((e) => '✨ ${e.substring(0, 1).toUpperCase()}${e.substring(1)}').toList()
         : ['🎵 Music', '🍔 Foodies', '✈️ Travel'];
 
+    final screenW = MediaQuery.of(context).size.width;
+    final isCompact = screenW < 380;
     return Container(
       key: const ValueKey(1),
-      margin: const EdgeInsets.symmetric(horizontal: 24),
-      padding: const EdgeInsets.all(22),
+      margin: EdgeInsets.symmetric(horizontal: isCompact ? 14 : 20),
+      padding: EdgeInsets.all(isCompact ? 16 : 22),
       decoration: BoxDecoration(
         color: isDark ? Colors.black.withOpacity(0.3) : Colors.white.withOpacity(0.55),
         borderRadius: BorderRadius.circular(28),
@@ -3513,10 +4180,12 @@ Widget _buildStatCard(String value, String label, List<Color> gradientColors, bo
       _ => '💖',
     };
 
+    final screenW = MediaQuery.of(context).size.width;
+    final isCompact = screenW < 380;
     return Container(
       key: const ValueKey(2),
-      margin: const EdgeInsets.symmetric(horizontal: 20),
-      padding: const EdgeInsets.all(22),
+      margin: EdgeInsets.symmetric(horizontal: isCompact ? 14 : 20),
+      padding: EdgeInsets.all(isCompact ? 16 : 22),
       decoration: BoxDecoration(
         color: isDark ? Colors.black.withOpacity(0.3) : Colors.white.withOpacity(0.65),
         borderRadius: BorderRadius.circular(28),
@@ -4311,6 +4980,179 @@ class _CustomConfessThumbShape extends SliderComponentShape {
 }
 
 // ─── Bouncing Button for Tactile Press Feedback ──────────────────────────────
+// ─── Animated Floating Reaction Item (Heartbeat, Particles, Elastic Spring) ────
+
+class _FloatingReactionItem extends StatefulWidget {
+  final Widget icon;
+  final VoidCallback onTap;
+  final double size;
+  final Color borderColor;
+  final Color? bgColor;
+  final List<Color>? gradientColors;
+  final bool isMain;
+  final List<String> particleEmojis;
+  final bool isDark;
+
+  const _FloatingReactionItem({
+    required this.icon,
+    required this.onTap,
+    required this.size,
+    required this.borderColor,
+    this.bgColor,
+    this.gradientColors,
+    this.isMain = false,
+    this.particleEmojis = const ['✨', '⭐'],
+    required this.isDark,
+  });
+
+  @override
+  State<_FloatingReactionItem> createState() => _FloatingReactionItemState();
+}
+
+class _FloatingReactionItemState extends State<_FloatingReactionItem> with TickerProviderStateMixin {
+  late final AnimationController _idleCtrl;
+  late final AnimationController _tapCtrl;
+  late final Animation<double> _tapScale;
+  final List<_ReactionParticle> _particles = [];
+  final math.Random _random = math.Random();
+
+  @override
+  void initState() {
+    super.initState();
+    _idleCtrl = AnimationController(
+      vsync: this,
+      duration: Duration(milliseconds: widget.isMain ? 1500 : 2400),
+    )..repeat(reverse: true);
+
+    _tapCtrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 380),
+    );
+
+    _tapScale = TweenSequence<double>([
+      TweenSequenceItem(tween: Tween(begin: 1.0, end: 0.82).chain(CurveTween(curve: Curves.easeInQuad)), weight: 25),
+      TweenSequenceItem(tween: Tween(begin: 0.82, end: 1.22).chain(CurveTween(curve: Curves.easeOutBack)), weight: 45),
+      TweenSequenceItem(tween: Tween(begin: 1.22, end: 1.0).chain(CurveTween(curve: Curves.elasticOut)), weight: 30),
+    ]).animate(_tapCtrl);
+
+    _tapCtrl.addStatusListener((status) {
+      if (status == AnimationStatus.completed) {
+        if (mounted) setState(() => _particles.clear());
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _idleCtrl.dispose();
+    _tapCtrl.dispose();
+    super.dispose();
+  }
+
+  void _triggerTap() {
+    HapticFeedback.heavyImpact();
+    _spawnParticles();
+    _tapCtrl.forward(from: 0);
+    widget.onTap();
+  }
+
+  void _spawnParticles() {
+    _particles.clear();
+    for (int i = 0; i < 7; i++) {
+      final angle = (i * (360 / 7) + _random.nextInt(20) - 10) * (math.pi / 180);
+      final dist = 32.0 + _random.nextDouble() * 22.0;
+      _particles.add(
+        _ReactionParticle(
+          emoji: widget.particleEmojis[i % widget.particleEmojis.length],
+          dx: math.cos(angle) * dist,
+          dy: math.sin(angle) * dist - 18,
+        ),
+      );
+    }
+    setState(() {});
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: Listenable.merge([_idleCtrl, _tapCtrl]),
+      builder: (context, _) {
+        final idleVal = _idleCtrl.value;
+        // Heartbeat pulse for center Spark (💖) or radiant breathe for Star (⭐) and other actions
+        final idleScale = widget.isMain
+            ? (1.0 + math.sin(idleVal * math.pi) * 0.13)
+            : (1.0 + idleVal * 0.06);
+        final currentScale = _tapCtrl.isAnimating ? _tapScale.value : idleScale;
+
+        return MouseRegion(
+          cursor: SystemMouseCursors.click,
+          child: GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: _triggerTap,
+            child: Stack(
+              clipBehavior: Clip.none,
+              alignment: Alignment.center,
+              children: [
+                // Flying animated particles on tap (ticking 60fps on each frame)
+                if (_particles.isNotEmpty)
+                  ..._particles.map((p) {
+                    final progress = _tapCtrl.value;
+                    final opacity = (1.0 - progress).clamp(0.0, 1.0);
+                    return Transform.translate(
+                      offset: Offset(p.dx * progress, p.dy * progress),
+                      child: Opacity(
+                        opacity: opacity,
+                        child: Transform.scale(
+                          scale: (0.7 + progress * 0.8).clamp(0.0, 1.5),
+                          child: Text(p.emoji, style: const TextStyle(fontSize: 18)),
+                        ),
+                      ),
+                    );
+                  }),
+
+                // Interactive Animated Button
+                Transform.scale(
+                  scale: currentScale,
+                  child: Container(
+                    width: widget.size,
+                    height: widget.size,
+                    decoration: BoxDecoration(
+                      color: widget.bgColor ?? (widget.isDark ? const Color(0xFF1E1B2E) : Colors.white),
+                      gradient: widget.gradientColors != null
+                          ? LinearGradient(
+                              colors: widget.gradientColors!,
+                              begin: Alignment.topLeft,
+                              end: Alignment.bottomRight,
+                            )
+                          : null,
+                      shape: BoxShape.circle,
+                      border: Border.all(
+                        color: widget.borderColor,
+                        width: widget.isMain ? 0 : 1.6,
+                      ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: widget.isMain
+                              ? const Color(0xFFFF3366).withOpacity(0.40 + idleVal * 0.35)
+                              : widget.borderColor.withOpacity(widget.isDark ? (0.35 + idleVal * 0.2) : (0.22 + idleVal * 0.18)),
+                          blurRadius: widget.isMain ? (14.0 + idleVal * 12.0) : (10.0 + idleVal * 6.0),
+                          spreadRadius: widget.isMain ? (idleVal * 3.0) : (idleVal * 1.5),
+                          offset: const Offset(0, 4),
+                        ),
+                      ],
+                    ),
+                    child: Center(child: widget.icon),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
 class _BouncingButton extends StatefulWidget {
   final Widget child;
   final VoidCallback onTap;

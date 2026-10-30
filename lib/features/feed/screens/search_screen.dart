@@ -274,7 +274,7 @@ class _UserResultTile extends ConsumerWidget {
         title: Row(
           children: [
             Text(user.name, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 15)),
-            if (user.isVerified) ...[
+            if (user.isReallyVerified) ...[
               const SizedBox(width: 4),
               const SBadgeWidget(size: 14, showTooltip: false),
             ],

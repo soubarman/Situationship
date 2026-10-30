@@ -1,4 +1,7 @@
+import '../../verification/presentation/widgets/s_badge_widget.dart';
 import 'dart:ui';
+import '../../../core/services/coin_service.dart';
+import '../../../shared/widgets/say_hi_premium_modal.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/theme/app_palette.dart';
 import 'package:flutter/material.dart';
@@ -29,7 +32,7 @@ class _CommunitiesScreenState extends ConsumerState<CommunitiesScreen>
   int _selectedTab = 0; // 0 = Active, 1 = Connections, 2 = Communities
 
   // Active tab state
-  int _selectedRangeKm = 3;
+  int _selectedRangeKm = 0; // 0 = Infinite (default)
   bool _isLiveVisible = true;
 
   // Featured profile card paging
@@ -73,14 +76,16 @@ class _CommunitiesScreenState extends ConsumerState<CommunitiesScreen>
   void _cycleRange() {
     HapticFeedback.selectionClick();
     setState(() {
-      if (_selectedRangeKm == 3) {
+      if (_selectedRangeKm == 0) {
+        _selectedRangeKm = 3;
+      } else if (_selectedRangeKm == 3) {
         _selectedRangeKm = 5;
       } else if (_selectedRangeKm == 5) {
         _selectedRangeKm = 10;
       } else if (_selectedRangeKm == 10) {
         _selectedRangeKm = 25;
       } else {
-        _selectedRangeKm = 3;
+        _selectedRangeKm = 0;
       }
     });
 
@@ -89,7 +94,9 @@ class _CommunitiesScreenState extends ConsumerState<CommunitiesScreen>
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            '⚡ Radar range set to $_selectedRangeKm km',
+            _selectedRangeKm <= 0
+                ? '⚡ Match range set to ∞ Infinite'
+                : '⚡ Match range set to $_selectedRangeKm km',
             style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 12),
           ),
           duration: const Duration(milliseconds: 1400),
@@ -139,10 +146,43 @@ class _CommunitiesScreenState extends ConsumerState<CommunitiesScreen>
   void _openChatWithUser(UserModel targetUser, UserModel currentUser) {
     final chatId = 'chat_${currentUser.id}_${targetUser.id}';
     context.push('/chats/$chatId', extra: {
+      'otherUserId': targetUser.id,
       'name': targetUser.name,
       'avatarUrl': targetUser.avatarUrl,
       'isOnline': targetUser.isOnline,
+      'isConfession': false,
     });
+  }
+
+  void _handleSayHi(UserModel targetUser, UserModel currentUser) {
+    if (targetUser.id == currentUser.id) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text("That's you! ✨"),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      return;
+    }
+
+    if (currentUser.hasActiveSubscription) {
+      HapticFeedback.selectionClick();
+      _openChatWithUser(targetUser, currentUser);
+    } else {
+      HapticFeedback.mediumImpact();
+      _showSayHiPremiumModal(targetUser, currentUser);
+    }
+  }
+
+  void _showSayHiPremiumModal(UserModel targetUser, UserModel currentUser) {
+    SayHiPremiumModal.show(
+      context: context,
+      targetUser: targetUser,
+      currentUser: currentUser,
+      onUnlocked: () {
+        _openChatWithUser(targetUser, currentUser);
+      },
+    );
   }
 
   void _showActiveUserModal(UserModel user, UserModel currentUser) {
@@ -259,14 +299,21 @@ class _CommunitiesScreenState extends ConsumerState<CommunitiesScreen>
                                 width: 7,
                                 height: 7,
                                 decoration: BoxDecoration(
-                                  color: AppTheme.accentPurple,
+                                  color: user.isActuallyActive ? const Color(0xFF10B981) : const Color(0xFF94A3B8),
                                   shape: BoxShape.circle,
+                                  boxShadow: user.isActuallyActive ? const [
+                                    BoxShadow(
+                                      color: Color(0xFF10B981),
+                                      blurRadius: 4,
+                                      spreadRadius: 1,
+                                    ),
+                                  ] : null,
                                 ),
                               ),
                               const SizedBox(width: 6),
-                              const Text(
-                                'Active 5m ago',
-                                style: TextStyle(
+                              Text(
+                                user.activeStatusText,
+                                style: const TextStyle(
                                   color: Colors.white,
                                   fontSize: 11,
                                   fontWeight: FontWeight.w700,
@@ -397,17 +444,20 @@ class _CommunitiesScreenState extends ConsumerState<CommunitiesScreen>
     final allQueueUsers = ref.watch(matchQueueProvider);
     final unlikedIds = ref.watch(unlikedUserIdsProvider);
 
-    // ── Filter out current user, disliked users, and session-unliked users ──
+    // ── Filter out current user, disliked users, demo/test users, and session-unliked users ──
     final dislikedSet = currentUser.dislikedUsers.toSet();
     final validUsers = allQueueUsers.where((u) {
       if (u.id == currentUser.id) return false;
+      if (u.isDemoOrTestAccount) return false;
+      if (!u.isDiscoverable) return false;
+      if (u.isCurrentlySuspended) return false;
+      if (currentUser.blockedUsers.contains(u.id)) return false;
       if (dislikedSet.contains(u.id)) return false;
       if (unlikedIds.contains(u.id)) return false;
       return true;
     }).toList();
 
-    // Fallback users if queue has few profiles
-    final activeUsers = validUsers.isNotEmpty ? validUsers : _fallbackUsers;
+    final activeUsers = validUsers;
     final sparkCount = currentUser.likedBy.length;
 
     return Scaffold(
@@ -629,6 +679,7 @@ class _CommunitiesScreenState extends ConsumerState<CommunitiesScreen>
   Widget _buildActiveTab(List<UserModel> users, UserModel currentUser, bool isDark, AppPalette palette) {
     // ── Filter by distance using LocationHelper ──
     final nearbyUsers = users.where((u) {
+      if (_selectedRangeKm <= 0) return true; // Infinite: match all
       final dist = LocationHelper.getDistanceKm(
         lat1: null,
         lon1: null,
@@ -643,7 +694,14 @@ class _CommunitiesScreenState extends ConsumerState<CommunitiesScreen>
     // Use nearby users if found within radius; otherwise show available
     final displayUsers = nearbyUsers.isNotEmpty ? nearbyUsers : users;
     final safePageIndex = _featuredPageIndex.clamp(0, (displayUsers.length - 1).clamp(0, 9999));
-    final otherUsers = displayUsers.length > 1 ? displayUsers.sublist(1) : <UserModel>[];
+    final rawOtherUsers = displayUsers.length > 1 ? displayUsers.sublist(1) : <UserModel>[];
+    final otherUsers = List<UserModel>.from(rawOtherUsers)..sort((a, b) {
+      if (a.isActuallyActive && !b.isActuallyActive) return -1;
+      if (!a.isActuallyActive && b.isActuallyActive) return 1;
+      final aSeen = a.lastSeen?.millisecondsSinceEpoch ?? 0;
+      final bSeen = b.lastSeen?.millisecondsSinceEpoch ?? 0;
+      return bSeen.compareTo(aSeen);
+    });
 
     return SingleChildScrollView(
       physics: const BouncingScrollPhysics(),
@@ -714,7 +772,7 @@ class _CommunitiesScreenState extends ConsumerState<CommunitiesScreen>
                         Icon(Icons.location_on_rounded, size: 14, color: palette.primary),
                         const SizedBox(width: 4),
                         Text(
-                          '${_selectedRangeKm.toInt()} km',
+                          _selectedRangeKm <= 0 ? '∞ Infinite' : '${_selectedRangeKm.toInt()} km',
                           style: TextStyle(
                             fontSize: 12,
                             fontWeight: FontWeight.w800,
@@ -739,10 +797,7 @@ class _CommunitiesScreenState extends ConsumerState<CommunitiesScreen>
 
           // ── Featured Dating Hero Card Carousel ────────────────────────────
           if (displayUsers.isEmpty)
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: _buildFeaturedActiveCard(_fallbackUsers[0], currentUser, isDark, palette),
-            )
+            _buildEmptyNearbyState(isDark, palette)
           else
             Column(
               children: [
@@ -795,6 +850,7 @@ class _CommunitiesScreenState extends ConsumerState<CommunitiesScreen>
           const SizedBox(height: 22),
 
           // ── Section: Active Sparks Carousel ──────────────────────────────
+          if (otherUsers.isNotEmpty) ...[
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16),
             child: Row(
@@ -818,13 +874,19 @@ class _CommunitiesScreenState extends ConsumerState<CommunitiesScreen>
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                       decoration: BoxDecoration(
-                        color: const Color(0xFFFF3366).withValues(alpha: 0.15),
+                        color: (otherUsers.any((u) => u.isActuallyActive)
+                            ? const Color(0xFF10B981)
+                            : const Color(0xFFFF3366)).withValues(alpha: 0.15),
                         borderRadius: BorderRadius.circular(8),
                       ),
-                      child: const Text(
-                        'ONLINE',
+                      child: Text(
+                        otherUsers.any((u) => u.isActuallyActive)
+                            ? '${otherUsers.where((u) => u.isActuallyActive).length} ONLINE'
+                            : 'RECENT',
                         style: TextStyle(
-                          color: Color(0xFFFF3366),
+                          color: otherUsers.any((u) => u.isActuallyActive)
+                              ? const Color(0xFF10B981)
+                              : const Color(0xFFFF3366),
                           fontSize: 9,
                           fontWeight: FontWeight.w900,
                           letterSpacing: 0.4,
@@ -865,6 +927,7 @@ class _CommunitiesScreenState extends ConsumerState<CommunitiesScreen>
           ),
 
           const SizedBox(height: 20),
+          ],
 
           // ── Section: Dating Visibility & Range Preferences ────────────────
           Padding(
@@ -883,22 +946,87 @@ class _CommunitiesScreenState extends ConsumerState<CommunitiesScreen>
     );
   }
 
-  Widget _buildFeaturedActiveCard(UserModel user, UserModel currentUser, bool isDark, AppPalette palette) {
+    Widget _buildEmptyNearbyState(bool isDark, AppPalette palette) {
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
+      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 36),
+      decoration: BoxDecoration(
+        color: isDark ? const Color(0xFF140F24).withOpacity(0.7) : Colors.white.withOpacity(0.85),
+        borderRadius: BorderRadius.circular(28),
+        border: Border.all(
+          color: isDark ? Colors.white.withOpacity(0.08) : const Color(0xFFFFD4DE),
+          width: 1.2,
+        ),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 68,
+            height: 68,
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: [
+                  const Color(0xFFFF3366).withOpacity(0.2),
+                  const Color(0xFFFF8E53).withOpacity(0.2),
+                ],
+              ),
+              shape: BoxShape.circle,
+            ),
+            child: const Center(
+              child: Text('✨', style: TextStyle(fontSize: 32)),
+            ),
+          ),
+          const SizedBox(height: 16),
+          Text(
+            'No Active Singles Nearby',
+            style: TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.w800,
+              color: isDark ? Colors.white : const Color(0xFF0F172A),
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Try expanding your distance radius above to see more people looking to connect.',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w500,
+              color: isDark ? Colors.white60 : const Color(0xFF64748B),
+              height: 1.4,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+Widget _buildFeaturedActiveCard(UserModel user, UserModel currentUser, bool isDark, AppPalette palette) {
     final matchScore = 88 + (user.id.hashCode.abs() % 11);
     final interests = user.interests.isNotEmpty
         ? user.interests.take(3).toList()
         : ['Travel', 'Coffee', 'Music'];
     final distanceKm = ((user.id.hashCode.abs() % 5) + 1).clamp(1, 25);
+    final hasSuperLikedMe = currentUser.superLikedBy.contains(user.id);
 
     return Container(
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(28),
         color: isDark ? const Color(0xFF161026) : Colors.white,
         border: Border.all(
-          color: palette.primary.withValues(alpha: 0.25),
-          width: 1.2,
+          color: hasSuperLikedMe
+              ? const Color(0xFF00C9FF)
+              : palette.primary.withValues(alpha: 0.25),
+          width: hasSuperLikedMe ? 2.0 : 1.2,
         ),
         boxShadow: [
+          if (hasSuperLikedMe)
+            BoxShadow(
+              color: const Color(0xFF00C9FF).withValues(alpha: 0.35),
+              blurRadius: 24,
+              offset: const Offset(0, 8),
+            ),
           BoxShadow(
             color: palette.primary.withValues(alpha: 0.14),
             blurRadius: 20,
@@ -971,7 +1099,7 @@ class _CommunitiesScreenState extends ConsumerState<CommunitiesScreen>
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  // Active Status Badge
+                  // Dynamic Active / Recent Status Badge
                   ClipRRect(
                     borderRadius: BorderRadius.circular(20),
                     child: BackdropFilter(
@@ -979,10 +1107,12 @@ class _CommunitiesScreenState extends ConsumerState<CommunitiesScreen>
                       child: Container(
                         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5.5),
                         decoration: BoxDecoration(
-                          color: Colors.black.withValues(alpha: 0.4),
+                          color: Colors.black.withValues(alpha: 0.45),
                           borderRadius: BorderRadius.circular(20),
                           border: Border.all(
-                            color: Colors.white.withValues(alpha: 0.18),
+                            color: (user.isActuallyActive
+                                ? const Color(0xFF00F5D4)
+                                : Colors.white).withValues(alpha: user.isActuallyActive ? 0.4 : 0.18),
                             width: 0.8,
                           ),
                         ),
@@ -992,23 +1122,27 @@ class _CommunitiesScreenState extends ConsumerState<CommunitiesScreen>
                             Container(
                               width: 7,
                               height: 7,
-                              decoration: const BoxDecoration(
-                                color: Color(0xFF00F5D4),
+                              decoration: BoxDecoration(
+                                color: user.isActuallyActive
+                                    ? const Color(0xFF00F5D4)
+                                    : (user.effectiveLastSeen != null ? const Color(0xFF94A3B8) : const Color(0xFF64748B)),
                                 shape: BoxShape.circle,
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: Color(0xFF00F5D4),
-                                    blurRadius: 4,
-                                    spreadRadius: 1,
-                                  ),
-                                ],
+                                boxShadow: user.isActuallyActive
+                                    ? const [
+                                        BoxShadow(
+                                          color: Color(0xFF00F5D4),
+                                          blurRadius: 4,
+                                          spreadRadius: 1,
+                                        ),
+                                      ]
+                                    : null,
                               ),
                             ),
                             const SizedBox(width: 6),
-                            const Text(
-                              'Active now',
+                            Text(
+                              user.activeStatusText,
                               style: TextStyle(
-                                color: Colors.white,
+                                color: user.isActuallyActive ? Colors.white : Colors.white.withValues(alpha: 0.85),
                                 fontSize: 11,
                                 fontWeight: FontWeight.w700,
                               ),
@@ -1018,6 +1152,41 @@ class _CommunitiesScreenState extends ConsumerState<CommunitiesScreen>
                       ),
                     ),
                   ),
+
+                  // Super Liked You VIP Pill
+                  if (hasSuperLikedMe)
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5.5),
+                      decoration: BoxDecoration(
+                        gradient: const LinearGradient(
+                          colors: [Color(0xFF00C9FF), Color(0xFF92FE9D)],
+                        ),
+                        borderRadius: BorderRadius.circular(20),
+                        boxShadow: [
+                          BoxShadow(
+                            color: const Color(0xFF00C9FF).withValues(alpha: 0.5),
+                            blurRadius: 10,
+                            spreadRadius: 1,
+                          ),
+                        ],
+                      ),
+                      child: const Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text('⭐', style: TextStyle(fontSize: 10.5)),
+                          SizedBox(width: 4),
+                          Text(
+                            'SUPER LIKED YOU',
+                            style: TextStyle(
+                              color: Colors.black,
+                              fontSize: 10,
+                              fontWeight: FontWeight.w900,
+                              letterSpacing: 0.6,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
 
                   // Compatibility % Pill
                   ClipRRect(
@@ -1112,12 +1281,10 @@ class _CommunitiesScreenState extends ConsumerState<CommunitiesScreen>
                           ),
                         ),
                       ),
-                      const SizedBox(width: 6),
-                      const Icon(
-                        Icons.verified_rounded,
-                        color: Color(0xFF3897F0),
-                        size: 20,
-                      ),
+                      if (user.isReallyVerified) ...[
+                        const SizedBox(width: 6),
+                        const SBadgeWidget(size: 20),
+                      ],
                     ],
                   ),
                   const SizedBox(height: 3),
@@ -1165,7 +1332,7 @@ class _CommunitiesScreenState extends ConsumerState<CommunitiesScreen>
                         child: GestureDetector(
                           onTap: () {
                             HapticFeedback.lightImpact();
-                            context.push('/chat/${user.id}');
+                            _handleSayHi(user, currentUser);
                           },
                           child: ClipRRect(
                             borderRadius: BorderRadius.circular(18),
@@ -1203,20 +1370,12 @@ class _CommunitiesScreenState extends ConsumerState<CommunitiesScreen>
                       ),
                       const SizedBox(width: 10),
 
-                      // Send Spark button
+                      // View Profile button
                       Expanded(
                         flex: 1,
                         child: GestureDetector(
                           onTap: () {
-                            HapticFeedback.mediumImpact();
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(
-                                content: Text('Spark sent to ${user.name}! 💖'),
-                                duration: const Duration(seconds: 2),
-                                behavior: SnackBarBehavior.floating,
-                                backgroundColor: const Color(0xFF1E102E),
-                              ),
-                            );
+                            HapticFeedback.selectionClick();
                             context.push('/profile/view/${user.id}');
                           },
                           child: Container(
@@ -1237,14 +1396,14 @@ class _CommunitiesScreenState extends ConsumerState<CommunitiesScreen>
                             child: const Row(
                               mainAxisAlignment: MainAxisAlignment.center,
                               children: [
-                                Icon(Icons.favorite_rounded, color: Colors.white, size: 16),
+                                Icon(Icons.person_rounded, color: Colors.white, size: 16),
                                 SizedBox(width: 6),
                                 Text(
-                                  'Spark',
+                                  'View Profile',
                                   style: TextStyle(
                                     color: Colors.white,
-                                    fontSize: 13.5,
-                                    fontWeight: FontWeight.w900,
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w800,
                                     letterSpacing: 0.2,
                                   ),
                                 ),
@@ -1346,7 +1505,7 @@ class _CommunitiesScreenState extends ConsumerState<CommunitiesScreen>
   }
 
   Widget _buildDatingRangeCard(bool isDark, AppPalette palette) {
-    final ranges = [3, 5, 10, 25];
+    final ranges = [0, 3, 5, 10, 25];
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
@@ -1386,7 +1545,7 @@ class _CommunitiesScreenState extends ConsumerState<CommunitiesScreen>
               ),
               const Spacer(),
               Text(
-                'Within ${_selectedRangeKm.toInt()} km',
+                _selectedRangeKm <= 0 ? 'Infinite (Any distance)' : 'Within ${_selectedRangeKm.toInt()} km',
                 style: TextStyle(
                   fontSize: 12,
                   fontWeight: FontWeight.w700,
@@ -1422,7 +1581,7 @@ class _CommunitiesScreenState extends ConsumerState<CommunitiesScreen>
                     ),
                     child: Center(
                       child: Text(
-                        '$r km',
+                        r == 0 ? '∞' : '$r km',
                         style: TextStyle(
                           fontSize: 12,
                           fontWeight: isSelected ? FontWeight.w800 : FontWeight.w600,
@@ -1444,6 +1603,7 @@ class _CommunitiesScreenState extends ConsumerState<CommunitiesScreen>
 
   Widget _buildAlsoAroundAvatarItem(UserModel user, UserModel currentUser, bool isDark) {
     final distanceKm = ((user.id.hashCode.abs() % 4) + 1);
+    final hasSuperLikedMe = currentUser.superLikedBy.contains(user.id);
 
     return GestureDetector(
       onTap: () {
@@ -1456,7 +1616,7 @@ class _CommunitiesScreenState extends ConsumerState<CommunitiesScreen>
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.center,
           children: [
-            // Circular Avatar with Romantic Sunset Ring
+            // Circular Avatar with Romantic Ring (or Cyan Starlight Ring if Super Liked)
             Stack(
               clipBehavior: Clip.none,
               children: [
@@ -1465,18 +1625,26 @@ class _CommunitiesScreenState extends ConsumerState<CommunitiesScreen>
                   height: 60,
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
-                    gradient: const LinearGradient(
+                    gradient: LinearGradient(
                       begin: Alignment.topLeft,
                       end: Alignment.bottomRight,
-                      colors: [
-                        Color(0xFFFF3366),
-                        Color(0xFFFF6584),
-                        Color(0xFFFF8E53),
-                      ],
+                      colors: hasSuperLikedMe
+                          ? const [
+                              Color(0xFF00C9FF),
+                              Color(0xFF92FE9D),
+                            ]
+                          : const [
+                              Color(0xFFFF3366),
+                              Color(0xFFFF6584),
+                              Color(0xFFFF8E53),
+                            ],
                     ),
                     boxShadow: [
                       BoxShadow(
-                        color: const Color(0xFFFF3366).withValues(alpha: 0.3),
+                        color: (hasSuperLikedMe
+                                ? const Color(0xFF00C9FF)
+                                : const Color(0xFFFF3366))
+                            .withValues(alpha: 0.35),
                         blurRadius: 8,
                         offset: const Offset(0, 2),
                       ),
@@ -1501,23 +1669,52 @@ class _CommunitiesScreenState extends ConsumerState<CommunitiesScreen>
                   ),
                 ),
 
-                // Emerald Online Indicator Dot
-                Positioned(
-                  right: 2,
-                  bottom: 2,
-                  child: Container(
-                    width: 14,
-                    height: 14,
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF10B981),
-                      shape: BoxShape.circle,
-                      border: Border.all(
-                        color: isDark ? const Color(0xFF090C15) : Colors.white,
-                        width: 2.2,
+                // Super Like indicator badge
+                if (hasSuperLikedMe)
+                  Positioned(
+                    left: -2,
+                    top: -2,
+                    child: Container(
+                      padding: const EdgeInsets.all(3),
+                      decoration: const BoxDecoration(
+                        color: Color(0xFF00C9FF),
+                        shape: BoxShape.circle,
+                        boxShadow: [
+                          BoxShadow(
+                            color: Color(0xFF00C9FF),
+                            blurRadius: 6,
+                          ),
+                        ],
+                      ),
+                      child: const Text('⭐', style: TextStyle(fontSize: 9)),
+                    ),
+                  ),
+
+                // Emerald Online Indicator Dot (only when genuinely active now)
+                if (user.isActuallyActive)
+                  Positioned(
+                    right: 2,
+                    bottom: 2,
+                    child: Container(
+                      width: 14,
+                      height: 14,
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF10B981),
+                        shape: BoxShape.circle,
+                        border: Border.all(
+                          color: isDark ? const Color(0xFF090C15) : Colors.white,
+                          width: 2.2,
+                        ),
+                        boxShadow: [
+                          BoxShadow(
+                            color: const Color(0xFF10B981).withValues(alpha: 0.7),
+                            blurRadius: 4,
+                            spreadRadius: 0.5,
+                          ),
+                        ],
                       ),
                     ),
                   ),
-                ),
               ],
             ),
             const SizedBox(height: 7),
@@ -1535,15 +1732,17 @@ class _CommunitiesScreenState extends ConsumerState<CommunitiesScreen>
             ),
             const SizedBox(height: 1),
 
-            // Distance subtitle
+            // Activity / Distance subtitle
             Text(
-              '$distanceKm km away',
+              user.isActuallyActive ? 'Active now' : user.activeStatusCompact,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: TextStyle(
                 fontSize: 10,
-                fontWeight: FontWeight.w500,
-                color: isDark ? Colors.white54 : const Color(0xFF64748B),
+                fontWeight: user.isActuallyActive ? FontWeight.w700 : FontWeight.w500,
+                color: user.isActuallyActive
+                    ? const Color(0xFF10B981)
+                    : (isDark ? Colors.white54 : const Color(0xFF64748B)),
               ),
             ),
           ],
@@ -2588,47 +2787,4 @@ const _vibeLabels = [
   'Soft Rebel',
   'Night Owl',
   'Quiet Storm',
-];
-
-final _fallbackUsers = [
-  const UserModel(
-    id: 'ananya-sample',
-    name: 'Ananya',
-    email: 'ananya@sample.com',
-    age: 23,
-    avatarUrl: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=500',
-    isOnline: true,
-  ),
-  const UserModel(
-    id: 'rishima-sample',
-    name: 'Rishima',
-    email: 'rishima@sample.com',
-    age: 24,
-    avatarUrl: 'https://images.unsplash.com/photo-1517841905240-472988babdf9?w=500',
-    isOnline: true,
-  ),
-  const UserModel(
-    id: 'mayuri-sample',
-    name: 'Mayuri',
-    email: 'mayuri@sample.com',
-    age: 22,
-    avatarUrl: 'https://images.unsplash.com/photo-1524504388940-b1c1722653e1?w=500',
-    isOnline: true,
-  ),
-  const UserModel(
-    id: 'stuti-sample',
-    name: 'Stuti',
-    email: 'stuti@sample.com',
-    age: 25,
-    avatarUrl: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=500',
-    isOnline: true,
-  ),
-  const UserModel(
-    id: 'kaveri-sample',
-    name: 'Kaveri',
-    email: 'kaveri@sample.com',
-    age: 23,
-    avatarUrl: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=500',
-    isOnline: true,
-  ),
 ];

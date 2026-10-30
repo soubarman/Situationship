@@ -893,13 +893,13 @@ class _ChatDetailScreenState extends ConsumerState<ChatDetailScreen>
 
     final name = shouldMask ? 'ANONYMOUS' : chat.otherUserName;
     final avatarUrl = shouldMask ? 'anonymous_mask' : chat.otherUserAvatar;
-    final isOnline = shouldMask ? false : chat.otherUserIsOnline;
 
     final isPendingConfession = isChatConfession && isReceiver && chat.status == 'requested';
     final isPendingConfessionSender = isChatConfession && !isReceiver && chat.status == 'requested';
 
     final otherUser = ref.watch(otherUserProvider(chat.otherUserId)).valueOrNull;
-    final isVerified = !shouldMask && (otherUser?.isVerified ?? false);
+    final isOnline = shouldMask ? false : (otherUser?.isActuallyActive ?? chat.otherUserIsOnline);
+    final isVerified = !shouldMask && (otherUser?.isReallyVerified ?? false);
 
     // Scroll to bottom when new messages arrive
     if (messages.isNotEmpty) {
@@ -909,7 +909,7 @@ class _ChatDetailScreenState extends ConsumerState<ChatDetailScreen>
     return Scaffold(
       backgroundColor: isDark ? AppTheme.darkBg : const Color(0xFFF0F4FF),
       extendBodyBehindAppBar: true,
-      appBar: _buildAppBar(context, chat, currentUser, isDark, name, avatarUrl, isOnline, isVerified),
+      appBar: _buildAppBar(context, chat, currentUser, otherUser, isDark, name, avatarUrl, isOnline, isVerified),
       body: Stack(
         children: [
           // ── Animated mesh background ─────────────────────────────────
@@ -975,6 +975,7 @@ class _ChatDetailScreenState extends ConsumerState<ChatDetailScreen>
     BuildContext context,
     ChatModel chat,
     UserModel? currentUser,
+    UserModel? otherUser,
     bool isDark,
     String name,
     String? avatarUrl,
@@ -1056,7 +1057,7 @@ class _ChatDetailScreenState extends ConsumerState<ChatDetailScreen>
                                     ? '🤫 Chatting anonymously'
                                     : isOnline
                                         ? '🟢 Active now'
-                                        : 'Last seen recently',
+                                        : (otherUser != null ? otherUser.activeStatusText : 'Recently online'),
                             key: ValueKey(_isTypingLocal.toString() + isOnline.toString()),
                             style: TextStyle(
                               fontSize: 12,

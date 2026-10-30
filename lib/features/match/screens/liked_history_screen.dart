@@ -9,6 +9,7 @@ import '../../../core/models/user_model.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/providers/app_state_provider.dart';
 import '../../../core/providers/firestore_provider.dart';
+import '../../../shared/widgets/say_hi_premium_modal.dart';
 
 // ─── Provider to track locally revealed users (per session + Firestore) ───────
 final _revealedUsersProvider = StateProvider<Set<String>>((ref) => {});
@@ -215,7 +216,15 @@ class _LikedMeTab extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final currentUser = ref.watch(currentUserProvider);
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final likedByIds = currentUser.likedBy;
+    final likedByIds = List<String>.from(currentUser.likedBy);
+    // Prioritize Super Likes to the very top of the admirations list
+    likedByIds.sort((a, b) {
+      final aSuper = currentUser.superLikedBy.contains(a);
+      final bSuper = currentUser.superLikedBy.contains(b);
+      if (aSuper && !bSuper) return -1;
+      if (!aSuper && bSuper) return 1;
+      return 0;
+    });
 
     if (likedByIds.isEmpty) {
       return _buildEmptyState(
@@ -255,13 +264,29 @@ class _LikedMeCard extends ConsumerStatefulWidget {
 class _LikedMeCardState extends ConsumerState<_LikedMeCard> {
   bool _isRevealing = false;
 
-  bool get _isRevealedBySwipe =>
-      widget.currentUser.following.contains(widget.userId);
+  bool get _hasPremium => widget.currentUser.hasActiveSubscription;
 
   bool get _isRevealedByCoins =>
       ref.watch(_revealedUsersProvider).contains(widget.userId);
 
-  bool get _isRevealed => _isRevealedBySwipe || _isRevealedByCoins;
+  bool get _isSuperLiked =>
+      widget.currentUser.superLikedBy.contains(widget.userId);
+
+  // Tinder rule: Viewing who liked you is strictly allowed ONLY if you have a Premium subscription (or unlocked with coins).
+  // Super Likes are always visible with their distinct cyan star frame and direct message in requests.
+  bool get _isRevealed => _hasPremium || _isRevealedByCoins || _isSuperLiked;
+
+  void _openPremiumPaywall(UserModel targetUser) {
+    HapticFeedback.mediumImpact();
+    SayHiPremiumModal.show(
+      context: context,
+      targetUser: targetUser,
+      currentUser: widget.currentUser,
+      onUnlocked: () {
+        setState(() {});
+      },
+    );
+  }
 
   Future<void> _revealWithCoins() async {
     final isDark = Theme.of(context).brightness == Brightness.dark;
@@ -431,8 +456,11 @@ class _LikedMeCardState extends ConsumerState<_LikedMeCard> {
 
   Widget _buildBlurredCard(
       BuildContext context, UserModel user, bool isDark) {
-    return Container(
-      margin: const EdgeInsets.symmetric(vertical: 7),
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: () => _openPremiumPaywall(user),
+      child: Container(
+        margin: const EdgeInsets.symmetric(vertical: 7),
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(24),
         gradient: LinearGradient(
@@ -550,53 +578,89 @@ class _LikedMeCardState extends ConsumerState<_LikedMeCard> {
                         // Reveal buttons
                         Row(
                           children: [
-                            // Coin reveal button
+                            // Gold Premium Unlock Button (Tinder Style)
                             Expanded(
+                              flex: 3,
                               child: GestureDetector(
-                                onTap: _isRevealing ? null : _revealWithCoins,
+                                onTap: () => _openPremiumPaywall(user),
                                 child: Container(
                                   padding: const EdgeInsets.symmetric(
-                                      vertical: 8, horizontal: 10),
+                                      vertical: 8, horizontal: 8),
                                   decoration: BoxDecoration(
                                     gradient: const LinearGradient(
                                       colors: [
-                                        Color(0xFFFF6B9D),
-                                        Color(0xFFFF8E53),
+                                        Color(0xFFFFB300),
+                                        Color(0xFFF7971E),
                                       ],
                                     ),
                                     borderRadius: BorderRadius.circular(12),
                                     boxShadow: [
                                       BoxShadow(
-                                        color: const Color(0xFFFF6B9D)
-                                            .withOpacity(0.35),
+                                        color: const Color(0xFFFFB300)
+                                            .withOpacity(0.4),
                                         blurRadius: 8,
                                         offset: const Offset(0, 3),
                                       ),
                                     ],
                                   ),
+                                  child: const Row(
+                                    mainAxisAlignment:
+                                        MainAxisAlignment.center,
+                                    children: [
+                                      Text('👑', style: TextStyle(fontSize: 13)),
+                                      SizedBox(width: 4),
+                                      Text(
+                                        'Unlock Gold',
+                                        style: TextStyle(
+                                          color: Colors.black,
+                                          fontSize: 11.5,
+                                          fontWeight: FontWeight.w900,
+                                          letterSpacing: 0.2,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            // Coin reveal button
+                            Expanded(
+                              flex: 2,
+                              child: GestureDetector(
+                                onTap: _isRevealing ? null : _revealWithCoins,
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(
+                                      vertical: 8, horizontal: 6),
+                                  decoration: BoxDecoration(
+                                    color: isDark ? Colors.white.withOpacity(0.08) : Colors.black.withOpacity(0.06),
+                                    borderRadius: BorderRadius.circular(12),
+                                    border: Border.all(
+                                      color: isDark ? Colors.white12 : Colors.black12,
+                                    ),
+                                  ),
                                   child: _isRevealing
-                                      ? const SizedBox(
-                                          height: 16,
-                                          width: 16,
-                                          child: CircularProgressIndicator(
-                                            strokeWidth: 2,
-                                            color: Colors.white,
+                                      ? const Center(
+                                          child: SizedBox(
+                                            height: 14,
+                                            width: 14,
+                                            child: CircularProgressIndicator(
+                                              strokeWidth: 2,
+                                              color: Colors.white,
+                                            ),
                                           ),
                                         )
                                       : const Row(
                                           mainAxisAlignment:
                                               MainAxisAlignment.center,
                                           children: [
-                                            Text('🪙',
-                                                style:
-                                                    TextStyle(fontSize: 13)),
-                                            SizedBox(width: 4),
+                                            Text('🪙', style: TextStyle(fontSize: 12)),
+                                            SizedBox(width: 3),
                                             Text(
-                                              'Reveal (10)',
+                                              '10 coins',
                                               style: TextStyle(
-                                                color: Colors.white,
-                                                fontSize: 11.5,
-                                                fontWeight: FontWeight.w800,
+                                                fontSize: 11,
+                                                fontWeight: FontWeight.w700,
                                               ),
                                             ),
                                           ],
@@ -641,7 +705,8 @@ class _LikedMeCardState extends ConsumerState<_LikedMeCard> {
           ),
         ),
       ),
-    );
+    ),
+  );
   }
 
   Widget _buildRevealedCard(
@@ -668,8 +733,9 @@ class _LikedMeCardState extends ConsumerState<_LikedMeCard> {
             borderRadius: BorderRadius.circular(23),
             boxShadow: [
               BoxShadow(
-                color: const Color(0xFFFF6B9D).withOpacity(0.15),
-                blurRadius: 20,
+                color: (_isSuperLiked ? const Color(0xFF00C9FF) : const Color(0xFFFF6B9D))
+                    .withOpacity(_isSuperLiked ? 0.35 : 0.15),
+                blurRadius: _isSuperLiked ? 24 : 20,
                 offset: const Offset(0, 6),
               ),
             ],
@@ -686,8 +752,10 @@ class _LikedMeCardState extends ConsumerState<_LikedMeCard> {
                       : Colors.white.withOpacity(0.50),
                   borderRadius: BorderRadius.circular(23),
                   border: Border.all(
-                    color: const Color(0xFFFF6B9D).withOpacity(0.30),
-                    width: 1.5,
+                    color: _isSuperLiked
+                        ? const Color(0xFF00C9FF)
+                        : const Color(0xFFFF6B9D).withOpacity(0.30),
+                    width: _isSuperLiked ? 2.0 : 1.5,
                   ),
                 ),
                 child: Row(
@@ -698,7 +766,8 @@ class _LikedMeCardState extends ConsumerState<_LikedMeCard> {
                           decoration: BoxDecoration(
                             borderRadius: BorderRadius.circular(18),
                             border: Border.all(
-                              color: const Color(0xFFFF6B9D).withOpacity(0.6),
+                              color: (_isSuperLiked ? const Color(0xFF00C9FF) : const Color(0xFFFF6B9D))
+                                  .withOpacity(0.7),
                               width: 2.0,
                             ),
                           ),
@@ -759,29 +828,47 @@ class _LikedMeCardState extends ConsumerState<_LikedMeCard> {
                                   overflow: TextOverflow.ellipsis,
                                 ),
                               ),
-                              // "Liked You" badge
+                              // "Super Liked You" or "Liked You" badge
                               Container(
                                 padding: const EdgeInsets.symmetric(
                                     horizontal: 8, vertical: 3),
                                 decoration: BoxDecoration(
-                                  gradient: const LinearGradient(
-                                    colors: [
-                                      Color(0xFFFF6B9D),
-                                      Color(0xFFFF8E53),
-                                    ],
-                                  ),
+                                  gradient: _isSuperLiked
+                                      ? const LinearGradient(
+                                          colors: [
+                                            Color(0xFF00C9FF),
+                                            Color(0xFF92FE9D),
+                                          ],
+                                        )
+                                      : const LinearGradient(
+                                          colors: [
+                                            Color(0xFFFF6B9D),
+                                            Color(0xFFFF8E53),
+                                          ],
+                                        ),
                                   borderRadius: BorderRadius.circular(20),
+                                  boxShadow: _isSuperLiked
+                                      ? [
+                                          BoxShadow(
+                                            color: const Color(0xFF00C9FF).withOpacity(0.4),
+                                            blurRadius: 8,
+                                          ),
+                                        ]
+                                      : null,
                                 ),
-                                child: const Row(
+                                child: Row(
                                   mainAxisSize: MainAxisSize.min,
                                   children: [
-                                    Icon(Icons.favorite_rounded,
-                                        size: 10, color: Colors.white),
-                                    SizedBox(width: 3),
+                                    Icon(
+                                      _isSuperLiked ? Icons.star_rounded : Icons.favorite_rounded,
+                                      size: 10.5,
+                                      color: _isSuperLiked ? Colors.black : Colors.white,
+                                    ),
+                                    const SizedBox(width: 3),
                                     Text(
-                                      'LIKED YOU',
+                                      _isSuperLiked ? 'SUPER LIKED YOU' : 'LIKED YOU',
                                       style: TextStyle(
-                                        color: Colors.white,
+                                        color: _isSuperLiked ? Colors.black : Colors.white,
                                         fontSize: 9,
                                         fontWeight: FontWeight.w900,
                                         letterSpacing: 0.5,
@@ -817,6 +904,39 @@ class _LikedMeCardState extends ConsumerState<_LikedMeCard> {
                                 ),
                               ],
                             ),
+                          if (_isSuperLiked &&
+                              widget.currentUser.superLikeNotes.containsKey(user.id) &&
+                              widget.currentUser.superLikeNotes[user.id]!.trim().isNotEmpty) ...[
+                            const SizedBox(height: 6),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFF00C9FF).withOpacity(isDark ? 0.15 : 0.08),
+                                borderRadius: BorderRadius.circular(10),
+                                border: Border.all(
+                                  color: const Color(0xFF00C9FF).withOpacity(0.35),
+                                ),
+                              ),
+                              child: Row(
+                                children: [
+                                  const Text('💌 ', style: TextStyle(fontSize: 12)),
+                                  Expanded(
+                                    child: Text(
+                                      '"${widget.currentUser.superLikeNotes[user.id]!.trim()}"',
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        fontStyle: FontStyle.italic,
+                                        fontWeight: FontWeight.w600,
+                                        color: isDark ? const Color(0xFFE2E8F0) : const Color(0xFF0F172A),
+                                      ),
+                                      maxLines: 2,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
                           if (user.bio != null && user.bio!.isNotEmpty) ...[
                             const SizedBox(height: 3),
                             Text(
