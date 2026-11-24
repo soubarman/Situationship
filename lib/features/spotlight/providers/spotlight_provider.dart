@@ -7,8 +7,27 @@ import 'location_provider.dart';
 import 'package:situationship/core/providers/app_state_provider.dart';
 import 'package:situationship/core/providers/firebase_auth_provider.dart';
 
+// Helper: Current clock-hour slot ID (e.g. '2026-10-30-14')
+String getCurrentSlotId([DateTime? dt]) {
+  final now = dt ?? DateTime.now();
+  final y = now.year.toString().padLeft(4, '0');
+  final m = now.month.toString().padLeft(2, '0');
+  final d = now.day.toString().padLeft(2, '0');
+  final h = now.hour.toString().padLeft(2, '0');
+  return '$y-$m-$d-$h';
+}
 
-// ─── Helper: get session ID from location state ───────────────────────────────
+DateTime getCurrentSlotStartTime([DateTime? dt]) {
+  final now = dt ?? DateTime.now();
+  return DateTime(now.year, now.month, now.day, now.hour, 0, 0);
+}
+
+DateTime getCurrentSlotEndTime([DateTime? dt]) {
+  final now = dt ?? DateTime.now();
+  return DateTime(now.year, now.month, now.day, now.hour + 1, 0, 0);
+}
+
+// ??? Helper: get session ID from location state ???????????????????????????????
 
 /// Returns null if location not yet resolved or denied.
 final _sessionIdProvider = Provider<String?>((ref) {
@@ -20,7 +39,7 @@ final _sessionIdProvider = Provider<String?>((ref) {
   );
 });
 
-// ─── Session stream ───────────────────────────────────────────────────────────
+// ??? Session stream ???????????????????????????????????????????????????????????
 
 final spotlightSessionProvider = StreamProvider<SpotlightSession?>((ref) {
   final authState = ref.watch(authStateChangesProvider);
@@ -29,6 +48,9 @@ final spotlightSessionProvider = StreamProvider<SpotlightSession?>((ref) {
 
   final sessionId = ref.watch(_sessionIdProvider);
   if (sessionId == null) return const Stream.empty();
+
+  final slotStart = getCurrentSlotStartTime();
+  final slotEnd = getCurrentSlotEndTime();
 
   return FirebaseFirestore.instanceFor(app: Firebase.app(), databaseId: 'default')
       .collection('spotlight_sessions')
@@ -39,22 +61,36 @@ final spotlightSessionProvider = StreamProvider<SpotlightSession?>((ref) {
       })
       .map((snapshot) {
     if (!snapshot.exists) {
-      // Auto-create a virtual session for this zone (no write needed — bids create it)
       return SpotlightSession(
         id: sessionId,
-        startTime: DateTime.now(),
-        endTime: DateTime.now().add(const Duration(hours: 1)),
+        startTime: slotStart,
+        endTime: slotEnd,
         prizePool: 0,
         isActive: true,
         minStartingBid: 100,
         activeBidders: 0,
       );
     }
-    return SpotlightSession.fromMap(snapshot.id, snapshot.data()!);
+
+    final session = SpotlightSession.fromMap(snapshot.id, snapshot.data()!);
+    final now = DateTime.now();
+    // If stored endTime has passed or is from a previous hour, present active hour slot
+    if (now.isAfter(session.endTime) || session.endTime.isBefore(slotStart)) {
+      return SpotlightSession(
+        id: session.id,
+        startTime: slotStart,
+        endTime: slotEnd,
+        prizePool: 0, // Reset prize pool for new slot until bids placed
+        isActive: true,
+        minStartingBid: session.minStartingBid,
+        activeBidders: 0,
+      );
+    }
+    return session;
   });
 });
 
-// ─── Bids stream ─────────────────────────────────────────────────────────────
+// ??? Bids stream ?????????????????????????????????????????????????????????????
 
 final spotlightBidsProvider =
     StreamProvider.family<List<SpotlightBid>, String>((ref, sessionId) {
@@ -67,42 +103,61 @@ final spotlightBidsProvider =
       .doc(sessionId)
       .collection('bids')
       .orderBy('amount', descending: true)
-      .limit(30)
+      .limit(60)
       .snapshots()
       .handleError((err) {
         debugPrint('[Spotlight] Bids stream error: $err');
       })
       .map((snapshot) {
-    final bids = snapshot.docs
+    final now = DateTime.now();
+    final currentSlotId = getCurrentSlotId(now);
+    final slotStart = getCurrentSlotStartTime(now);
+    final slotEnd = getCurrentSlotEndTime(now);
+
+    // Filter bids to ONLY those belonging to the current 1-hour slot:
+    // 1. If bid has slotId, it MUST match currentSlotId.
+    // 2. If legacy bid without slotId, its timestamp must be within [slotStart, slotEnd].
+    // Past hour profiles are automatically excluded!
+    final activeBids = snapshot.docs
         .map((doc) => SpotlightBid.fromMap(doc.id, doc.data()))
+        .where((bid) {
+          if (bid.slotId.isNotEmpty) {
+            return bid.slotId == currentSlotId;
+          }
+          return bid.timestamp.isAfter(slotStart.subtract(const Duration(seconds: 10))) &&
+                 bid.timestamp.isBefore(slotEnd.add(const Duration(minutes: 1)));
+        })
         .toList();
 
-    // Sort by amount descending (primary), then timestamp ascending (tie-breaker) in memory
-    bids.sort((a, b) {
+    // Sort by amount descending (primary), then timestamp ascending (tie-breaker)
+    activeBids.sort((a, b) {
       final amtCmp = b.amount.compareTo(a.amount);
       if (amtCmp != 0) return amtCmp;
       return a.timestamp.compareTo(b.timestamp);
     });
 
+    final top30 = activeBids.take(30).toList();
+
     // Assign ranks locally based on the sorted order
-    for (int i = 0; i < bids.length; i++) {
-      bids[i] = SpotlightBid(
-        id: bids[i].id,
-        sessionId: bids[i].sessionId,
-        userId: bids[i].userId,
-        username: bids[i].username,
-        profileImageUrl: bids[i].profileImageUrl,
-        isVerified: bids[i].isVerified,
-        amount: bids[i].amount,
-        timestamp: bids[i].timestamp,
+    for (int i = 0; i < top30.length; i++) {
+      top30[i] = SpotlightBid(
+        id: top30[i].id,
+        sessionId: top30[i].sessionId,
+        userId: top30[i].userId,
+        username: top30[i].username,
+        profileImageUrl: top30[i].profileImageUrl,
+        isVerified: top30[i].isVerified,
+        amount: top30[i].amount,
+        timestamp: top30[i].timestamp,
         rank: i + 1,
+        slotId: top30[i].slotId,
       );
     }
-    return bids;
+    return top30;
   });
 });
 
-// ─── Notifier ─────────────────────────────────────────────────────────────────
+// ??? Notifier ?????????????????????????????????????????????????????????????????
 
 final spotlightNotifierProvider = Provider((ref) => SpotlightNotifier(ref));
 
@@ -123,32 +178,60 @@ class SpotlightNotifier {
     required int amount,
   }) async {
     final user = _ref.read(currentUserProvider);
-    if (user.id.isEmpty) return;
+    if (user.id.isEmpty) {
+      throw Exception('Please sign in to place a bid');
+    }
 
     final resolvedSessionId = _sessionId ?? sessionId;
+    final now = DateTime.now();
+    final currentSlotId = getCurrentSlotId(now);
+    final slotStart = getCurrentSlotStartTime(now);
+    final slotEnd = getCurrentSlotEndTime(now);
 
-    final sessionRef = FirebaseFirestore.instanceFor(app: Firebase.app(), databaseId: 'default')
-        .collection('spotlight_sessions')
-        .doc(resolvedSessionId);
-
+    final db = FirebaseFirestore.instanceFor(app: Firebase.app(), databaseId: 'default');
+    final sessionRef = db.collection('spotlight_sessions').doc(resolvedSessionId);
     final bidRef = sessionRef.collection('bids').doc(user.id);
-    final userRef = FirebaseFirestore.instanceFor(app: Firebase.app(), databaseId: 'default').collection('users').doc(user.id);
+    final userRef = db.collection('users').doc(user.id);
 
-    await FirebaseFirestore.instanceFor(app: Firebase.app(), databaseId: 'default').runTransaction((transaction) async {
-      final userDoc = await transaction.get(userRef);
-      if (!userDoc.exists) throw Exception('User not found');
-      
-      final currentCoins = userDoc.data()?['coins'] as int? ?? 0;
-      if (currentCoins < amount) {
-        throw Exception('Insufficient coins. You need $amount coins to place this bid.');
+    try {
+      // 1. First fetch outside transaction to avoid cross-document concurrency limits on Web
+      final userSnap = await userRef.get();
+      if (!userSnap.exists) {
+        throw Exception('User account profile not found');
       }
 
-      // Deduct coins from user
-      transaction.update(userRef, {
-        'coins': FieldValue.increment(-amount),
-      });
+      final userData = userSnap.data() ?? {};
+      final currentCoins = (userData['coins'] as num?)?.toInt() ?? 0;
 
-      transaction.set(bidRef, {
+      final bidSnap = await bidRef.get();
+      int previousBid = 0;
+      if (bidSnap.exists) {
+        final existingSlotId = bidSnap.data()?['slotId'] as String? ?? '';
+        final existingTs = (bidSnap.data()?['timestamp'] as Timestamp?)?.toDate();
+        final isCurrentSlot = existingSlotId == currentSlotId || 
+            (existingSlotId.isEmpty && existingTs != null && existingTs.isAfter(slotStart));
+        if (isCurrentSlot) {
+          previousBid = ((bidSnap.data()?['amount'] as num?)?.toInt() ?? 0);
+        }
+      }
+
+      final delta = amount - previousBid;
+      if (delta > 0 && currentCoins < delta) {
+        throw Exception('Insufficient coins. You need ${delta} more coins to raise your bid to ${amount}.');
+      }
+
+      // 2. Perform write via WriteBatch (supported everywhere, never fails with Web SDK transaction locks)
+      final batch = db.batch();
+
+      // Deduct or refund incremental delta
+      if (delta != 0) {
+        batch.update(userRef, {
+          'coins': FieldValue.increment(-delta),
+        });
+      }
+
+      // Place or update bid
+      batch.set(bidRef, {
         'sessionId': resolvedSessionId,
         'userId': user.id,
         'username': user.name,
@@ -157,16 +240,47 @@ class SpotlightNotifier {
         'amount': amount,
         'timestamp': FieldValue.serverTimestamp(),
         'rank': 999,
+        'slotId': currentSlotId,
       });
 
-      // Ensure the session doc exists with zone metadata
-      transaction.set(sessionRef, {
+      // Update session document
+      final sessionSnap = await sessionRef.get();
+      final existingEnd = (sessionSnap.data()?['endTime'] as Timestamp?)?.toDate();
+      final isNewHour = !sessionSnap.exists || existingEnd == null || now.isAfter(existingEnd);
+
+      final Map<String, dynamic> sessionUpdates = {
         'isActive': true,
-        'prizePool': FieldValue.increment(amount),
         'minStartingBid': 100,
         'sessionId': resolvedSessionId,
-      }, SetOptions(merge: true));
-    });
+        'startTime': Timestamp.fromDate(slotStart),
+        'endTime': Timestamp.fromDate(slotEnd),
+        'slotId': currentSlotId,
+      };
+
+      if (isNewHour) {
+        sessionUpdates['prizePool'] = amount;
+        sessionUpdates['activeBidders'] = 1;
+      } else {
+        sessionUpdates['prizePool'] = FieldValue.increment(delta);
+        if (previousBid == 0) {
+          sessionUpdates['activeBidders'] = FieldValue.increment(1);
+        }
+      }
+
+      batch.set(sessionRef, sessionUpdates, SetOptions(merge: true));
+      await batch.commit();
+
+    } catch (e, stack) {
+      debugPrint('[Spotlight] placeBid error: $e\n$stack');
+      final errorMsg = e.toString();
+      if (errorMsg.contains('permission-denied') || errorMsg.contains('PERMISSION_DENIED')) {
+        throw Exception('Permission denied by server. Please check your login credentials.');
+      } else if (errorMsg.contains('Insufficient coins')) {
+        rethrow;
+      } else {
+        throw Exception(errorMsg.replaceAll('Exception: ', ''));
+      }
+    }
   }
 
   Future<void> removeBid({required String sessionId}) async {
@@ -174,8 +288,11 @@ class SpotlightNotifier {
     if (user.id.isEmpty) return;
 
     final resolvedSessionId = _sessionId ?? sessionId;
-    final db = FirebaseFirestore.instanceFor(app: Firebase.app(), databaseId: 'default');
+    final now = DateTime.now();
+    final currentSlotId = getCurrentSlotId(now);
+    final slotStart = getCurrentSlotStartTime(now);
 
+    final db = FirebaseFirestore.instanceFor(app: Firebase.app(), databaseId: 'default');
     final sessionRef = db.collection('spotlight_sessions').doc(resolvedSessionId);
     final bidRef = sessionRef.collection('bids').doc(user.id);
     final userRef = db.collection('users').doc(user.id);
@@ -185,19 +302,25 @@ class SpotlightNotifier {
         final bidDoc = await transaction.get(bidRef);
         if (!bidDoc.exists) return;
 
+        final existingSlotId = bidDoc.data()?['slotId'] as String? ?? '';
+        final existingTs = (bidDoc.data()?['timestamp'] as Timestamp?)?.toDate();
+        final isCurrentSlot = existingSlotId == currentSlotId || 
+            (existingSlotId.isEmpty && existingTs != null && existingTs.isAfter(slotStart));
+
         final bidAmount = (bidDoc.data()?['amount'] as num?)?.toInt() ?? 0;
 
-        // 1. Delete the bid document from session bids atomically
+        // Delete the bid document from session bids atomically
         transaction.delete(bidRef);
 
-        // 2. Refund coins to user & decrement prize pool
-        if (bidAmount > 0) {
+        // Refund coins to user & decrement prize pool & activeBidders only if from current active slot
+        if (isCurrentSlot && bidAmount > 0) {
           transaction.update(userRef, {
             'coins': FieldValue.increment(bidAmount),
           });
 
           transaction.set(sessionRef, {
             'prizePool': FieldValue.increment(-bidAmount),
+            'activeBidders': FieldValue.increment(-1),
           }, SetOptions(merge: true));
         }
       });

@@ -188,7 +188,7 @@ class _CreateCommunityScreenState extends ConsumerState<CreateCommunityScreen> {
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Scaffold(
-      backgroundColor: isDark ? const Color(0xFF0A0D18) : const Color(0xFFF8FAFC),
+      backgroundColor: isDark ? const Color(0xFF0B0D14) : const Color(0xFFF8FAFC),
       body: Stack(
         children: [
           const BackgroundOrbs(),

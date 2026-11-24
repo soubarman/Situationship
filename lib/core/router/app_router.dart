@@ -23,7 +23,6 @@ import '../../features/profile/screens/user_detail_screen.dart';
 import '../../features/profile/screens/visitors_screen.dart';
 import '../../features/post/screens/create_post_screen.dart';
 import '../../features/feed/screens/take_screen.dart';
-import '../../features/feed/screens/story_view_screen.dart';
 import '../../features/feed/screens/take_viewer_screen.dart';
 import '../../features/spotlight/screens/spotlight_screen.dart';
 import '../../features/wallet/screens/wallet_screen.dart';
@@ -35,6 +34,7 @@ import '../providers/app_state_provider.dart';
 import '../providers/shared_prefs_provider.dart';
 import '../../features/auth/screens/suspended_screen.dart';
 import '../../shared/widgets/notifications_sheet.dart';
+import '../../features/cupid_ai/screens/cupid_ai_screen.dart';
 
 final appRouterProvider = Provider<GoRouter>((ref) {
   final router = GoRouter(
@@ -65,6 +65,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         '/spotlight',
         '/verification',
         '/take',
+        '/cupid',
       ].any((r) => state.matchedLocation.startsWith(r));
       final isCompletingProfile = state.matchedLocation == '/complete-profile';
 
@@ -172,6 +173,11 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         path: '/wallet',
         name: 'wallet',
         builder: (context, state) => const WalletScreen(),
+      ),
+      GoRoute(
+        path: '/cupid',
+        name: 'cupid-ai',
+        builder: (context, state) => const CupidAIScreen(),
       ),
       GoRoute(
         path: '/notifications',

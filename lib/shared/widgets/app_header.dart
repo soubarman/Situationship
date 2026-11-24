@@ -7,6 +7,7 @@ import '../../core/providers/app_state_provider.dart';
 import '../../core/theme/app_palette.dart';
 import 'notifications_sheet.dart';
 import 'situationship_logo.dart';
+import 'app_3d_icons.dart';
 
 /// Unified Header component that matches the exact Situationship layout:
 /// - Left: Situationship™ Logo or Screen Title
@@ -177,11 +178,8 @@ class SituationshipHeaderBar extends ConsumerWidget {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.center,
           children: [
-            const Text(
-              '🪙',
-              style: TextStyle(fontSize: 12),
-            ),
-            const SizedBox(width: 4.5),
+            const Coin3dIcon(size: 14),
+            const SizedBox(width: 5),
             Text(
               '$coins',
               style: const TextStyle(

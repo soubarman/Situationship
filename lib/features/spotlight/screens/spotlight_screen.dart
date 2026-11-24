@@ -1,4 +1,4 @@
-import 'dart:ui';
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -8,8 +8,8 @@ import 'package:situationship/core/providers/app_state_provider.dart';
 import '../models/spotlight_model.dart';
 import '../providers/spotlight_provider.dart';
 import '../providers/location_provider.dart';
-import '../widgets/spotlight_card.dart';
 import '../widgets/bid_bottom_sheet.dart';
+import '../../../shared/widgets/app_3d_icons.dart';
 
 class SpotlightScreen extends ConsumerStatefulWidget {
   const SpotlightScreen({super.key});
@@ -46,7 +46,7 @@ class _SpotlightScreenState extends ConsumerState<SpotlightScreen> {
 
     return locationAsync.when(
       loading: () => Scaffold(
-        backgroundColor: isDark ? const Color(0xFF0D0B14) : const Color(0xFFF8FAFC),
+        backgroundColor: isDark ? const Color(0xFF0B0D14) : const Color(0xFFF8FAFC),
         body: const Center(child: CircularProgressIndicator()),
       ),
       error: (_, __) => const SizedBox.shrink(),
@@ -58,13 +58,19 @@ class _SpotlightScreenState extends ConsumerState<SpotlightScreen> {
         final sessionAsync = ref.watch(spotlightSessionProvider);
 
     return Scaffold(
-      backgroundColor: isDark ? const Color(0xFF0D0B14) : const Color(0xFFF8FAFC),
+      backgroundColor: isDark ? const Color(0xFF0B0D14) : const Color(0xFFF8FAFC),
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
         leading: IconButton(
-          icon: Icon(Icons.arrow_back_rounded, color: isDark ? Colors.white : Colors.black),
-          onPressed: () => context.pop(),
+          icon: Icon(Icons.arrow_back_ios_new_rounded, size: 20, color: isDark ? Colors.white : Colors.black),
+          onPressed: () {
+            if (Navigator.of(context).canPop()) {
+              Navigator.of(context).pop();
+            } else {
+              context.go('/');
+            }
+          },
         ),
         title: Column(
           children: [
@@ -105,7 +111,7 @@ class _SpotlightScreenState extends ConsumerState<SpotlightScreen> {
               ),
               child: Row(
                 children: [
-                  const Text('🪙', style: TextStyle(fontSize: 14)),
+                  const Coin3dIcon(size: 14),
                   const SizedBox(width: 5),
                   Text(
                     '${currentUser.coins} coins',
@@ -141,8 +147,12 @@ class _SpotlightScreenState extends ConsumerState<SpotlightScreen> {
               // Check user's bid
               final userBid = realBids.where((b) => b.userId == currentUser.id).firstOrNull;
 
-              return SingleChildScrollView(
-                physics: const BouncingScrollPhysics(),
+              return Align(
+                alignment: Alignment.topCenter,
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 580),
+                  child: SingleChildScrollView(
+                    physics: const BouncingScrollPhysics(),
                 child: Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 16.0),
                   child: Column(
@@ -162,7 +172,7 @@ class _SpotlightScreenState extends ConsumerState<SpotlightScreen> {
                       // Podium
                       Row(
                         children: [
-                          const Text('👑', style: TextStyle(fontSize: 18)),
+                          const CrownVector(size: 18, is3dGold: true),
                           const SizedBox(width: 8),
                           Text(
                             'SPOTLIGHT HOUR',
@@ -242,7 +252,7 @@ class _SpotlightScreenState extends ConsumerState<SpotlightScreen> {
                         Container(
                           padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
                           decoration: BoxDecoration(
-                            color: isDark ? const Color(0xFF1E1B2E) : Colors.white,
+                            color: isDark ? const Color(0xFF131722) : Colors.white,
                             borderRadius: BorderRadius.circular(20),
                             border: Border.all(
                               color: isDark ? Colors.white.withOpacity(0.08) : Colors.black.withOpacity(0.05),
@@ -279,7 +289,9 @@ class _SpotlightScreenState extends ConsumerState<SpotlightScreen> {
                     ],
                   ),
                 ),
-              );
+              ),
+            ),
+          );
             },
           );
         },
@@ -290,15 +302,36 @@ class _SpotlightScreenState extends ConsumerState<SpotlightScreen> {
   }
 
   Widget _buildLiveSlotCard(SpotlightSession session) {
+    final now = DateTime.now();
+    final isPeak = now.hour >= 19 && now.hour <= 23;
+    final slotStart = session.startTime;
+    final slotEnd = session.endTime;
+
+    String formatTime(DateTime t) {
+      final h = t.hour % 12 == 0 ? 12 : t.hour % 12;
+      final m = t.minute.toString().padLeft(2, '0');
+      final a = t.hour >= 12 ? 'PM' : 'AM';
+      return '$h:$m $a';
+    }
+
     return Container(
-      padding: const EdgeInsets.all(20),
+      padding: const EdgeInsets.all(22),
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(24),
+        borderRadius: BorderRadius.circular(26),
         gradient: LinearGradient(
-          colors: [AppTheme.primaryBlue, Color(0xFFC7AFFF)],
+          colors: isPeak 
+              ? [const Color(0xFF6C38FF), const Color(0xFFFF5E62)]
+              : [const Color(0xFF4A00E0), const Color(0xFF8E2DE2)],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
+        boxShadow: [
+          BoxShadow(
+            color: (isPeak ? const Color(0xFFFF5E62) : const Color(0xFF8E2DE2)).withOpacity(0.35),
+            blurRadius: 24,
+            offset: const Offset(0, 10),
+          ),
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -306,41 +339,65 @@ class _SpotlightScreenState extends ConsumerState<SpotlightScreen> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              const Text(
-                'LIVE SLOT',
-                style: TextStyle(color: Colors.white70, fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 1.0),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+                decoration: BoxDecoration(
+                  color: Colors.white.withOpacity(0.18),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: const Text(
+                  'LIVE SPOTLIGHT SLOT',
+                  style: TextStyle(color: Colors.white, fontSize: 9.5, fontWeight: FontWeight.w900, letterSpacing: 1.2),
+                ),
               ),
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                 decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.2),
+                  color: isPeak ? const Color(0xFFFF6584).withOpacity(0.3) : Colors.white.withOpacity(0.16),
                   borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: isPeak ? Colors.amberAccent : Colors.white30,
+                    width: 1,
+                  ),
                 ),
-                child: const Row(
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
                   children: [
-                    Text('🌙', style: TextStyle(fontSize: 10)),
-                    SizedBox(width: 4),
-                    Text('Off-peak', style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold)),
+                    isPeak
+                        ? const Fire3dIcon(size: 13)
+                        : const Icon(Icons.nightlight_round, size: 12, color: Colors.white70),
+                    const SizedBox(width: 4),
+                    Text(
+                      isPeak ? 'Peak • 2x Boost' : 'Off-peak • Active',
+                      style: const TextStyle(color: Colors.white, fontSize: 10.5, fontWeight: FontWeight.w800),
+                    ),
                   ],
                 ),
               )
             ],
           ),
-          const SizedBox(height: 8),
-          const Text(
-            '12:00 AM – 1:00 AM',
-            style: TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.w900),
+          const SizedBox(height: 12),
+          Text(
+            '${formatTime(slotStart)} – ${formatTime(slotEnd)}',
+            style: const TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.w900, letterSpacing: -0.3),
           ),
-          const SizedBox(height: 24),
+          const SizedBox(height: 20),
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text('MIN BID', style: TextStyle(color: Colors.white70, fontSize: 10, fontWeight: FontWeight.bold)),
+                  const Text('MIN ENTRY BID', style: TextStyle(color: Colors.white70, fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 0.5)),
                   const SizedBox(height: 4),
-                  Text('🪙 ${session.minStartingBid}', style: const TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.w900)),
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Container(width: 22, height: 22, decoration: BoxDecoration(color: const Color(0xFFFFB703).withValues(alpha: 0.2), shape: BoxShape.circle), child: const Icon(Icons.monetization_on_rounded, color: Color(0xFFFFB703), size: 16)),
+                      const SizedBox(width: 4),
+                      Text('${session.minStartingBid}', style: const TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.w900)),
+                    ],
+                  ),
                 ],
               ),
               Column(
@@ -348,13 +405,13 @@ class _SpotlightScreenState extends ConsumerState<SpotlightScreen> {
                 children: [
                   const Row(
                     children: [
-                      Icon(Icons.access_time, color: Colors.white70, size: 12),
+                      Icon(Icons.access_time_rounded, color: Colors.white70, size: 12),
                       SizedBox(width: 4),
-                      Text('NEXT SLOT IN', style: TextStyle(color: Colors.white70, fontSize: 10, fontWeight: FontWeight.bold)),
+                      Text('NEXT SLOT IN', style: TextStyle(color: Colors.white70, fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 0.5)),
                     ],
                   ),
                   const SizedBox(height: 4),
-                  _CountdownText(endTime: session.endTime),
+                  _CountdownText(endTime: slotEnd),
                 ],
               )
             ],
@@ -366,25 +423,104 @@ class _SpotlightScreenState extends ConsumerState<SpotlightScreen> {
 
   Widget _buildYourBidCard(BuildContext context, SpotlightSession session, List<SpotlightBid> bids, SpotlightBid? userBid, bool isDark) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
       decoration: BoxDecoration(
-        color: isDark ? const Color(0xFF1E1B2E) : Colors.white,
+        color: isDark ? const Color(0xFF131722) : Colors.white,
         borderRadius: BorderRadius.circular(24),
+        border: Border.all(
+          color: userBid != null 
+              ? const Color(0xFFFFD700).withOpacity(0.4) 
+              : (isDark ? Colors.white.withOpacity(0.08) : Colors.black.withOpacity(0.06)),
+          width: 1.5,
+        ),
+        boxShadow: userBid != null ? [
+          BoxShadow(
+            color: const Color(0xFFFFD700).withOpacity(0.12),
+            blurRadius: 16,
+            offset: const Offset(0, 4),
+          ),
+        ] : null,
       ),
       child: Row(
         children: [
-          const Text('✨', style: TextStyle(fontSize: 20)),
+          Container(
+            width: 42,
+            height: 42,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              gradient: userBid != null
+                  ? const LinearGradient(colors: [Color(0xFFFFD700), Color(0xFFFFA500)])
+                  : LinearGradient(colors: [AppTheme.primaryBlue.withOpacity(0.3), AppTheme.primaryBlue.withOpacity(0.1)]),
+            ),
+            child: Center(
+              child: userBid != null
+                  ? (userBid.rank == 1
+                      ? const CrownVector(size: 20, is3dGold: true)
+                      : const Icon(Icons.star_rounded, color: Colors.white, size: 22))
+                  : const Icon(Icons.auto_awesome_rounded, color: Colors.white70, size: 20),
+            ),
+          ),
           const SizedBox(width: 12),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
               children: [
-                Text('Your bid this hour', style: TextStyle(color: isDark ? Colors.white54 : Colors.black54, fontSize: 11, fontWeight: FontWeight.bold)),
-                const SizedBox(height: 2),
                 Text(
-                  userBid != null ? 'Rank #${userBid.rank} (🪙 ${userBid.amount} coins)' : 'Not bidding yet',
-                  style: TextStyle(color: isDark ? Colors.white : Colors.black, fontSize: 14, fontWeight: FontWeight.w900),
+                  'YOUR LIVE STATUS',
+                  style: TextStyle(
+                    color: isDark ? Colors.white54 : Colors.black54,
+                    fontSize: 9.5,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: 1.0,
+                  ),
                 ),
+                const SizedBox(height: 4),
+                if (userBid != null)
+                  Wrap(
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    spacing: 6,
+                    runSpacing: 4,
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                        decoration: BoxDecoration(
+                          color: userBid.rank == 1 
+                              ? const Color(0xFFFFD700) 
+                              : (userBid.rank == 2 ? const Color(0xFFE0E0E0) : const Color(0xFFCD7F32)),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Text(
+                          'Rank #${userBid.rank}',
+                          style: const TextStyle(color: Colors.black, fontSize: 11, fontWeight: FontWeight.w900),
+                        ),
+                      ),
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Coin3dIcon(size: 13),
+                          const SizedBox(width: 3.5),
+                          Text(
+                            '${userBid.amount} coins',
+                            style: TextStyle(
+                              color: isDark ? Colors.white : Colors.black,
+                              fontSize: 12.5,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  )
+                else
+                  Text(
+                    'Not in Top 30 yet',
+                    style: TextStyle(
+                      color: isDark ? Colors.white : Colors.black,
+                      fontSize: 13.5,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
               ],
             ),
           ),
@@ -396,7 +532,7 @@ class _SpotlightScreenState extends ConsumerState<SpotlightScreen> {
                 final confirm = await showDialog<bool>(
                   context: context,
                   builder: (ctx) => AlertDialog(
-                    backgroundColor: isDark ? const Color(0xFF1E1B2E) : Colors.white,
+                    backgroundColor: isDark ? const Color(0xFF131722) : Colors.white,
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
                     title: const Text('Cancel Spotlight Bid?'),
                     content: Text('Your bid of ${userBid.amount} coins will be deleted and refunded to your coin balance.'),
@@ -443,13 +579,16 @@ class _SpotlightScreenState extends ConsumerState<SpotlightScreen> {
           ElevatedButton(
             onPressed: () => _openBiddingSheet(context, session, bids),
             style: ElevatedButton.styleFrom(
-              backgroundColor: AppTheme.primaryBlue,
+              backgroundColor: userBid != null ? const Color(0xFF00C9FF) : AppTheme.primaryBlue,
               foregroundColor: Colors.white,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
               elevation: 0,
             ),
-            child: Text(userBid != null ? 'Update bid' : 'Place bid', style: const TextStyle(fontWeight: FontWeight.bold)),
+            child: Text(
+              userBid != null ? 'Update bid' : 'Join Spotlight',
+              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+            ),
           )
         ],
       ),
@@ -480,31 +619,44 @@ class _CountdownText extends StatefulWidget {
 }
 
 class _CountdownTextState extends State<_CountdownText> {
-  late DateTime _endTime;
+  Timer? _timer;
 
   @override
   void initState() {
     super.initState();
-    _endTime = widget.endTime;
-    _update();
-  }
-
-  void _update() {
-    Future.delayed(const Duration(seconds: 1), () {
-      if (mounted) {
-        setState(() {});
-        _update();
-      }
+    _timer = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (mounted) setState(() {});
     });
   }
 
   @override
+  void dispose() {
+    _timer?.cancel();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final diff = _endTime.difference(DateTime.now());
-    if (diff.isNegative) return const Text('00:00', style: TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.w900));
-    final mm = (diff.inMinutes % 60).toString().padLeft(2, '0');
-    final ss = (diff.inSeconds % 60).toString().padLeft(2, '0');
-    return Text('$mm:$ss', style: const TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.w900, fontFeatures: [FontFeature.tabularFigures()]));
+    final now = DateTime.now();
+    final clockNextSlot = DateTime(now.year, now.month, now.day, now.hour + 1, 0, 0);
+    DateTime target = clockNextSlot;
+    if (widget.endTime.isAfter(now) && widget.endTime.difference(now).inHours < 2) {
+      target = widget.endTime;
+    }
+    final diff = target.difference(now);
+    final totalSec = diff.isNegative ? 0 : diff.inSeconds;
+
+    final mm = ((totalSec ~/ 60) % 60).toString().padLeft(2, '0');
+    final ss = (totalSec % 60).toString().padLeft(2, '0');
+    return Text(
+      '$mm:$ss',
+      style: const TextStyle(
+        color: Colors.white,
+        fontSize: 22,
+        fontWeight: FontWeight.w900,
+        fontFeatures: [FontFeature.tabularFigures()],
+      ),
+    );
   }
 }
 
@@ -587,11 +739,25 @@ class _SpotlightPodiumCard extends StatelessWidget {
               ),
 
               if (isRank1)
-                const Positioned(
-                  top: 12,
-                  left: 0,
-                  right: 0,
-                  child: Center(child: Text('👑', style: TextStyle(fontSize: 24))),
+                Positioned(
+                  top: 14,
+                  left: 12,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                    decoration: BoxDecoration(
+                      color: Colors.black.withOpacity(0.65),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: rankColor.withOpacity(0.8), width: 1),
+                    ),
+                    child: const Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        CrownVector(size: 11, is3dGold: true),
+                        SizedBox(width: 3.5),
+                        Text('1st', style: TextStyle(color: Color(0xFFFFD700), fontSize: 9.5, fontWeight: FontWeight.w900)),
+                      ],
+                    ),
+                  ),
                 ),
 
               // Rank Badge
@@ -652,13 +818,29 @@ class _SpotlightPodiumCard extends StatelessWidget {
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Text(
-                          'Min 🪙 ${bid.amount}',
-                          style: TextStyle(
-                            color: rankColor,
-                            fontSize: 11,
-                            fontWeight: FontWeight.w900,
-                          ),
+                        Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              'Min',
+                              style: TextStyle(
+                                color: rankColor,
+                                fontSize: 11,
+                                fontWeight: FontWeight.w900,
+                              ),
+                            ),
+                            const SizedBox(width: 4),
+                            const Coin3dIcon(size: 10),
+                            const SizedBox(width: 3),
+                            Text(
+                              '${bid.amount}',
+                              style: TextStyle(
+                                color: rankColor,
+                                fontSize: 11,
+                                fontWeight: FontWeight.w900,
+                              ),
+                            ),
+                          ],
                         ),
                         const SizedBox(height: 2),
                         const Text(
@@ -704,7 +886,7 @@ class _SpotlightPodiumCard extends StatelessWidget {
                         child: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            const Text('🪙', style: TextStyle(fontSize: 11)),
+                            const Coin3dIcon(size: 11),
                             const SizedBox(width: 4),
                             Text(
                               '${bid.amount}',
@@ -727,7 +909,7 @@ class _SpotlightPodiumCard extends StatelessWidget {
   Widget _buildAvatarFallback(String name, Color accentColor) {
     final initial = name.isNotEmpty ? name.substring(0, 1).toUpperCase() : '?';
     return Container(
-      color: const Color(0xFF1E1B2E),
+      color: const Color(0xFF131722),
       child: Center(
         child: Container(
           width: 56,
@@ -771,7 +953,7 @@ class _SpotlightListItem extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: isDark ? const Color(0xFF1E1B2E) : Colors.white,
+          color: isDark ? const Color(0xFF131722) : Colors.white,
           borderRadius: BorderRadius.circular(20),
           border: Border.all(
             color: isDark ? Colors.white.withOpacity(0.05) : Colors.black.withOpacity(0.04),
@@ -859,7 +1041,7 @@ class _SpotlightListItem extends StatelessWidget {
                 const SizedBox(height: 6),
                 Row(
                   children: [
-                    const Text('🪙', style: TextStyle(fontSize: 12)),
+                    const Coin3dIcon(size: 12),
                     const SizedBox(width: 4),
                     Text(
                       '${bid.amount}',
@@ -882,7 +1064,7 @@ class _SpotlightListItem extends StatelessWidget {
 
 // ─── Full-screen location gate for SpotlightScreen ────────────────────────────
 
-class _SpotlightLocationGate extends StatelessWidget {
+class _SpotlightLocationGate extends ConsumerWidget {
   final bool isDark;
   final LocationState locState;
 
@@ -892,12 +1074,12 @@ class _SpotlightLocationGate extends StatelessWidget {
   });
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final isPermanent = locState.status == LocationStatus.deniedForever;
     final isService   = locState.status == LocationStatus.serviceDisabled;
 
     return Scaffold(
-      backgroundColor: isDark ? const Color(0xFF0D0B14) : const Color(0xFFF8FAFC),
+      backgroundColor: isDark ? const Color(0xFF0B0D14) : const Color(0xFFF8FAFC),
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
@@ -969,7 +1151,10 @@ class _SpotlightLocationGate extends StatelessWidget {
                   } else if (isPermanent) {
                     await Geolocator.openAppSettings();
                   } else {
-                    await Geolocator.requestPermission();
+                    final perm = await Geolocator.requestPermission();
+                    if (perm == LocationPermission.whileInUse || perm == LocationPermission.always) {
+                      ref.invalidate(locationProvider);
+                    }
                   }
                 },
                 child: Container(

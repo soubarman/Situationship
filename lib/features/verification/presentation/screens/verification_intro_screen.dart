@@ -18,7 +18,7 @@ class VerificationIntroScreen extends ConsumerWidget {
     final statusAsync = ref.watch(verificationStatusStreamProvider);
 
     return Scaffold(
-      backgroundColor: const Color(0xFF0D0D1A),
+      backgroundColor: const Color(0xFF0B0D14),
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
@@ -33,7 +33,7 @@ class VerificationIntroScreen extends ConsumerWidget {
       ),
       body: statusAsync.when(
         loading: () => const Center(
-          child: CircularProgressIndicator(color: Color(0xFFAB47BC)),
+          child: CircularProgressIndicator(color: Color(0xFF2D6FD4)),
         ),
         error: (e, _) => Center(
           child: Padding(
@@ -131,7 +131,7 @@ class _IntroContent extends StatelessWidget {
               ),
               borderRadius: BorderRadius.circular(24),
               border: Border.all(
-                color: const Color(0xFFAB47BC).withOpacity(0.3),
+                color: const Color(0xFF2D6FD4).withOpacity(0.3),
               ),
             ),
             child: Column(
@@ -459,7 +459,7 @@ class _IntroContent extends StatelessWidget {
                 decoration: BoxDecoration(
                   gradient: canVerify
                       ? const LinearGradient(
-                          colors: [Color(0xFFFF6B9D), Color(0xFFAB47BC), Color(0xFF7C4DFF)],
+                          colors: [Color(0xFFFF6B9D), Color(0xFF2D6FD4), Color(0xFF7C4DFF)],
                         )
                       : null,
                   borderRadius: BorderRadius.circular(16),
@@ -513,7 +513,7 @@ class _Step extends StatelessWidget {
             decoration: const BoxDecoration(
               shape: BoxShape.circle,
               gradient: LinearGradient(
-                colors: [Color(0xFFFF6B9D), Color(0xFFAB47BC)],
+                colors: [Color(0xFFFF6B9D), Color(0xFF2D6FD4)],
               ),
             ),
             child: Text(

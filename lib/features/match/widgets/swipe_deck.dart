@@ -8,6 +8,7 @@ import 'package:firebase_core/firebase_core.dart';
 import '../../../core/models/user_model.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/providers/app_state_provider.dart';
+import '../../../core/services/like_service.dart';
 import 'swipe_card.dart';
 
 class SwipeDeck extends ConsumerStatefulWidget {
@@ -92,13 +93,16 @@ class _SwipeDeckState extends ConsumerState<SwipeDeck> with SingleTickerProvider
           // Trigger mock match screen 35% of the time!
           if (_isSuperLikeActive || Random().nextDouble() < 0.35) {
             _isSuperLikeActive = false; // Reset flag
+            final currentUserId = ref.read(currentUserProvider).id;
+            final canonicalChatId = LikeService.getCanonicalChatId(currentUserId, user.id);
             Future.delayed(const Duration(milliseconds: 100), () {
               if (mounted) {
                 context.push('/match/success', extra: {
                   'matchedUser': {
+                    'id': user.id,
                     'name': user.name,
                     'avatarUrl': user.avatarUrl ?? 'https://i.pravatar.cc/400?u=${user.id}',
-                    'chatId': 'chat_match_${user.id}',
+                    'chatId': canonicalChatId,
                   }
                 });
               }
@@ -673,7 +677,7 @@ class _SwipeDeckState extends ConsumerState<SwipeDeck> with SingleTickerProvider
 
     try {
       final db = FirebaseFirestore.instanceFor(app: Firebase.app(), databaseId: 'default');
-      final chatId = 'chat_${currentUser.id}_${targetUser.id}';
+      final chatId = LikeService.getCanonicalChatId(currentUser.id, targetUser.id);
 
       // Ensure chat exists
       final chatDoc = await db.collection('chats').doc(chatId).get();

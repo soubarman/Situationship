@@ -1,8 +1,10 @@
+import 'package:go_router/go_router.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/providers/app_state_provider.dart';
 import '../../../core/services/coin_service.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../shared/widgets/app_3d_icons.dart';
 
 class WalletScreen extends ConsumerWidget {
   const WalletScreen({super.key});
@@ -46,8 +48,19 @@ class _FemaleWallet extends StatelessWidget {
           // ── Header ──────────────────────────────────────────────────────
           SliverAppBar(
             expandedHeight: 220,
-            backgroundColor: Colors.transparent,
+            backgroundColor: const Color(0xFF0A0D14),
+            surfaceTintColor: Colors.transparent,
             pinned: true,
+            leading: IconButton(
+              icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white, size: 20),
+              onPressed: () {
+                if (Navigator.of(context).canPop()) {
+                  Navigator.of(context).pop();
+                } else {
+                  context.go('/');
+                }
+              },
+            ),
             flexibleSpace: FlexibleSpaceBar(
               background: Container(
                 decoration: const BoxDecoration(
@@ -373,8 +386,19 @@ class _MaleWalletState extends ConsumerState<_MaleWallet> {
           // ── Header ──────────────────────────────────────────────────────
           SliverAppBar(
             expandedHeight: 200,
-            backgroundColor: Colors.transparent,
+            backgroundColor: const Color(0xFF0A0D14),
+            surfaceTintColor: Colors.transparent,
             pinned: true,
+            leading: IconButton(
+              icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white, size: 20),
+              onPressed: () {
+                if (Navigator.of(context).canPop()) {
+                  Navigator.of(context).pop();
+                } else {
+                  context.go('/');
+                }
+              },
+            ),
             flexibleSpace: FlexibleSpaceBar(
               background: Container(
                 decoration: const BoxDecoration(
@@ -391,7 +415,13 @@ class _MaleWalletState extends ConsumerState<_MaleWallet> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       mainAxisAlignment: MainAxisAlignment.end,
                       children: [
-                        const Text('🪙 Your Coins', style: TextStyle(color: Colors.white70, fontSize: 14, fontWeight: FontWeight.w600)),
+                        const Row(
+                          children: [
+                            Coin3dIcon(size: 15),
+                            SizedBox(width: 6),
+                            Text('Your Coins', style: TextStyle(color: Colors.white70, fontSize: 14, fontWeight: FontWeight.w600)),
+                          ],
+                        ),
                         const SizedBox(height: 4),
                         Text(
                           '${user.coins}',
@@ -434,7 +464,7 @@ class _MaleWalletState extends ConsumerState<_MaleWallet> {
                 const SizedBox(height: 12),
                 _CoinPackCard(
                   coins: 100, price: 49, label: 'Starter',
-                  tag: null, gradient: const LinearGradient(colors: [Color(0xFF1E3A5F), Color(0xFF2563EB)]),
+                  tag: null, gradient: const LinearGradient(begin: Alignment.topLeft, end: Alignment.bottomRight, colors: [Color(0xFF16233B), Color(0xFF1B3B6F)]),
                   onBuy: () => _handleBuy(100, 49, 'starter'),
                   isPurchasing: _purchasing,
                 ),
@@ -442,7 +472,7 @@ class _MaleWalletState extends ConsumerState<_MaleWallet> {
                 _CoinPackCard(
                   coins: 250, price: 99, label: 'Popular',
                   tag: 'BEST VALUE',
-                  gradient: const LinearGradient(colors: [Color(0xFF4527A0), Color(0xFFB8A9FF)]),
+                  gradient: const LinearGradient(begin: Alignment.topLeft, end: Alignment.bottomRight, colors: [Color(0xFF2A1B4E), Color(0xFF42287A)]),
                   onBuy: () => _handleBuy(250, 99, 'popular'),
                   isPurchasing: _purchasing,
                 ),
@@ -450,7 +480,7 @@ class _MaleWalletState extends ConsumerState<_MaleWallet> {
                 _CoinPackCard(
                   coins: 600, price: 199, label: 'Power',
                   tag: 'MOST COINS',
-                  gradient: const LinearGradient(colors: [Color(0xFF880E4F), Color(0xFFFF80AB)]),
+                  gradient: const LinearGradient(begin: Alignment.topLeft, end: Alignment.bottomRight, colors: [Color(0xFF381533), Color(0xFF6B1D5F)]),
                   onBuy: () => _handleBuy(600, 199, 'power'),
                   isPurchasing: _purchasing,
                 ),
@@ -493,7 +523,8 @@ class _MaleWalletState extends ConsumerState<_MaleWallet> {
         content: Text('✅ $coins coins added to your wallet!'),
         backgroundColor: AppTheme.success,
         behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        margin: const EdgeInsets.only(left: 16, right: 16, bottom: 28),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
       ));
     }
   }
@@ -517,7 +548,8 @@ class _MaleWalletState extends ConsumerState<_MaleWallet> {
         content: const Text('⭐ Premium activated! Enjoy all features.'),
         backgroundColor: AppTheme.primaryBlue,
         behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        margin: const EdgeInsets.only(left: 16, right: 16, bottom: 28),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
       ));
     }
   }
@@ -542,47 +574,119 @@ class _CoinPackCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: isPurchasing ? null : onBuy,
-      child: Container(
-        padding: const EdgeInsets.all(20),
-        decoration: BoxDecoration(
-          gradient: gradient,
-          borderRadius: BorderRadius.circular(18),
-          boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.3), blurRadius: 20, offset: const Offset(0, 6))],
-        ),
-        child: Row(
-          children: [
-            const Text('🪙', style: TextStyle(fontSize: 36)),
-            const SizedBox(width: 16),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+    return Padding(
+      padding: EdgeInsets.only(top: tag != null ? 8 : 0),
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          GestureDetector(
+            onTap: isPurchasing ? null : onBuy,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 18),
+              decoration: BoxDecoration(
+                gradient: gradient,
+                borderRadius: BorderRadius.circular(20),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.35),
+                    blurRadius: 18,
+                    offset: const Offset(0, 6),
+                  ),
+                ],
+              ),
+              child: Row(
                 children: [
-                  Row(
-                    children: [
-                      Text('$coins Coins', style: const TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.w900)),
-                      if (tag != null) ...[
-                        const SizedBox(width: 8),
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                          decoration: BoxDecoration(color: Colors.white.withOpacity(0.25), borderRadius: BorderRadius.circular(20)),
-                          child: Text(tag!, style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.w800)),
+                  Container(
+                    width: 48,
+                    height: 48,
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.18),
+                      shape: BoxShape.circle,
+                    ),
+                    alignment: Alignment.center,
+                    child: const Coin3dIcon(size: 26),
+                  ),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          '$coins Coins',
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 20,
+                            fontWeight: FontWeight.w900,
+                            letterSpacing: -0.3,
+                          ),
+                        ),
+                        const SizedBox(height: 3),
+                        Text(
+                          '$label pack',
+                          style: TextStyle(
+                            color: Colors.white.withValues(alpha: 0.75),
+                            fontSize: 13,
+                            fontWeight: FontWeight.w500,
+                          ),
                         ),
                       ],
-                    ],
+                    ),
                   ),
-                  Text('$label pack', style: const TextStyle(color: Colors.white70, fontSize: 13)),
+                  const SizedBox(width: 12),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.22),
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(
+                        color: Colors.white.withValues(alpha: 0.4),
+                        width: 1,
+                      ),
+                    ),
+                    child: Text(
+                      '₹$price',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 16,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                  ),
                 ],
               ),
             ),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
-              decoration: BoxDecoration(color: Colors.white.withOpacity(0.25), borderRadius: BorderRadius.circular(14)),
-              child: Text('₹$price', style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w800)),
+          ),
+          if (tag != null)
+            Positioned(
+              top: -8,
+              right: 18,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3.5),
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(
+                    colors: [Color(0xFFFFB703), Color(0xFFFB8500)],
+                  ),
+                  borderRadius: BorderRadius.circular(12),
+                  boxShadow: [
+                    BoxShadow(
+                      color: const Color(0xFFFB8500).withValues(alpha: 0.5),
+                      blurRadius: 8,
+                      offset: const Offset(0, 2),
+                    ),
+                  ],
+                ),
+                child: Text(
+                  tag!,
+                  style: const TextStyle(
+                    color: Colors.black87,
+                    fontSize: 10,
+                    fontWeight: FontWeight.w900,
+                    letterSpacing: 0.5,
+                  ),
+                ),
+              ),
             ),
-          ],
-        ),
+        ],
       ),
     );
   }
@@ -596,53 +700,120 @@ class _SubscriptionCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.all(20),
+      padding: const EdgeInsets.all(22),
       decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [Color(0xFF0D2744), Color(0xFF1565C0)],
+        color: const Color(0xFF121622),
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(
+          color: const Color(0xFF2D6FD4).withValues(alpha: 0.35),
+          width: 1.2,
         ),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: AppTheme.primaryBlue.withOpacity(0.4), width: 1.5),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.45),
+            blurRadius: 24,
+            offset: const Offset(0, 8),
+          ),
+          BoxShadow(
+            color: const Color(0xFF2D6FD4).withValues(alpha: 0.12),
+            blurRadius: 36,
+            offset: const Offset(0, 6),
+          ),
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
-              const Text('⭐', style: TextStyle(fontSize: 28)),
-              const SizedBox(width: 10),
+              Container(
+                width: 44,
+                height: 44,
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(
+                    colors: [Color(0xFFFFB703), Color(0xFFFB8500)],
+                  ),
+                  shape: BoxShape.circle,
+                  boxShadow: [
+                    BoxShadow(
+                      color: const Color(0xFFFB8500).withValues(alpha: 0.4),
+                      blurRadius: 10,
+                      offset: const Offset(0, 3),
+                    ),
+                  ],
+                ),
+                child: const Icon(Icons.star_rounded, color: Colors.white, size: 26),
+              ),
+              const SizedBox(width: 14),
               const Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('Premium', style: TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.w900)),
-                    Text('₹199 / month', style: TextStyle(color: Color(0xFF6ECBF5), fontSize: 13)),
+                    Text(
+                      'Situationship Premium',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 19,
+                        fontWeight: FontWeight.w900,
+                        letterSpacing: -0.3,
+                      ),
+                    ),
+                    SizedBox(height: 2),
+                    Text(
+                      '₹199 / month • Cancel anytime',
+                      style: TextStyle(
+                        color: Color(0xFF6ECBF5),
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
                   ],
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 18),
           const _FeatureRow(text: 'Undo ghost views for free'),
-          const _FeatureRow(text: 'Priority placement in feed'),
-          const _FeatureRow(text: 'All filters & AR effects'),
-          const _FeatureRow(text: '10 free phone unlocks/month'),
+          const _FeatureRow(text: 'Priority placement in Discover feed'),
+          const _FeatureRow(text: 'Unlock all filters & AR effects'),
+          const _FeatureRow(text: '10 free verified phone unlocks / month'),
           const SizedBox(height: 20),
           SizedBox(
             width: double.infinity,
-            child: ElevatedButton(
-              onPressed: isPurchasing ? null : onSubscribe,
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppTheme.primaryBlue,
-                foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(vertical: 14),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+            height: 50,
+            child: Container(
+              decoration: BoxDecoration(
+                gradient: const LinearGradient(
+                  colors: [Color(0xFF2D6FD4), Color(0xFF48AADB)],
+                ),
+                borderRadius: BorderRadius.circular(16),
+                boxShadow: [
+                  BoxShadow(
+                    color: const Color(0xFF2D6FD4).withValues(alpha: 0.45),
+                    blurRadius: 14,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
               ),
-              child: isPurchasing
-                  ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-                  : const Text('Subscribe Now', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800)),
+              child: ElevatedButton(
+                onPressed: isPurchasing ? null : onSubscribe,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.transparent,
+                  shadowColor: Colors.transparent,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                ),
+                child: isPurchasing
+                    ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                    : const Text(
+                        'Subscribe Now',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 15,
+                          fontWeight: FontWeight.w900,
+                          letterSpacing: 0.3,
+                        ),
+                      ),
+              ),
             ),
           ),
         ],
@@ -668,14 +839,27 @@ class _FeatureRow extends StatelessWidget {
   );
 }
 
+class _SpendGuideItem {
+  final IconData icon;
+  final Color color;
+  final String label;
+  final String cost;
+  const _SpendGuideItem({
+    required this.icon,
+    required this.color,
+    required this.label,
+    required this.cost,
+  });
+}
+
 class _SpendGuide extends StatelessWidget {
-  final List<List<String>> items = const [
-    ['⚡', 'Boost post', 'from 25 coins'],
-    ['🎯', 'Spotlight bid', 'from 50 coins'],
-    ['🎁', 'Send a gift', 'from 30 coins'],
-    ['👻', 'Undo ghost view', '20 coins'],
-    ['📞', 'Phone unlock', '50 coins (or free with sub)'],
-    ['✨', 'Extra filters', '5 coins (or free with sub)'],
+  final List<_SpendGuideItem> items = const [
+    _SpendGuideItem(icon: Icons.bolt_rounded, color: Color(0xFFFFB703), label: 'Boost post', cost: 'from 25 coins'),
+    _SpendGuideItem(icon: Icons.track_changes_rounded, color: Color(0xFFFF5277), label: 'Spotlight bid', cost: 'from 50 coins'),
+    _SpendGuideItem(icon: Icons.card_giftcard_rounded, color: Color(0xFFE040FB), label: 'Send a gift', cost: 'from 30 coins'),
+    _SpendGuideItem(icon: Icons.visibility_off_rounded, color: Color(0xFF64B5F6), label: 'Undo ghost view', cost: '20 coins'),
+    _SpendGuideItem(icon: Icons.phone_rounded, color: Color(0xFF4CAF50), label: 'Phone unlock', cost: '50 coins (free with sub)'),
+    _SpendGuideItem(icon: Icons.auto_awesome_rounded, color: Color(0xFFFFD54F), label: 'Extra filters', cost: '5 coins (free with sub)'),
   ];
 
   const _SpendGuide();
@@ -685,18 +869,45 @@ class _SpendGuide extends StatelessWidget {
     return Column(
       children: items.map((item) => Container(
         margin: const EdgeInsets.only(bottom: 8),
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
         decoration: BoxDecoration(
-          color: const Color(0xFF141924),
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: Colors.white10),
+          color: const Color(0xFF131722),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: Colors.white.withValues(alpha: 0.07),
+            width: 0.9,
+          ),
         ),
         child: Row(
           children: [
-            Text(item[0], style: const TextStyle(fontSize: 20)),
+            Container(
+              width: 36,
+              height: 36,
+              decoration: BoxDecoration(
+                color: item.color.withValues(alpha: 0.14),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Icon(item.icon, color: item.color, size: 20),
+            ),
             const SizedBox(width: 12),
-            Expanded(child: Text(item[1], style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w600))),
-            Text(item[2], style: TextStyle(color: AppTheme.primaryBlue, fontSize: 12, fontWeight: FontWeight.w700)),
+            Expanded(
+              child: Text(
+                item.label,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+            Text(
+              item.cost,
+              style: TextStyle(
+                color: AppTheme.primaryBlue,
+                fontSize: 12.5,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
           ],
         ),
       )).toList(),

@@ -10,6 +10,8 @@ import '../../../core/theme/app_theme.dart';
 import '../../../core/providers/app_state_provider.dart';
 import '../../../core/providers/firestore_provider.dart';
 import '../../../shared/widgets/say_hi_premium_modal.dart';
+import '../../../core/services/like_service.dart';
+import '../widgets/match_overlay.dart';
 
 // ─── Provider to track locally revealed users (per session + Firestore) ───────
 final _revealedUsersProvider = StateProvider<Set<String>>((ref) => {});
@@ -989,23 +991,70 @@ class _LikedMeCardState extends ConsumerState<_LikedMeCard> {
                       ),
                     ),
                     const SizedBox(width: 8),
-                    // View Profile arrow
-                    Container(
-                      width: 38,
-                      height: 38,
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFFF6B9D).withOpacity(0.12),
-                        shape: BoxShape.circle,
-                        border: Border.all(
-                          color: const Color(0xFFFF6B9D).withOpacity(0.30),
-                          width: 1.0,
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        // Direct Match button
+                        GestureDetector(
+                          onTap: () async {
+                            HapticFeedback.heavyImpact();
+                            final result = await LikeService.sendLike(
+                              ref: ref,
+                              currentUser: widget.currentUser,
+                              targetUser: user,
+                            );
+                            if (result.isMatch && context.mounted) {
+                              MatchOverlay.show(
+                                context: context,
+                                currentUser: widget.currentUser,
+                                matchedUser: user,
+                                isSuperMatch: _isSuperLiked,
+                              );
+                            }
+                          },
+                          child: Container(
+                            width: 38,
+                            height: 38,
+                            decoration: BoxDecoration(
+                              gradient: const LinearGradient(
+                                colors: [Color(0xFFFF6B9D), Color(0xFFFF8E53)],
+                              ),
+                              shape: BoxShape.circle,
+                              boxShadow: [
+                                BoxShadow(
+                                  color: const Color(0xFFFF6B9D).withOpacity(0.4),
+                                  blurRadius: 8,
+                                  offset: const Offset(0, 2),
+                                ),
+                              ],
+                            ),
+                            child: const Icon(
+                              Icons.favorite_rounded,
+                              size: 19,
+                              color: Colors.white,
+                            ),
+                          ),
                         ),
-                      ),
-                      child: const Icon(
-                        Icons.arrow_forward_ios_rounded,
-                        size: 16,
-                        color: Color(0xFFFF6B9D),
-                      ),
+                        const SizedBox(width: 8),
+                        // View Profile arrow
+                        Container(
+                          width: 36,
+                          height: 36,
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFFF6B9D).withOpacity(0.12),
+                            shape: BoxShape.circle,
+                            border: Border.all(
+                              color: const Color(0xFFFF6B9D).withOpacity(0.30),
+                              width: 1.0,
+                            ),
+                          ),
+                          child: const Icon(
+                            Icons.arrow_forward_ios_rounded,
+                            size: 15,
+                            color: Color(0xFFFF6B9D),
+                          ),
+                        ),
+                      ],
                     ),
                   ],
                 ),
@@ -1066,6 +1115,7 @@ class _LikedUserCard extends ConsumerWidget {
     );
 
     final isMatch = user.following.contains(currentUserId);
+    final isSuperLikedByMe = user.superLikedBy.contains(currentUserId);
 
         return GestureDetector(
           behavior: HitTestBehavior.opaque,
@@ -1124,11 +1174,12 @@ class _LikedUserCard extends ConsumerWidget {
                               decoration: BoxDecoration(
                                 borderRadius: BorderRadius.circular(18),
                                 border: Border.all(
-                                  color: isMatch
-                                      ? const Color(0xFFFF6B9D)
-                                          .withOpacity(0.7)
-                                      : AppTheme.primaryBlue.withOpacity(0.4),
-                                  width: 2.0,
+                                  color: isSuperLikedByMe
+                                      ? const Color(0xFF00C9FF)
+                                      : (isMatch
+                                          ? const Color(0xFFFF6B9D).withOpacity(0.7)
+                                          : AppTheme.primaryBlue.withOpacity(0.4)),
+                                  width: isSuperLikedByMe ? 2.5 : 2.0,
                                 ),
                               ),
                               child: ClipRRect(
@@ -1187,30 +1238,42 @@ class _LikedUserCard extends ConsumerWidget {
                                       overflow: TextOverflow.ellipsis,
                                     ),
                                   ),
-                                  if (isMatch)
+                                  if (isMatch || isSuperLikedByMe)
                                     Container(
                                       padding: const EdgeInsets.symmetric(
                                           horizontal: 8, vertical: 3),
                                       decoration: BoxDecoration(
-                                        gradient: const LinearGradient(
-                                          colors: [
-                                            Color(0xFFFF6B9D),
-                                            Color(0xFFFF8E53),
-                                          ],
-                                        ),
+                                        gradient: isSuperLikedByMe
+                                            ? const LinearGradient(
+                                                colors: [
+                                                  Color(0xFF00C9FF),
+                                                  Color(0xFF92FE9D),
+                                                ],
+                                              )
+                                            : const LinearGradient(
+                                                colors: [
+                                                  Color(0xFFFF6B9D),
+                                                  Color(0xFFFF8E53),
+                                                ],
+                                              ),
                                         borderRadius:
                                             BorderRadius.circular(20),
                                       ),
-                                      child: const Row(
+                                      child: Row(
                                         mainAxisSize: MainAxisSize.min,
                                         children: [
-                                          Icon(Icons.favorite_rounded,
-                                              size: 10, color: Colors.white),
-                                          SizedBox(width: 3),
+                                          Icon(
+                                            isSuperLikedByMe ? Icons.star_rounded : Icons.favorite_rounded,
+                                            size: 10,
+                                            color: isSuperLikedByMe ? Colors.black : Colors.white,
+                                          ),
+                                          const SizedBox(width: 3),
                                           Text(
-                                            'MATCH',
+                                            isMatch
+                                                ? (isSuperLikedByMe ? 'SUPER MATCH' : 'MATCH')
+                                                : 'SUPER LIKED',
                                             style: TextStyle(
-                                              color: Colors.white,
+                                              color: isSuperLikedByMe ? Colors.black : Colors.white,
                                               fontSize: 9,
                                               fontWeight: FontWeight.w900,
                                               letterSpacing: 0.5,
@@ -1301,6 +1364,40 @@ class _LikedUserCard extends ConsumerWidget {
                           ),
                         ),
                         const SizedBox(width: 8),
+                        // Chat button if matched
+                        if (isMatch) ...[
+                          GestureDetector(
+                            onTap: () {
+                              final chatId = LikeService.getCanonicalChatId(currentUserId, user.id);
+                              context.push('/chats/$chatId', extra: {
+                                'otherUserId': user.id,
+                                'name': user.name,
+                                'avatarUrl': user.avatarUrl,
+                                'isOnline': user.isOnline,
+                                'isConfession': false,
+                              });
+                            },
+                            child: Container(
+                              width: 38,
+                              height: 38,
+                              margin: const EdgeInsets.only(right: 6),
+                              decoration: BoxDecoration(
+                                gradient: const LinearGradient(
+                                  colors: [Color(0xFFFF6B9D), Color(0xFFFF8E53)],
+                                ),
+                                shape: BoxShape.circle,
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: const Color(0xFFFF6B9D).withOpacity(0.35),
+                                    blurRadius: 8,
+                                    offset: const Offset(0, 2),
+                                  ),
+                                ],
+                              ),
+                              child: const Icon(Icons.chat_bubble_rounded, size: 17, color: Colors.white),
+                            ),
+                          ),
+                        ],
                         // Unlike button
                         GestureDetector(
                           onTap: () async {

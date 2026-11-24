@@ -23,7 +23,7 @@ class VerificationResultScreen extends ConsumerWidget {
     final isFirestoreApproved = firestoreStatus.valueOrNull?.isApproved ?? false;
 
     return Scaffold(
-      backgroundColor: const Color(0xFF0D0D1A),
+      backgroundColor: const Color(0xFF0B0D14),
       body: SafeArea(
         child: _buildBody(context, ref, submission, isFirestoreApproved),
       ),
@@ -163,7 +163,7 @@ class _ProgressViewState extends State<_ProgressView>
                       child: CustomPaint(
                         size: const Size(100, 100),
                         painter: _RingPainter(
-                          color: const Color(0xFFAB47BC),
+                          color: const Color(0xFF2D6FD4),
                           strokeWidth: 3,
                           dashLength: 0.6,
                         ),
@@ -216,7 +216,7 @@ class _ProgressViewState extends State<_ProgressView>
                 child: LinearProgressIndicator(
                   value: widget.progress,
                   backgroundColor: Colors.white.withOpacity(0.1),
-                  valueColor: const AlwaysStoppedAnimation(Color(0xFFAB47BC)),
+                  valueColor: const AlwaysStoppedAnimation(Color(0xFF2D6FD4)),
                   minHeight: 8,
                 ),
               ),
@@ -333,7 +333,7 @@ class _ApprovedViewState extends State<_ApprovedView>
               child: ElevatedButton(
                 onPressed: widget.onDone,
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFFAB47BC),
+                  backgroundColor: const Color(0xFF2D6FD4),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(16),
                   ),
@@ -498,7 +498,7 @@ class _RejectedView extends StatelessWidget {
               child: ElevatedButton(
                 onPressed: onRetry,
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFFAB47BC),
+                  backgroundColor: const Color(0xFF2D6FD4),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(14),
                   ),
@@ -550,7 +550,7 @@ class _FailedView extends StatelessWidget {
             const SizedBox(height: 32),
             ElevatedButton(
               onPressed: onRetry,
-              style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFAB47BC)),
+              style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF2D6FD4)),
               child: const Text('Go Back', style: TextStyle(color: Colors.white)),
             ),
           ],

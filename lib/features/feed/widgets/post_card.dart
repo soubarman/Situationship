@@ -299,10 +299,10 @@ class _PostCardState extends ConsumerState<PostCard>
     final isBoosted = boostStatus != null;
 
     return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+      margin: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
       decoration: BoxDecoration(
         color: isDark ? palette.surfaceTint : Colors.white,
-        borderRadius: BorderRadius.circular(28),
+        borderRadius: BorderRadius.circular(20),
         border: Border.all(
           color: isBoosted
               ? (boostStatus.boostTier == 'premium'
@@ -597,15 +597,15 @@ class _PostCardState extends ConsumerState<PostCard>
   ) {
     final boostStatus = ref.watch(contentBoostStatusProvider(widget.post.id));
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 14, 16, 10),
+      padding: const EdgeInsets.fromLTRB(12, 10, 12, 8),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
           GestureDetector(
             onTap: () => ProfileChoiceSheet.navigateToProfile(context, ref, widget.post.userId),
             child: Container(
-              width: 44,
-              height: 44,
+              width: 38,
+              height: 38,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
                 border: Border.all(
@@ -616,8 +616,8 @@ class _PostCardState extends ConsumerState<PostCard>
               child: ClipOval(
                 child: CachedNetworkImage(
                   imageUrl: displayAvatar,
-                  width: 44,
-                  height: 44,
+                  width: 38,
+                  height: 38,
                   fit: BoxFit.cover,
                   memCacheWidth: 200,
                   errorWidget: (context, url, error) => Container(
@@ -643,7 +643,7 @@ class _PostCardState extends ConsumerState<PostCard>
                           displayName,
                           style: TextStyle(
                             fontWeight: FontWeight.w700,
-                            fontSize: 15,
+                            fontSize: 13.5,
                             color: isDark ? Colors.white : const Color(0xFF131127),
                             letterSpacing: -0.2,
                           ),
@@ -679,7 +679,7 @@ class _PostCardState extends ConsumerState<PostCard>
                     Text(
                       _formatTimeAgo(widget.post.createdAt),
                       style: TextStyle(
-                        fontSize: 12,
+                        fontSize: 11,
                         color: isDark ? const Color(0xFF9E9AB7) : Colors.black54,
                         fontWeight: FontWeight.w500,
                       ),
@@ -809,8 +809,8 @@ class _PostCardState extends ConsumerState<PostCard>
               GestureDetector(
                 onTap: () => _showPostOptionsSheet(context, isDark, palette),
                 child: Container(
-                  width: 32,
-                  height: 32,
+                  width: 28,
+                  height: 28,
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
                     color: isDark ? palette.backgroundTint.withOpacity(0.85) : Colors.black.withOpacity(0.05),
@@ -822,7 +822,7 @@ class _PostCardState extends ConsumerState<PostCard>
                   child: Icon(
                     Icons.more_horiz_rounded,
                     color: isDark ? Colors.white.withOpacity(0.85) : Colors.black87,
-                    size: 18,
+                    size: 16,
                   ),
                 ),
               ),
@@ -841,7 +841,7 @@ class _PostCardState extends ConsumerState<PostCard>
         children: [
           Container(
             width: double.infinity,
-            margin: const EdgeInsets.symmetric(vertical: 4),
+            margin: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
             child: widget.post.imageUrl != null
                 ? GestureDetector(
                     onTap: () {
@@ -856,13 +856,17 @@ class _PostCardState extends ConsumerState<PostCard>
                     },
                     child: Hero(
                       tag: '${widget.post.id}_image',
-                      child: ConstrainedBox(
-                        constraints: BoxConstraints(
-                          maxHeight: MediaQuery.of(context).size.height * 0.75,
-                        ),
-                        child: CachedNetworkImage(
-                          imageUrl: widget.post.imageUrl!,
-                          fit: BoxFit.contain,
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(14),
+                        child: ConstrainedBox(
+                          constraints: const BoxConstraints(
+                            minHeight: 280,
+                            maxHeight: 460,
+                          ),
+                          child: CachedNetworkImage(
+                            imageUrl: widget.post.imageUrl!,
+                            width: double.infinity,
+                            fit: BoxFit.cover,
                           memCacheWidth: 800,
                           progressIndicatorBuilder: (context, url, progress) {
                             return SizedBox(
@@ -879,7 +883,8 @@ class _PostCardState extends ConsumerState<PostCard>
                         ),
                       ),
                     ),
-                  )
+                  ),
+                )
                 : const SizedBox.shrink(),
           ),
           if (widget.post.musicTrack != null)
@@ -923,7 +928,7 @@ class _PostCardState extends ConsumerState<PostCard>
                           ],
                         ),
                       ),
-                      const Text('🎵', style: TextStyle(fontSize: 16)),
+                      const Icon(Icons.music_note_rounded, color: Colors.white, size: 18),
                     ],
                   ),
                 ),
@@ -967,7 +972,7 @@ class _PostCardState extends ConsumerState<PostCard>
     final displayComments = widget.post.commentCount;
 
     return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 12, 20, 10),
+      padding: const EdgeInsets.fromLTRB(14, 6, 14, 12),
       child: Row(
         children: [
           // React Button - directly opens animated reactions
@@ -1437,7 +1442,7 @@ class _PostCardState extends ConsumerState<PostCard>
       children: [
         if (mainCaption.isNotEmpty && mainCaption != widget.post.mood)
           Padding(
-            padding: const EdgeInsets.fromLTRB(18, 4, 18, 10),
+            padding: const EdgeInsets.fromLTRB(12, 4, 12, 6),
             child: GestureDetector(
               onTap: () {
                 if (isLongCaption) setState(() => _isExpanded = !_isExpanded);

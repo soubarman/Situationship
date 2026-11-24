@@ -506,8 +506,12 @@ class HeartQueueEngine {
     rawScore += qualityPts;
     buf.write('[Quality:${(qualityRatio * 100).round()}%+${qualityPts.toStringAsFixed(1)}]');
 
-    // ── Signal 8: Mutual Attraction Boost (+15 pts) ─────────────────────────
-    if (candidate.likedBy.contains(currentUser.id) ||
+    // ── Signal 8: Super Like & Mutual Attraction Boost (Tinder Priority Pipeline) ───
+    if (currentUser.superLikedBy.contains(candidate.id)) {
+      // Super Liked users get maximum discovery priority (+50 pts) to appear first in stack
+      rawScore += 50.0;
+      buf.write('[SuperLikedYou+50]');
+    } else if (currentUser.likedBy.contains(candidate.id) ||
         candidate.following.contains(currentUser.id)) {
       rawScore += weights.mutualAttractionBonus;
       buf.write('[MutualLiked+${weights.mutualAttractionBonus.toStringAsFixed(0)}]');

@@ -13,6 +13,7 @@ import '../../../core/providers/firebase_auth_provider.dart';
 import '../../../shared/widgets/background_orbs.dart';
 import '../../../core/utils/heart_queue_engine.dart';
 import '../../../shared/widgets/app_header.dart';
+import '../../../core/services/like_service.dart';
 import '../widgets/discover_tab.dart';
 import '../widgets/soul_mode_tab.dart';
 import '../widgets/nearly_souls_tab.dart';
@@ -86,6 +87,7 @@ class _MatchScreenState extends ConsumerState<MatchScreen>
 
   // Match overlay state
   bool _showMatchOverlay = false;
+  bool _isSuperMatch = false;
   UserModel? _matchedUser;
 
   // ── Undo animation state ────────────────────────────────────────────────────
@@ -310,65 +312,29 @@ class _MatchScreenState extends ConsumerState<MatchScreen>
     });
   }
 
-  /// Async Firestore write (separated for clarity).
+  /// Async Firestore write using unified LikeService pipeline.
   Future<void> _writeLikeToFirestore(
     UserModel targetUser,
     String currentUserId,
     UserModel currentUser,
   ) async {
-    // Notify engine about the like (behavioral learning)
     _engine.onLike(targetUser);
     try {
-      final db = firestoreProvider;
-      final batch = db.batch();
-      batch.set(
-        db.collection('users').doc(currentUserId),
-        {'following': FieldValue.arrayUnion([targetUser.id])},
-        SetOptions(merge: true),
-      );
-      batch.set(
-        db.collection('users').doc(targetUser.id),
-        {
-          'followers': FieldValue.arrayUnion([currentUserId]),
-          'likedBy': FieldValue.arrayUnion([currentUserId]),
-        },
-        SetOptions(merge: true),
-      );
-      await batch.commit();
-
-      await sendNotification(
-        userId: targetUser.id,
-        senderId: currentUser.id,
-        senderName: currentUser.name,
-        senderAvatar: currentUser.avatarUrl,
-        type: 'like',
-        title: '${currentUser.name} liked you! 💖',
-        body: 'Check them out before someone else does!',
+      final result = await LikeService.sendLike(
+        ref: ref,
+        currentUser: currentUser,
+        targetUser: targetUser,
       );
 
-      final isMutual = targetUser.following.contains(currentUser.id) ||
-          targetUser.likedBy.contains(currentUser.id) ||
-          currentUser.likedBy.contains(targetUser.id);
-
-      if (isMutual && mounted) {
-        await sendNotification(
-          userId: targetUser.id,
-          senderId: currentUser.id,
-          senderName: currentUser.name,
-          senderAvatar: currentUser.avatarUrl,
-          type: 'match',
-          title: "It's a match! 🎉",
-          body: 'You and ${currentUser.name} have matched! Say hello!',
-        );
-        if (mounted) {
-          setState(() {
-            _showMatchOverlay = true;
-            _matchedUser = targetUser;
-          });
-        }
+      if (result.isMatch && mounted) {
+        setState(() {
+          _showMatchOverlay = true;
+          _isSuperMatch = result.isSuperMatch;
+          _matchedUser = targetUser;
+        });
       }
     } catch (e) {
-      debugPrint('[HeartQueue] Firestore write error: $e');
+      debugPrint('[HeartQueue] LikeService write error: $e');
     }
   }
 
@@ -432,7 +398,7 @@ class _MatchScreenState extends ConsumerState<MatchScreen>
             child: Align(
               alignment: Alignment.topCenter,
               child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 440),
+                constraints: const BoxConstraints(maxWidth: 520),
                 child: Padding(
                   padding: const EdgeInsets.only(top: 14, bottom: 74),
                   child: Column(
@@ -495,18 +461,68 @@ class _MatchScreenState extends ConsumerState<MatchScreen>
             MatchOverlay(
               currentUser: currentUser,
               matchedUser: _matchedUser!,
+              isSuperMatch: _isSuperMatch,
               onSendMessage: () {
                 _dismissMatchOverlay();
-                final chatId =
-                    'chat_${currentUser.id}_${_matchedUser!.id}';
+                final chatId = LikeService.getCanonicalChatId(currentUser.id, _matchedUser!.id);
                 context.push('/chats/$chatId', extra: {
+                  'otherUserId': _matchedUser!.id,
                   'name': _matchedUser!.name,
                   'avatarUrl': _matchedUser!.avatarUrl,
                   'isOnline': _matchedUser!.isOnline,
+                  'isConfession': false,
                 });
               },
               onDismiss: _dismissMatchOverlay,
             ),
+
+          // ── Cupid Floating Concierge Pill ───────────────────────────
+          Positioned(
+            bottom: 86,
+            right: 18,
+            child: GestureDetector(
+              onTap: () {
+                HapticFeedback.mediumImpact();
+                context.push('/cupid');
+              },
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8.5),
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(
+                    colors: [Color(0xFFFF5277), Color(0xFFFF3366)],
+                  ),
+                  borderRadius: BorderRadius.circular(24),
+                  boxShadow: [
+                    BoxShadow(
+                      color: const Color(0xFFFF5277).withValues(alpha: 0.45),
+                      blurRadius: 14,
+                      offset: const Offset(0, 4),
+                    ),
+                  ],
+                  border: Border.all(
+                    color: Colors.white.withValues(alpha: 0.35),
+                    width: 1,
+                  ),
+                ),
+                child: const Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.favorite_rounded, color: Colors.white, size: 15),
+                    SizedBox(width: 6),
+                    Text(
+                      'Cupid Concierge',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w900,
+                        letterSpacing: 0.2,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
 
           // ── Undo Like button (3-second animated toast) ────────────────
           if (_showUndo && _undoUser != null)
@@ -546,11 +562,11 @@ class _MatchScreenState extends ConsumerState<MatchScreen>
       margin: const EdgeInsets.symmetric(horizontal: 16),
       padding: const EdgeInsets.all(3.5),
       decoration: BoxDecoration(
-        color: const Color(0xFF130D20),
+        color: const Color(0xFF11141C),
         borderRadius: BorderRadius.circular(22),
         border: Border.all(
-          color: Colors.white.withValues(alpha: 0.1),
-          width: 0.8,
+          color: Colors.white.withValues(alpha: 0.08),
+          width: 1.0,
         ),
       ),
       child: Row(
@@ -588,19 +604,21 @@ class _MatchScreenState extends ConsumerState<MatchScreen>
           borderRadius: BorderRadius.circular(18),
         ),
         child: Center(
-          child: AnimatedDefaultTextStyle(
-            duration: const Duration(milliseconds: 200),
-            style: TextStyle(
-              fontSize: 12,
-              fontWeight: active ? FontWeight.w900 : FontWeight.w600,
-              color: active
-                  ? Colors.white
-                  : Colors.white.withValues(alpha: 0.65),
-            ),
-            child: Text(
-              label,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
+          child: FittedBox(
+            fit: BoxFit.scaleDown,
+            child: AnimatedDefaultTextStyle(
+              duration: const Duration(milliseconds: 200),
+              style: TextStyle(
+                fontSize: 11.5,
+                fontWeight: active ? FontWeight.w900 : FontWeight.w600,
+                color: active
+                    ? Colors.white
+                    : Colors.white.withValues(alpha: 0.65),
+              ),
+              child: Text(
+                label,
+                maxLines: 1,
+              ),
             ),
           ),
         ),

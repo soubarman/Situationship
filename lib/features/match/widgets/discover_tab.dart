@@ -1,3 +1,5 @@
+import '../../spotlight/models/spotlight_model.dart';
+import '../../spotlight/providers/spotlight_provider.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/theme/app_palette.dart';
 import 'dart:async';
@@ -217,9 +219,14 @@ class _DiscoverTabState extends ConsumerState<DiscoverTab>
     return [widget.users[0], widget.users[1]];
   }
 
-  String get _spotlightTime {
-    final m = (_spotlightSecondsLeft ~/ 60).toString().padLeft(2, '0');
-    final s = (_spotlightSecondsLeft % 60).toString().padLeft(2, '0');
+  String _getSpotlightTime(SpotlightSession? session) {
+    final now = DateTime.now();
+    final nextSlot = DateTime(now.year, now.month, now.day, now.hour + 1, 0, 0);
+    final target = (session != null && session.endTime.isAfter(now)) ? session.endTime : nextSlot;
+    final diff = target.difference(now);
+    final totalSec = diff.isNegative ? 0 : diff.inSeconds;
+    final m = ((totalSec ~/ 60) % 60).toString().padLeft(2, '0');
+    final s = (totalSec % 60).toString().padLeft(2, '0');
     return '$m:$s';
   }
 
@@ -657,6 +664,8 @@ class _DiscoverTabState extends ConsumerState<DiscoverTab>
   // ─── Weekly Spotlight Header ──────────────────────────────────────────────────
 
   Widget _buildWeeklySpotlightHeader(AppPalette palette) {
+    final session = ref.watch(spotlightSessionProvider).valueOrNull;
+    final liveTime = _getSpotlightTime(session);
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
       onTap: () {
@@ -678,7 +687,7 @@ class _DiscoverTabState extends ConsumerState<DiscoverTab>
             _PulsingDot(palette: palette),
             const SizedBox(width: 7),
             Text(
-              'WEEKLY SPOTLIGHT',
+              'SPOTLIGHT HOUR',
               style: TextStyle(fontSize: 11, fontWeight: FontWeight.w900, color: palette.secondary, letterSpacing: 0.7),
             ),
           ]),
@@ -692,7 +701,7 @@ class _DiscoverTabState extends ConsumerState<DiscoverTab>
               border: Border.all(color: Colors.white.withValues(alpha: 0.1), width: 1),
             ),
             child: Text(
-              'resets $_spotlightTime',
+              'resets $liveTime',
               style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: Colors.white.withValues(alpha: 0.55)),
             ),
           ),
@@ -1273,6 +1282,8 @@ class _FaceOffCardState extends State<_FaceOffCard> with SingleTickerProviderSta
 
   @override
   Widget build(BuildContext context) {
+    final bool theySuperLikedMe = widget.currentUser.superLikedBy.contains(widget.user.id);
+    final String? superLikeNote = widget.currentUser.superLikeNotes[widget.user.id];
     final vibe = _vibeFor(widget.user);
     final quote = _quoteFor(widget.user);
     final distance = LocationHelper.getDistanceKm(
@@ -1401,6 +1412,65 @@ class _FaceOffCardState extends State<_FaceOffCard> with SingleTickerProviderSta
                         ),
                       ),
 
+                    // Glowing Starlight Border when they Super Liked You (Tinder style!)
+                    if (theySuperLikedMe && !widget.isChosen)
+                      Positioned.fill(
+                        child: DecoratedBox(
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(24),
+                            border: Border.all(
+                              color: const Color(0xFF00C9FF),
+                              width: 2.8,
+                            ),
+                            boxShadow: [
+                              BoxShadow(
+                                color: const Color(0xFF00C9FF).withValues(alpha: 0.55),
+                                blurRadius: 16,
+                                spreadRadius: 1,
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+
+                    // Top Left Super Liked You badge
+                    if (theySuperLikedMe)
+                      Positioned(
+                        top: 10,
+                        left: 10,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3.5),
+                          decoration: BoxDecoration(
+                            gradient: const LinearGradient(
+                              colors: [Color(0xFF00C9FF), Color(0xFF92FE9D)],
+                            ),
+                            borderRadius: BorderRadius.circular(12),
+                            boxShadow: [
+                              BoxShadow(
+                                color: const Color(0xFF00C9FF).withValues(alpha: 0.5),
+                                blurRadius: 8,
+                              ),
+                            ],
+                          ),
+                          child: const Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text('⭐', style: TextStyle(fontSize: 10)),
+                              SizedBox(width: 3),
+                              Text(
+                                'SUPER LIKED YOU',
+                                style: TextStyle(
+                                  color: Colors.black,
+                                  fontSize: 8.5,
+                                  fontWeight: FontWeight.w900,
+                                  letterSpacing: 0.5,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+
                     // Glow Border when chosen
                     if (widget.isChosen)
                       AnimatedBuilder(
@@ -1507,9 +1577,31 @@ class _FaceOffCardState extends State<_FaceOffCard> with SingleTickerProviderSta
                             ]),
                           ),
                           const SizedBox(height: 2),
-                          // Quote
-                          Text(
-                            quote,
+                          // Attached Super Like Note (if any) or standard quote
+                          if (theySuperLikedMe && superLikeNote != null && superLikeNote.trim().isNotEmpty)
+                            Container(
+                              margin: const EdgeInsets.only(bottom: 3),
+                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2.5),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFF00C9FF).withValues(alpha: 0.25),
+                                borderRadius: BorderRadius.circular(6),
+                                border: Border.all(color: const Color(0xFF00C9FF).withValues(alpha: 0.4)),
+                              ),
+                              child: Text(
+                                '💌 "${superLikeNote.trim()}"',
+                                style: const TextStyle(
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.w700,
+                                  color: Color(0xFFE2E8F0),
+                                  fontStyle: FontStyle.italic,
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            )
+                          else
+                            Text(
+                              quote,
                             style: TextStyle(
                               fontSize: 10.5,
                               fontWeight: FontWeight.w500,

@@ -1,3 +1,4 @@
+import '../../../core/services/like_service.dart';
 import '../../verification/presentation/widgets/s_badge_widget.dart';
 import 'dart:ui';
 import '../../../core/services/coin_service.dart';
@@ -144,7 +145,7 @@ class _CommunitiesScreenState extends ConsumerState<CommunitiesScreen>
   }
 
   void _openChatWithUser(UserModel targetUser, UserModel currentUser) {
-    final chatId = 'chat_${currentUser.id}_${targetUser.id}';
+    final chatId = LikeService.getCanonicalChatId(currentUser.id, targetUser.id);
     context.push('/chats/$chatId', extra: {
       'otherUserId': targetUser.id,
       'name': targetUser.name,
@@ -461,7 +462,7 @@ class _CommunitiesScreenState extends ConsumerState<CommunitiesScreen>
     final sparkCount = currentUser.likedBy.length;
 
     return Scaffold(
-      backgroundColor: isDark ? const Color(0xFF090C15) : const Color(0xFFF8FAFC),
+      backgroundColor: isDark ? const Color(0xFF0B0D14) : const Color(0xFFF8FAFC),
       body: Stack(
         children: [
           const BackgroundOrbs(),
@@ -1702,7 +1703,7 @@ Widget _buildFeaturedActiveCard(UserModel user, UserModel currentUser, bool isDa
                         color: const Color(0xFF10B981),
                         shape: BoxShape.circle,
                         border: Border.all(
-                          color: isDark ? const Color(0xFF090C15) : Colors.white,
+                          color: isDark ? const Color(0xFF0B0D14) : Colors.white,
                           width: 2.2,
                         ),
                         boxShadow: [

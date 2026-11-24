@@ -161,7 +161,11 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
       body: Stack(
         children: [
           const BackgroundOrbs(),
-          CustomScrollView(
+          Align(
+            alignment: Alignment.topCenter,
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 580),
+              child: CustomScrollView(
             physics: const BouncingScrollPhysics(),
             slivers: [
               // Sticky Frosted Glass AppBar
@@ -198,8 +202,10 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
               SliverPadding(padding: EdgeInsets.only(bottom: MediaQuery.of(context).padding.bottom + 120)),
             ],
           ),
-        ],
+        ),
       ),
+    ],
+  ),
     );
   }
 

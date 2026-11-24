@@ -399,14 +399,15 @@ class _CountdownTimerWidgetState extends State<CountdownTimerWidget> {
 
   void _updateDuration() {
     final now = DateTime.now();
-    if (now.isAfter(widget.endTime)) {
+    final nextSlot = DateTime(now.year, now.month, now.day, now.hour + 1, 0, 0);
+    final target = widget.endTime.isAfter(now) ? widget.endTime : nextSlot;
+    if (now.isAfter(target)) {
       setState(() {
         _duration = Duration.zero;
       });
-      _timer.cancel();
     } else {
       setState(() {
-        _duration = widget.endTime.difference(now);
+        _duration = target.difference(now);
       });
     }
   }

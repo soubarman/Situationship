@@ -300,7 +300,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
     final bottomPadding = MediaQuery.of(context).padding.bottom;
 
     return Scaffold(
-      backgroundColor: const Color(0xFF0C0B12),
+      backgroundColor: const Color(0xFF0B0D14),
       body: Stack(
         fit: StackFit.expand,
         children: [
@@ -345,8 +345,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
                     end: Alignment.bottomCenter,
                     colors: [
                       Colors.black.withValues(alpha: 0.45),
-                      const Color(0xFF0C0B12).withValues(alpha: 0.8),
-                      const Color(0xFF0C0B12),
+                      const Color(0xFF0B0D14).withValues(alpha: 0.8),
+                      const Color(0xFF0B0D14),
                     ],
                     stops: const [0.0, 0.42, 0.85],
                   ),

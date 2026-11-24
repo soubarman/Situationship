@@ -290,8 +290,9 @@ class UserModel {
   }
 
   factory UserModel.fromMap(Map<String, dynamic> map) {
+    final parsedId = (map['id'] ?? map['uid'] ?? map['userId'] ?? '').toString();
     return UserModel(
-      id: map['id'] ?? '',
+      id: parsedId,
       name: map['name'] ?? '',
       email: map['email'] ?? '',
       age: map['age'] ?? 18,

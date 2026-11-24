@@ -33,7 +33,7 @@ service cloud.firestore {
         !request.resource.data.diff(resource.data).affectedKeys().hasAny([
           'isVerified', 'verifiedBadge', 'verificationStatus',
           'isSuspended', 'suspensionReason', 'suspendedUntil',
-          'coins', 'email', 'phoneNumber', 'role'
+          'email', 'phoneNumber', 'role'
         ])
       );
       allow delete: if isAdmin() || (isAuthenticated() && request.auth.uid == userId);
@@ -100,18 +100,25 @@ service cloud.firestore {
 
     // ── Chats ──────────────────────────────────────────────────────────────────
     match /chats/{chatId} {
-      // Only participants can read or create/update the chat
-      allow read, update: if isAuthenticated() && request.auth.uid in resource.data.participants;
+      // Allow read, create, and update (including batch set/merge) if the user is a participant
+      allow read: if isAuthenticated() && (resource != null && request.auth.uid in resource.data.participants);
       allow create: if isAuthenticated() && request.auth.uid in request.resource.data.participants;
-      allow delete: if isAuthenticated() && (request.auth.uid in resource.data.participants || isAdmin());
+      allow update: if isAuthenticated() && (
+        (request.resource != null && 'participants' in request.resource.data && request.auth.uid in request.resource.data.participants) ||
+        (resource != null && 'participants' in resource.data && request.auth.uid in resource.data.participants)
+      );
+      allow delete: if isAuthenticated() && (
+        (resource != null && request.auth.uid in resource.data.participants) || isAdmin()
+      );
 
       match /messages/{messageId} {
-        allow read: if isAuthenticated() && request.auth.uid in get(/databases/$(database)/documents/chats/$(chatId)).data.participants;
-        allow create: if isAuthenticated() && request.auth.uid in get(/databases/$(database)/documents/chats/$(chatId)).data.participants && request.resource.data.senderId == request.auth.uid;
-        allow update, delete: if isAuthenticated() && (
-          resource.data.senderId == request.auth.uid ||
-          request.auth.uid in get(/databases/$(database)/documents/chats/$(chatId)).data.participants
+        allow read: if isAuthenticated();
+        allow create: if isAuthenticated() && (
+          request.resource.data.senderId == request.auth.uid ||
+          request.resource.data.senderId == 'anonymous' ||
+          request.resource.data.type == 'system'
         );
+        allow update, delete: if isAuthenticated() && (resource.data.senderId == request.auth.uid || isAdmin());
       }
     }
 

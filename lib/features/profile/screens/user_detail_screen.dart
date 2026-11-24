@@ -25,6 +25,8 @@ import '../../../core/providers/firestore_provider.dart';
 import '../../../shared/widgets/profile_choice_sheet.dart';
 import '../../../shared/widgets/say_hi_premium_modal.dart';
 import '../../../shared/widgets/super_like_dialog.dart';
+import '../../../core/services/like_service.dart';
+import '../../match/widgets/match_overlay.dart';
 import '../../../core/utils/heart_queue_engine.dart';
 
 class UserDetailScreen extends ConsumerStatefulWidget {
@@ -172,34 +174,32 @@ class _UserDetailScreenState extends ConsumerState<UserDetailScreen>
 
   void _handleHeroSpark(UserModel currentUser, UserModel targetUser) async {
     HapticFeedback.heavyImpact();
+    final firstName = targetUser.name.split(" ").first;
+    final isCurrentlyFollowing = currentUser.following.contains(targetUser.id);
+
     try {
-      final isCurrentlyFollowing = currentUser.following.contains(targetUser.id);
-      await ref.read(socialProvider.notifier).toggleFollow(
-        currentUserId: currentUser.id,
-        targetUserId: targetUser.id,
-        isCurrentlyFollowing: isCurrentlyFollowing,
-      );
-
-      // Cache profile in likes history immediately
-      ref.read(likedUsersCacheProvider.notifier).update((m) => {...m, targetUser.id: targetUser});
-      ref.read(sessionLikedUserIdsProvider.notifier).update((list) => [targetUser.id, ...list.where((id) => id != targetUser.id)]);
-
-      if (!isCurrentlyFollowing) {
-        await sendNotification(
-          userId: targetUser.id,
-          senderId: currentUser.id,
-          senderName: currentUser.name,
-          senderAvatar: currentUser.avatarUrl,
-          type: 'like',
-          title: 'New Spark! 💖',
-          body: '${currentUser.name} sparked with your profile!',
+      if (isCurrentlyFollowing) {
+        // Unspark / Pass
+        await LikeService.passUser(currentUser: currentUser, targetUser: targetUser);
+        if (mounted) _showSuccess('Unsparked with $firstName');
+      } else {
+        // Send Like using unified LikeService
+        final result = await LikeService.sendLike(
+          ref: ref,
+          currentUser: currentUser,
+          targetUser: targetUser,
         );
-      }
 
-      if (mounted) {
-        _showSuccess(isCurrentlyFollowing
-            ? 'Unsparked with ${targetUser.name.split(" ").first}'
-            : '💖 Sparked with ${targetUser.name.split(" ").first}!');
+        if (result.isMatch && mounted) {
+          MatchOverlay.show(
+            context: context,
+            currentUser: currentUser,
+            matchedUser: targetUser,
+            isSuperMatch: false,
+          );
+        } else if (mounted) {
+          _showSuccess('💖 Sparked with $firstName!');
+        }
       }
     } catch (e) {
       if (mounted) _showError('Could not send spark: $e');
@@ -208,96 +208,45 @@ class _UserDetailScreenState extends ConsumerState<UserDetailScreen>
 
   void _handleSuperLike(UserModel currentUser, UserModel targetUser, {String? note}) async {
     HapticFeedback.heavyImpact();
-    final authUser = FirebaseAuth.instance.currentUser;
-    final currentUserId = authUser?.uid ?? (currentUser.id.isNotEmpty && currentUser.id != '1' ? currentUser.id : null);
-
-    if (currentUserId == null) {
-      _showError('Please sign in to send a Super Like!');
-      return;
-    }
+    final firstName = targetUser.name.split(" ").first;
 
     try {
-      // Record Super Like atomically in Firestore for priority discovery and recipient badge
-      final batch = FirebaseFirestore.instance.batch();
-      final targetRef = FirebaseFirestore.instance.collection('users').doc(targetUser.id);
-      final currentRef = FirebaseFirestore.instance.collection('users').doc(currentUserId);
-
-      final Map<String, dynamic> targetUpdates = {
-        'followers': FieldValue.arrayUnion([currentUserId]),
-        'likedBy': FieldValue.arrayUnion([currentUserId]),
-        'superLikedBy': FieldValue.arrayUnion([currentUserId]),
-      };
-      if (note != null && note.trim().isNotEmpty) {
-        targetUpdates['superLikeNotes.${currentUserId}'] = note.trim();
-      }
-      batch.set(targetRef, targetUpdates, SetOptions(merge: true));
-
-      batch.set(currentRef, {
-        'following': FieldValue.arrayUnion([targetUser.id]),
-      }, SetOptions(merge: true));
-
-      // Direct the Super Like text note straight into Chat Requests!
-      final superLikeText = (note != null && note.trim().isNotEmpty)
-          ? note.trim()
-          : '⭐ Super Liked your profile!';
-
-      final chatId = 'chat_${currentUserId}_${targetUser.id}';
-      final chatRef = FirebaseFirestore.instance.collection('chats').doc(chatId);
-      final messageRef = chatRef.collection('messages').doc();
-
-      batch.set(chatRef, {
-        'id': chatId,
-        'participants': [currentUserId, targetUser.id],
-        'status': 'requested',
-        'requestSenderId': currentUserId,
-        'senderId': currentUserId,
-        'senderName': currentUser.name,
-        'senderAvatar': currentUser.avatarUrl,
-        'receiverId': targetUser.id,
-        'receiverName': targetUser.name,
-        'receiverAvatar': targetUser.avatarUrl,
-        'lastMessage': '⭐ $superLikeText',
-        'lastMessageTime': FieldValue.serverTimestamp(),
-        'unreadCount': 1,
-        'isExpired': false,
-        'isConfession': false,
-      }, SetOptions(merge: true));
-
-      batch.set(messageRef, {
-        'id': messageRef.id,
-        'senderId': currentUserId,
-        'text': '⭐ Super Like: "$superLikeText"',
-        'createdAt': DateTime.now().millisecondsSinceEpoch,
-        'isRead': false,
-        'type': 'text',
-      });
-
-      await batch.commit();
-
-      ref.read(likedUsersCacheProvider.notifier).update((m) => {...m, targetUser.id: targetUser});
-      ref.read(sessionLikedUserIdsProvider.notifier).update((list) => [targetUser.id, ...list.where((id) => id != targetUser.id)]);
-
-      final firstName = targetUser.name.split(" ").first;
-      await sendNotification(
-        userId: targetUser.id,
-        senderId: currentUserId,
-        senderName: currentUser.name,
-        senderAvatar: currentUser.avatarUrl,
-        type: 'superlike',
-        title: '⭐ Super Like received!',
-        body: (note != null && note.trim().isNotEmpty)
-            ? '${currentUser.name}: "${note.trim()}"'
-            : '${currentUser.name} Super Liked your profile!',
+      final result = await LikeService.sendSuperLike(
+        ref: ref,
+        currentUser: currentUser,
+        targetUser: targetUser,
+        note: note,
       );
 
       if (mounted) {
         setState(() {
           _hasSuperLikedThisSession = true;
         });
-        _showSuccess('⭐ Super Liked $firstName with priority starlight!');
+
+        if (result.isMatch) {
+          MatchOverlay.show(
+            context: context,
+            currentUser: currentUser,
+            matchedUser: targetUser,
+            isSuperMatch: true,
+          );
+        } else {
+          _showSuccess('⭐ Super Liked $firstName with priority starlight!');
+        }
       }
     } catch (e) {
-      if (mounted) _showError('Could not send Super Like: $e');
+      if (e.toString().contains('INSUFFICIENT_COINS')) {
+        if (mounted) {
+          SayHiPremiumModal.show(
+            context: context,
+            targetUser: targetUser,
+            currentUser: currentUser,
+            onUnlocked: () => _handleSuperLike(currentUser, targetUser, note: note),
+          );
+        }
+      } else {
+        if (mounted) _showError('Could not send Super Like: $e');
+      }
     }
   }
 
@@ -451,7 +400,7 @@ class _UserDetailScreenState extends ConsumerState<UserDetailScreen>
 
     try {
       final db = firestoreProvider;
-      final chatId = 'chat_${currentUser.id}_${targetUser.id}';
+      final chatId = LikeService.getCanonicalChatId(currentUser.id, targetUser.id);
 
       await db.collection('chats').doc(chatId).set({
         'id': chatId,
@@ -607,7 +556,7 @@ class _UserDetailScreenState extends ConsumerState<UserDetailScreen>
 
     try {
       final db = firestoreProvider;
-      final chatId = 'chat_${currentUser.id}_${targetUser.id}';
+      final chatId = LikeService.getCanonicalChatId(currentUser.id, targetUser.id);
 
       // Ensure chat exists
       final chatDoc = await db.collection('chats').doc(chatId).get();
@@ -2878,7 +2827,7 @@ class _UserDetailScreenState extends ConsumerState<UserDetailScreen>
 
       // Mirror write to (default) for cross-db sync
       try {
-        await FirebaseFirestore.instanceFor(app: Firebase.app(), databaseId: '(default)')
+        await FirebaseFirestore.instanceFor(app: Firebase.app(), databaseId: 'default')
             .collection('users')
             .doc(currentUser.id)
             .update({
@@ -3535,6 +3484,42 @@ Widget _buildStatCard(String value, String label, List<Color> gradientColors, bo
                   ),
                 ),
               ],
+              const SizedBox(height: 14),
+              GestureDetector(
+                onTap: () => _handleHeroSpark(currentUser, user),
+                child: Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  decoration: BoxDecoration(
+                    gradient: const LinearGradient(
+                      colors: [Color(0xFF00C9FF), Color(0xFF92FE9D)],
+                    ),
+                    borderRadius: BorderRadius.circular(16),
+                    boxShadow: [
+                      BoxShadow(
+                        color: const Color(0xFF00C9FF).withOpacity(0.4),
+                        blurRadius: 10,
+                        offset: const Offset(0, 3),
+                      ),
+                    ],
+                  ),
+                  child: const Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.favorite_rounded, color: Colors.black, size: 18),
+                      SizedBox(width: 8),
+                      Text(
+                        '💖 Like Back to Match!',
+                        style: TextStyle(
+                          color: Colors.black,
+                          fontWeight: FontWeight.w900,
+                          fontSize: 14,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
             ],
           ),
         ),
@@ -3683,7 +3668,7 @@ Widget _buildStatCard(String value, String label, List<Color> gradientColors, bo
                     particleEmojis: const ['💬', '💭', '✨', '👋'],
                     onTap: () {
                       if (currentUser.hasActiveSubscription) {
-                        final chatId = 'chat_${currentUser.id}_${user.id}';
+                        final chatId = LikeService.getCanonicalChatId(currentUser.id, user.id);
                         context.pushNamed('chat-detail', pathParameters: {
                           'chatId': chatId,
                         }, extra: {
@@ -3699,7 +3684,7 @@ Widget _buildStatCard(String value, String label, List<Color> gradientColors, bo
                           targetUser: user,
                           currentUser: currentUser,
                           onUnlocked: () {
-                            final chatId = 'chat_${currentUser.id}_${user.id}';
+                            final chatId = LikeService.getCanonicalChatId(currentUser.id, user.id);
                             context.pushNamed('chat-detail', pathParameters: {
                               'chatId': chatId,
                             }, extra: {
@@ -3726,7 +3711,7 @@ Widget _buildStatCard(String value, String label, List<Color> gradientColors, bo
   void _handleReaction(String emoji, UserModel currentUser, UserModel targetUser, bool isFollowing) async {
     try {
       final db = firestoreProvider;
-      final chatId = 'chat_${currentUser.id}_${targetUser.id}';
+      final chatId = LikeService.getCanonicalChatId(currentUser.id, targetUser.id);
 
       final chatDoc = await db.collection('chats').doc(chatId).get();
       if (!chatDoc.exists) {

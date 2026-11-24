@@ -1,3 +1,4 @@
+import '../../../core/services/like_service.dart';
 import 'dart:ui';
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
@@ -1037,7 +1038,7 @@ class SoulModeTabState extends ConsumerState<SoulModeTab>
 
     try {
       final db = firestoreProvider;
-      final chatId = 'chat_${currentUser.id}_${targetUser.id}';
+      final chatId = LikeService.getCanonicalChatId(currentUser.id, targetUser.id);
 
       final chatDoc = await db.collection('chats').doc(chatId).get();
       if (!chatDoc.exists) {

@@ -1,8 +1,6 @@
-import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:image_picker/image_picker.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_core/firebase_core.dart';
@@ -12,7 +10,6 @@ import '../../../core/providers/app_state_provider.dart';
 import '../../../core/providers/firebase_auth_provider.dart';
 import '../../../core/models/user_model.dart';
 import '../../../shared/widgets/multi_photo_manager.dart';
-import 'package:flutter/foundation.dart' show kIsWeb;
 
 import '../../../core/providers/firestore_provider.dart';
 
@@ -210,7 +207,7 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
 
       // 2. Mirror write to '(default)' for backward-compatibility
       try {
-        await FirebaseFirestore.instanceFor(app: Firebase.app(), databaseId: '(default)')
+        await FirebaseFirestore.instanceFor(app: Firebase.app(), databaseId: 'default')
             .collection('users')
             .doc(authUser.uid)
             .set(updates, SetOptions(merge: true));
@@ -254,6 +251,16 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
       backgroundColor: isDark ? AppTheme.darkBg : AppTheme.lightBg,
       appBar: AppBar(
         title: const Text('Edit Profile'),
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 20),
+          onPressed: () {
+            if (Navigator.of(context).canPop()) {
+              Navigator.of(context).pop();
+            } else {
+              context.go('/profile');
+            }
+          },
+        ),
         actions: [
           TextButton(
             onPressed: _isSaving ? null : _saveProfile,
@@ -275,8 +282,11 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
           const SizedBox(width: 8),
         ],
       ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(24),
+      body: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 580),
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -497,6 +507,8 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
             ),
             SizedBox(height: MediaQuery.of(context).padding.bottom + 120),
           ],
+        ),
+          ),
         ),
       ),
     );

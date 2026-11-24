@@ -53,7 +53,7 @@ class _WelcomeScreenState extends ConsumerState<WelcomeScreen>
     final bottomPadding = MediaQuery.of(context).padding.bottom;
 
     return Scaffold(
-      backgroundColor: const Color(0xFF0C0B12),
+      backgroundColor: const Color(0xFF0B0D14),
       body: Stack(
         fit: StackFit.expand,
         children: [
@@ -121,9 +121,9 @@ class _WelcomeScreenState extends ConsumerState<WelcomeScreen>
                     end: Alignment.bottomCenter,
                     colors: [
                       Colors.transparent,
-                      const Color(0xFF0C0B12).withValues(alpha: 0.45),
-                      const Color(0xFF0C0B12).withValues(alpha: 0.88),
-                      const Color(0xFF0C0B12),
+                      const Color(0xFF0B0D14).withValues(alpha: 0.45),
+                      const Color(0xFF0B0D14).withValues(alpha: 0.88),
+                      const Color(0xFF0B0D14),
                     ],
                     stops: const [0.0, 0.28, 0.58, 1.0],
                   ),

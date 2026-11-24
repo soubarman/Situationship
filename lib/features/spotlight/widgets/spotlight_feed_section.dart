@@ -9,6 +9,7 @@ import 'package:situationship/core/theme/app_palette.dart';
 import '../models/spotlight_model.dart';
 import '../providers/spotlight_provider.dart';
 import '../providers/location_provider.dart';
+import '../../../shared/widgets/app_3d_icons.dart';
 
 class SpotlightFeedSection extends ConsumerWidget {
   const SpotlightFeedSection({super.key});
@@ -67,10 +68,10 @@ class SpotlightFeedSection extends ConsumerWidget {
                 }
 
                 return SizedBox(
-                  height: 185,
+                  height: 132,
                   child: ListView.builder(
                     scrollDirection: Axis.horizontal,
-                    padding: const EdgeInsets.symmetric(horizontal: 12),
+                    padding: const EdgeInsets.symmetric(horizontal: 10),
                     itemCount: displayBids.length,
                     itemBuilder: (context, index) {
                       return SpotlightFeedCard(bid: displayBids[index], palette: palette);
@@ -145,13 +146,19 @@ class _LocationPrompt extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  '⚡ Spotlight is location-based',
-                  style: TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w800,
-                    color: isDark ? Colors.white : AppTheme.textPrimary,
-                  ),
+                Row(
+                  children: [
+                    const Bolt3dIcon(size: 13),
+                    const SizedBox(width: 4),
+                    Text(
+                      'Spotlight is location-based',
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w800,
+                        color: isDark ? Colors.white : AppTheme.textPrimary,
+                      ),
+                    ),
+                  ],
                 ),
                 const SizedBox(height: 3),
                 Text(
@@ -241,22 +248,22 @@ class SpotlightFeedCard extends StatelessWidget {
       case 1:
         borderColor = const Color(0xFFFFB800);
         rankBadge = Container(
-          padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+          padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
           decoration: BoxDecoration(
             color: const Color(0xFFFFB800),
-            borderRadius: BorderRadius.circular(10),
+            borderRadius: BorderRadius.circular(8),
           ),
-          child: Row(
+          child: const Row(
             mainAxisSize: MainAxisSize.min,
-            children: const [
-              Text('👑', style: TextStyle(fontSize: 10)),
-              SizedBox(width: 3),
+            children: [
+              CrownVector(size: 9.5, color: Colors.black),
+              SizedBox(width: 2.5),
               Text(
                 '#1',
                 style: TextStyle(
                   color: Colors.black,
                   fontWeight: FontWeight.w900,
-                  fontSize: 10,
+                  fontSize: 8.5,
                 ),
               ),
             ],
@@ -266,22 +273,22 @@ class SpotlightFeedCard extends StatelessWidget {
       case 2:
         borderColor = const Color(0xFF38BDF8);
         rankBadge = Container(
-          padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+          padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
           decoration: BoxDecoration(
             color: const Color(0xFF0284C7),
-            borderRadius: BorderRadius.circular(10),
+            borderRadius: BorderRadius.circular(8),
           ),
-          child: Row(
+          child: const Row(
             mainAxisSize: MainAxisSize.min,
-            children: const [
-              Text('👑', style: TextStyle(fontSize: 10)),
-              SizedBox(width: 3),
+            children: [
+              CrownVector(size: 9.5, color: Colors.white),
+              SizedBox(width: 2.5),
               Text(
                 '#2',
                 style: TextStyle(
                   color: Colors.white,
                   fontWeight: FontWeight.w900,
-                  fontSize: 10,
+                  fontSize: 8.5,
                 ),
               ),
             ],
@@ -291,22 +298,22 @@ class SpotlightFeedCard extends StatelessWidget {
       case 3:
         borderColor = const Color(0xFFEC4899);
         rankBadge = Container(
-          padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+          padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
           decoration: BoxDecoration(
             color: const Color(0xFFDB2777),
-            borderRadius: BorderRadius.circular(10),
+            borderRadius: BorderRadius.circular(8),
           ),
-          child: Row(
+          child: const Row(
             mainAxisSize: MainAxisSize.min,
-            children: const [
-              Text('👑', style: TextStyle(fontSize: 10)),
-              SizedBox(width: 3),
+            children: [
+              CrownVector(size: 9.5, color: Colors.white),
+              SizedBox(width: 2.5),
               Text(
                 '#3',
                 style: TextStyle(
                   color: Colors.white,
                   fontWeight: FontWeight.w900,
-                  fontSize: 10,
+                  fontSize: 8.5,
                 ),
               ),
             ],
@@ -316,17 +323,17 @@ class SpotlightFeedCard extends StatelessWidget {
       case 4:
         borderColor = const Color(0xFFA855F7);
         rankBadge = Container(
-          padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+          padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
           decoration: BoxDecoration(
             color: const Color(0xFF7E22CE),
-            borderRadius: BorderRadius.circular(10),
+            borderRadius: BorderRadius.circular(8),
           ),
-          child: Row(
+          child: const Row(
             mainAxisSize: MainAxisSize.min,
-            children: const [
-              Text('⚡', style: TextStyle(fontSize: 10)),
-              SizedBox(width: 3),
-              Text('#4', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 10)),
+            children: [
+              Bolt3dIcon(size: 9.5),
+              SizedBox(width: 2),
+              Text('#4', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 8.5)),
             ],
           ),
         );
@@ -334,17 +341,17 @@ class SpotlightFeedCard extends StatelessWidget {
       case 5:
         borderColor = const Color(0xFF10B981);
         rankBadge = Container(
-          padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+          padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
           decoration: BoxDecoration(
             color: const Color(0xFF059669),
-            borderRadius: BorderRadius.circular(10),
+            borderRadius: BorderRadius.circular(8),
           ),
-          child: Row(
+          child: const Row(
             mainAxisSize: MainAxisSize.min,
-            children: const [
-              Text('⚡', style: TextStyle(fontSize: 10)),
-              SizedBox(width: 3),
-              Text('#5', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 10)),
+            children: [
+              Bolt3dIcon(size: 9.5),
+              SizedBox(width: 2),
+              Text('#5', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 8.5)),
             ],
           ),
         );
@@ -352,17 +359,17 @@ class SpotlightFeedCard extends StatelessWidget {
       case 6:
         borderColor = const Color(0xFFF59E0B);
         rankBadge = Container(
-          padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+          padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
           decoration: BoxDecoration(
             color: const Color(0xFFD97706),
-            borderRadius: BorderRadius.circular(10),
+            borderRadius: BorderRadius.circular(8),
           ),
-          child: Row(
+          child: const Row(
             mainAxisSize: MainAxisSize.min,
-            children: const [
-              Text('⚡', style: TextStyle(fontSize: 10)),
-              SizedBox(width: 3),
-              Text('#6', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 10)),
+            children: [
+              Bolt3dIcon(size: 9.5),
+              SizedBox(width: 2),
+              Text('#6', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 8.5)),
             ],
           ),
         );
@@ -370,17 +377,17 @@ class SpotlightFeedCard extends StatelessWidget {
       case 7:
         borderColor = const Color(0xFF6366F1);
         rankBadge = Container(
-          padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+          padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
           decoration: BoxDecoration(
             color: const Color(0xFF4F46E5),
-            borderRadius: BorderRadius.circular(10),
+            borderRadius: BorderRadius.circular(8),
           ),
-          child: Row(
+          child: const Row(
             mainAxisSize: MainAxisSize.min,
-            children: const [
-              Text('⚡', style: TextStyle(fontSize: 10)),
-              SizedBox(width: 3),
-              Text('#7', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 10)),
+            children: [
+              Bolt3dIcon(size: 9.5),
+              SizedBox(width: 2),
+              Text('#7', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 8.5)),
             ],
           ),
         );
@@ -388,17 +395,17 @@ class SpotlightFeedCard extends StatelessWidget {
       case 8:
         borderColor = const Color(0xFF14B8A6);
         rankBadge = Container(
-          padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+          padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
           decoration: BoxDecoration(
             color: const Color(0xFF0D9488),
-            borderRadius: BorderRadius.circular(10),
+            borderRadius: BorderRadius.circular(8),
           ),
-          child: Row(
+          child: const Row(
             mainAxisSize: MainAxisSize.min,
-            children: const [
-              Text('⚡', style: TextStyle(fontSize: 10)),
-              SizedBox(width: 3),
-              Text('#8', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 10)),
+            children: [
+              Bolt3dIcon(size: 9.5),
+              SizedBox(width: 2),
+              Text('#8', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 8.5)),
             ],
           ),
         );
@@ -406,17 +413,17 @@ class SpotlightFeedCard extends StatelessWidget {
       case 9:
         borderColor = const Color(0xFF06B6D4);
         rankBadge = Container(
-          padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+          padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
           decoration: BoxDecoration(
             color: const Color(0xFF0891B2),
-            borderRadius: BorderRadius.circular(10),
+            borderRadius: BorderRadius.circular(8),
           ),
-          child: Row(
+          child: const Row(
             mainAxisSize: MainAxisSize.min,
-            children: const [
-              Text('⚡', style: TextStyle(fontSize: 10)),
-              SizedBox(width: 3),
-              Text('#9', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 10)),
+            children: [
+              Bolt3dIcon(size: 9.5),
+              SizedBox(width: 2),
+              Text('#9', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 8.5)),
             ],
           ),
         );
@@ -424,17 +431,17 @@ class SpotlightFeedCard extends StatelessWidget {
       case 10:
         borderColor = const Color(0xFFF43F5E);
         rankBadge = Container(
-          padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+          padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
           decoration: BoxDecoration(
             color: const Color(0xFFE11D48),
-            borderRadius: BorderRadius.circular(10),
+            borderRadius: BorderRadius.circular(8),
           ),
-          child: Row(
+          child: const Row(
             mainAxisSize: MainAxisSize.min,
-            children: const [
-              Text('🔥', style: TextStyle(fontSize: 10)),
-              SizedBox(width: 3),
-              Text('#10', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 10)),
+            children: [
+              Fire3dIcon(size: 9.5),
+              SizedBox(width: 2),
+              Text('#10', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 8.5)),
             ],
           ),
         );
@@ -442,17 +449,17 @@ class SpotlightFeedCard extends StatelessWidget {
       default:
         borderColor = const Color(0xFFA855F7);
         rankBadge = Container(
-          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+          padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
           decoration: BoxDecoration(
             color: const Color(0xFF7E22CE),
-            borderRadius: BorderRadius.circular(10),
+            borderRadius: BorderRadius.circular(8),
           ),
           child: Text(
             '#$rank',
             style: const TextStyle(
               color: Colors.white,
               fontWeight: FontWeight.w900,
-              fontSize: 10,
+              fontSize: 8.5,
             ),
           ),
         );
@@ -463,10 +470,10 @@ class SpotlightFeedCard extends StatelessWidget {
       return GestureDetector(
         onTap: () => context.push('/spotlight'),
         child: Container(
-          width: 124,
-          margin: const EdgeInsets.symmetric(horizontal: 5),
+          width: 94,
+          margin: const EdgeInsets.symmetric(horizontal: 4),
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(20),
+            borderRadius: BorderRadius.circular(16),
             gradient: LinearGradient(
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
@@ -478,13 +485,13 @@ class SpotlightFeedCard extends StatelessWidget {
             ),
             border: Border.all(
               color: borderColor.withValues(alpha: 0.65),
-              width: 1.5,
+              width: 1.3,
             ),
             boxShadow: [
               BoxShadow(
-                color: borderColor.withValues(alpha: 0.20),
-                blurRadius: 10,
-                spreadRadius: 1,
+                color: borderColor.withValues(alpha: 0.18),
+                blurRadius: 8,
+                spreadRadius: 0.5,
               ),
             ],
           ),
@@ -493,8 +500,8 @@ class SpotlightFeedCard extends StatelessWidget {
             children: [
               // Rank badge at top-left
               Positioned(
-                top: 10,
-                left: 10,
+                top: 7,
+                left: 7,
                 child: rankBadge,
               ),
 
@@ -504,29 +511,29 @@ class SpotlightFeedCard extends StatelessWidget {
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     Container(
-                      width: 44,
-                      height: 44,
+                      width: 32,
+                      height: 32,
                       decoration: BoxDecoration(
                         shape: BoxShape.circle,
                         color: borderColor.withValues(alpha: 0.15),
                         border: Border.all(
                           color: borderColor.withValues(alpha: 0.6),
-                          width: 1.5,
+                          width: 1.2,
                         ),
                       ),
                       child: Icon(
                         Icons.add_rounded,
                         color: borderColor,
-                        size: 26,
+                        size: 18,
                       ),
                     ),
-                    const SizedBox(height: 8),
+                    const SizedBox(height: 5),
                     const Text(
                       'Spot Open',
                       style: TextStyle(
                         color: Colors.white,
-                        fontSize: 12,
-                        fontWeight: FontWeight.w800,
+                        fontSize: 10,
+                        fontWeight: FontWeight.w700,
                         letterSpacing: -0.2,
                       ),
                     ),
@@ -536,14 +543,14 @@ class SpotlightFeedCard extends StatelessWidget {
 
               // Bottom Info: Min bid & Claim CTA
               Positioned(
-                bottom: 10,
-                left: 10,
-                right: 10,
+                bottom: 6,
+                left: 6,
+                right: 6,
                 child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+                  padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2.5),
                   decoration: BoxDecoration(
                     color: Colors.white.withValues(alpha: 0.08),
-                    borderRadius: BorderRadius.circular(10),
+                    borderRadius: BorderRadius.circular(8),
                     border: Border.all(
                       color: Colors.white.withValues(alpha: 0.12),
                     ),
@@ -551,20 +558,36 @@ class SpotlightFeedCard extends StatelessWidget {
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Text(
-                        'Min 🪙 ${bid.amount}',
-                        style: TextStyle(
-                          color: borderColor,
-                          fontSize: 10,
-                          fontWeight: FontWeight.w900,
-                        ),
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            'Min',
+                            style: TextStyle(
+                              color: borderColor,
+                              fontSize: 8.5,
+                              fontWeight: FontWeight.w900,
+                            ),
+                          ),
+                          const SizedBox(width: 3),
+                          const Coin3dIcon(size: 9.5),
+                          const SizedBox(width: 2.5),
+                          Text(
+                            '${bid.amount}',
+                            style: TextStyle(
+                              color: borderColor,
+                              fontSize: 8.5,
+                              fontWeight: FontWeight.w900,
+                            ),
+                          ),
+                        ],
                       ),
-                      const SizedBox(height: 2),
+                      const SizedBox(height: 1),
                       const Text(
                         'Tap to claim',
                         style: TextStyle(
                           color: Colors.white70,
-                          fontSize: 9,
+                          fontSize: 7.5,
                           fontWeight: FontWeight.w600,
                         ),
                       ),
@@ -580,30 +603,29 @@ class SpotlightFeedCard extends StatelessWidget {
 
     // Real user bid card
     final displayUsername = bid.username;
-    final displayLikes = '🪙 ${bid.amount}';
     final hasPhoto = bid.profileImageUrl.isNotEmpty;
 
     return GestureDetector(
       onTap: () => context.push('/profile/view/${bid.userId}'),
       child: Container(
-        width: 124,
-        margin: const EdgeInsets.symmetric(horizontal: 5),
+        width: 94,
+        margin: const EdgeInsets.symmetric(horizontal: 4),
         decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(20),
+          borderRadius: BorderRadius.circular(16),
           border: Border.all(
             color: borderColor.withValues(alpha: 0.85),
-            width: 1.8,
+            width: 1.5,
           ),
           boxShadow: [
             BoxShadow(
-              color: borderColor.withValues(alpha: 0.35),
-              blurRadius: 12,
-              spreadRadius: 1,
+              color: borderColor.withValues(alpha: 0.30),
+              blurRadius: 8,
+              spreadRadius: 0.5,
             ),
           ],
         ),
         child: ClipRRect(
-          borderRadius: BorderRadius.circular(18),
+          borderRadius: BorderRadius.circular(14),
           child: Stack(
             fit: StackFit.expand,
             children: [
@@ -635,32 +657,32 @@ class SpotlightFeedCard extends StatelessWidget {
 
               // Top-left: Rank Badge
               Positioned(
-                top: 10,
-                left: 10,
+                top: 7,
+                left: 7,
                 child: rankBadge,
               ),
 
               // Top-right: Glassmorphic Add (+) button
               Positioned(
-                top: 10,
-                right: 10,
+                top: 7,
+                right: 7,
                 child: GestureDetector(
                   onTap: () {
                     context.push('/spotlight');
                   },
                   child: Container(
-                    width: 26,
-                    height: 26,
+                    width: 20,
+                    height: 20,
                     decoration: BoxDecoration(
                       shape: BoxShape.circle,
                       color: Colors.black.withValues(alpha: 0.45),
                       border: Border.all(
                         color: Colors.white.withValues(alpha: 0.35),
-                        width: 1,
+                        width: 0.8,
                       ),
                     ),
                     child: const Center(
-                      child: Icon(Icons.add_rounded, color: Colors.white, size: 16),
+                      child: Icon(Icons.add_rounded, color: Colors.white, size: 12),
                     ),
                   ),
                 ),
@@ -668,9 +690,9 @@ class SpotlightFeedCard extends StatelessWidget {
 
               // Bottom Info: Username, Bid Amount
               Positioned(
-                bottom: 10,
-                left: 10,
-                right: 10,
+                bottom: 7,
+                left: 7,
+                right: 7,
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   mainAxisSize: MainAxisSize.min,
@@ -679,27 +701,23 @@ class SpotlightFeedCard extends StatelessWidget {
                       displayUsername,
                       style: const TextStyle(
                         color: Colors.white,
-                        fontSize: 12.5,
-                        fontWeight: FontWeight.w900,
+                        fontSize: 10.5,
+                        fontWeight: FontWeight.w800,
                         letterSpacing: -0.2,
                       ),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                     ),
-                    const SizedBox(height: 3),
+                    const SizedBox(height: 2),
                     Row(
                       children: [
-                        const Icon(
-                          Icons.flash_on_rounded,
-                          size: 12,
-                          color: Color(0xFFFFB800),
-                        ),
-                        const SizedBox(width: 3),
+                        const Coin3dIcon(size: 10),
+                        const SizedBox(width: 3.5),
                         Text(
-                          displayLikes,
+                          '${bid.amount}',
                           style: const TextStyle(
                             color: Colors.white,
-                            fontSize: 11,
+                            fontSize: 9.5,
                             fontWeight: FontWeight.w800,
                           ),
                         ),
@@ -721,8 +739,8 @@ class SpotlightFeedCard extends StatelessWidget {
       color: const Color(0xFF1E1B2E),
       child: Center(
         child: Container(
-          width: 54,
-          height: 54,
+          width: 36,
+          height: 36,
           decoration: BoxDecoration(
             shape: BoxShape.circle,
             color: accentColor.withValues(alpha: 0.2),
@@ -733,7 +751,7 @@ class SpotlightFeedCard extends StatelessWidget {
               initial,
               style: TextStyle(
                 color: accentColor,
-                fontSize: 22,
+                fontSize: 15,
                 fontWeight: FontWeight.w900,
               ),
             ),

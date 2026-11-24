@@ -7,6 +7,7 @@ import 'package:situationship/core/theme/app_theme.dart';
 import 'package:situationship/core/providers/app_state_provider.dart';
 import '../models/spotlight_model.dart';
 import '../providers/spotlight_provider.dart';
+import '../../../shared/widgets/app_3d_icons.dart';
 
 class BidBottomSheet extends ConsumerStatefulWidget {
   final SpotlightSession session;
@@ -71,11 +72,11 @@ class _BidBottomSheetState extends ConsumerState<BidBottomSheet> {
   }
 
   int _calculateMinToEnter() {
-    if (widget.currentBids.length < 20) {
-      return widget.session.minStartingBid; // 200 coins
+    if (widget.currentBids.length < 30) {
+      return widget.session.minStartingBid; // 100 coins
     }
     
-    // If board is full, must beat the 20th rank's bid
+    // If board is full, must beat the 30th rank's bid
     final lastBid = widget.currentBids.last.amount;
     if (lastBid < 1000) return lastBid + 50;
     if (lastBid < 5000) return lastBid + 100;
@@ -105,13 +106,21 @@ class _BidBottomSheetState extends ConsumerState<BidBottomSheet> {
 
     final minToEnter = _calculateMinToEnter();
     final currentUser = ref.read(currentUserProvider);
+    final existingBid = widget.currentBids.firstWhere(
+      (b) => b.userId == currentUser.id,
+      orElse: () => SpotlightBid(id: '', sessionId: '', userId: '', username: '', profileImageUrl: '', isVerified: false, amount: 0, timestamp: DateTime.now(), rank: 999),
+    );
+    final existingAmount = existingBid.amount;
+    final delta = amount - existingAmount;
     
     setState(() {
       _bidAmount = amount;
-      if (amount < minToEnter) {
-        _errorText = 'Minimum to enter leaderboard is $minToEnter coins';
-      } else if (amount > currentUser.coins) {
-        _errorText = 'Not enough coins (Balance: ${currentUser.coins})';
+      if (amount < minToEnter && existingAmount == 0) {
+        _errorText = 'Minimum to enter leaderboard is ' + minToEnter.toString() + ' coins';
+      } else if (existingAmount > 0 && amount <= existingAmount) {
+        _errorText = 'Bid must be higher than your current ' + existingAmount.toString() + ' coins';
+      } else if (delta > 0 && delta > currentUser.coins) {
+        _errorText = 'Need ' + delta.toString() + ' more coins (Balance: ' + currentUser.coins.toString() + ')';
       } else {
         _errorText = null;
       }
@@ -149,9 +158,16 @@ class _BidBottomSheetState extends ConsumerState<BidBottomSheet> {
     if (_bidAmount <= 0 || _errorText != null) return;
     
     final currentUser = ref.read(currentUserProvider);
-    if (currentUser.coins < _bidAmount) {
+    final existingBid = widget.currentBids.firstWhere(
+      (b) => b.userId == currentUser.id,
+      orElse: () => SpotlightBid(id: '', sessionId: '', userId: '', username: '', profileImageUrl: '', isVerified: false, amount: 0, timestamp: DateTime.now(), rank: 999),
+    );
+    final existingAmount = existingBid.amount;
+    final delta = _bidAmount - existingAmount;
+
+    if (delta > 0 && currentUser.coins < delta) {
       setState(() {
-        _errorText = 'Not enough coins. Need $_bidAmount (Balance: ${currentUser.coins})';
+        _errorText = 'Need ' + delta.toString() + ' more coins to raise bid (Balance: ' + currentUser.coins.toString() + ')';
       });
       return;
     }
@@ -159,7 +175,9 @@ class _BidBottomSheetState extends ConsumerState<BidBottomSheet> {
     _focusNode.unfocus();
     setState(() {
       _paymentStep = 'processing';
-      _processingMessage = 'Using $_bidAmount coins...';
+      _processingMessage = existingAmount > 0 
+          ? 'Raising bid by ' + delta.toString() + ' coins (total ' + _bidAmount.toString() + ')...' 
+          : 'Securing Spotlight with ' + _bidAmount.toString() + ' coins...';
     });
 
     await Future.delayed(const Duration(milliseconds: 600));
@@ -327,7 +345,7 @@ class _BidBottomSheetState extends ConsumerState<BidBottomSheet> {
             ),
             child: Row(
               children: [
-                const Text('🪙', style: TextStyle(fontSize: 16)),
+                const Coin3dIcon(size: 16),
                 const SizedBox(width: 8),
                 Text(
                   'Your Balance:',
@@ -393,18 +411,30 @@ class _BidBottomSheetState extends ConsumerState<BidBottomSheet> {
                         style: TextStyle(fontSize: 11, color: Colors.white70),
                       ),
                       const SizedBox(height: 4),
-                      Text(
-                        widget.currentBids.isNotEmpty
-                            ? '🪙 ${widget.currentBids.first.amount}'
-                            : 'None',
-                        style: TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
-                          color: widget.currentBids.isNotEmpty
-                              ? const Color(0xFFFFD700)
-                              : Colors.white38,
+                      if (widget.currentBids.isNotEmpty)
+                        Row(
+                          children: [
+                            const Coin3dIcon(size: 16),
+                            const SizedBox(width: 5),
+                            Text(
+                              '${widget.currentBids.first.amount}',
+                              style: const TextStyle(
+                                fontSize: 18,
+                                fontWeight: FontWeight.bold,
+                                color: Color(0xFFFFD700),
+                              ),
+                            ),
+                          ],
+                        )
+                      else
+                        const Text(
+                          'None',
+                          style: TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.white38,
+                          ),
                         ),
-                      ),
                     ],
                   ),
                 ),
@@ -419,17 +449,23 @@ class _BidBottomSheetState extends ConsumerState<BidBottomSheet> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       const Text(
-                        '🚪 Min to Enter (#20)',
+                        'Min to Enter (#30)',
                         style: TextStyle(fontSize: 11, color: Colors.white70),
                       ),
                       const SizedBox(height: 4),
-                      Text(
-                        '🪙 $minToEnter',
-                        style: TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
-                          color: AppTheme.primaryBlue,
-                        ),
+                      Row(
+                        children: [
+                          const Coin3dIcon(size: 16),
+                          const SizedBox(width: 5),
+                          Text(
+                            '$minToEnter',
+                            style: TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.bold,
+                              color: AppTheme.primaryBlue,
+                            ),
+                          ),
+                        ],
                       ),
                     ],
                   ),
@@ -628,9 +664,10 @@ class _BidBottomSheetState extends ConsumerState<BidBottomSheet> {
           ),
           const SizedBox(height: 12),
           Row(
+            mainAxisSize: MainAxisSize.min,
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              const Text('🪙', style: TextStyle(fontSize: 14)),
+              const Coin3dIcon(size: 13),
               const SizedBox(width: 6),
               Text(
                 'Deducting coins from your wallet balance',

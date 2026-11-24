@@ -20,13 +20,33 @@ class SpotlightSession {
   });
 
   factory SpotlightSession.fromMap(String id, Map<String, dynamic> map) {
+    final now = DateTime.now();
+    final slotStart = DateTime(now.year, now.month, now.day, now.hour, 0, 0);
+    final slotEnd = DateTime(now.year, now.month, now.day, now.hour + 1, 0, 0);
+
+    DateTime startTime = slotStart;
+    DateTime endTime = slotEnd;
+
+    if (map['startTime'] != null && map['startTime'] is Timestamp) {
+      startTime = (map['startTime'] as Timestamp).toDate();
+    }
+    if (map['endTime'] != null && map['endTime'] is Timestamp) {
+      endTime = (map['endTime'] as Timestamp).toDate();
+    }
+
+    // If the stored endTime is expired or outside current slot, snap cleanly to current clock-hour slot
+    if (now.isAfter(endTime) || endTime.isBefore(slotStart)) {
+      startTime = slotStart;
+      endTime = slotEnd;
+    }
+
     return SpotlightSession(
       id: id,
-      startTime: map['startTime'] != null ? (map['startTime'] as Timestamp).toDate() : DateTime.now(),
-      endTime: map['endTime'] != null ? (map['endTime'] as Timestamp).toDate() : DateTime.now().add(const Duration(hours: 1)),
+      startTime: startTime,
+      endTime: endTime,
       prizePool: map['prizePool'] ?? 0,
-      isActive: map['isActive'] ?? false,
-      minStartingBid: map['minStartingBid'] ?? 200,
+      isActive: map['isActive'] ?? true,
+      minStartingBid: map['minStartingBid'] ?? 100,
       activeBidders: map['activeBidders'] ?? 0,
     );
   }
@@ -53,6 +73,7 @@ class SpotlightBid {
   final int amount;
   final DateTime timestamp;
   final int rank;
+  final String slotId;
 
   SpotlightBid({
     required this.id,
@@ -64,6 +85,7 @@ class SpotlightBid {
     required this.amount,
     required this.timestamp,
     required this.rank,
+    this.slotId = '',
   });
 
   factory SpotlightBid.fromMap(String id, Map<String, dynamic> map) {
@@ -77,6 +99,7 @@ class SpotlightBid {
       amount: map['amount'] ?? 0,
       timestamp: map['timestamp'] != null ? (map['timestamp'] as Timestamp).toDate() : DateTime.now(),
       rank: map['rank'] ?? 999,
+      slotId: map['slotId'] ?? '',
     );
   }
 
@@ -90,6 +113,7 @@ class SpotlightBid {
       'amount': amount,
       'timestamp': Timestamp.fromDate(timestamp),
       'rank': rank,
+      if (slotId.isNotEmpty) 'slotId': slotId,
     };
   }
 }

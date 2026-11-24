@@ -248,7 +248,7 @@ class _VerificationRecordScreenState
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    const CircularProgressIndicator(color: Color(0xFFAB47BC)),
+                    const CircularProgressIndicator(color: Color(0xFF2D6FD4)),
                     const SizedBox(height: 20),
                     const Text(
                       'Uploading video…',
@@ -329,7 +329,7 @@ class _VerificationRecordScreenState
               'Feel free to use the app in the meantime.',
               style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
             ),
-            backgroundColor: Color(0xFFAB47BC),
+            backgroundColor: Color(0xFF2D6FD4),
             duration: Duration(seconds: 5),
           ),
         );
@@ -366,7 +366,7 @@ class _VerificationRecordScreenState
       ),
       body: _isLoading
           ? const Center(
-              child: CircularProgressIndicator(color: Color(0xFFAB47BC)),
+              child: CircularProgressIndicator(color: Color(0xFF2D6FD4)),
             )
           : _errorMessage != null
               ? _ErrorView(
@@ -459,7 +459,7 @@ class _VerificationRecordScreenState
                   child: ElevatedButton(
                     onPressed: _recordedBytes != null ? _submitVideo : null,
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFFAB47BC),
+                      backgroundColor: const Color(0xFF2D6FD4),
                       foregroundColor: Colors.white,
                       padding: const EdgeInsets.symmetric(vertical: 16),
                       shape: RoundedRectangleBorder(
@@ -485,12 +485,12 @@ class _VerificationRecordScreenState
                     shape: BoxShape.circle,
                     color: _isRecording
                         ? const Color(0xFFFF5252)
-                        : const Color(0xFFAB47BC),
+                        : const Color(0xFF2D6FD4),
                     boxShadow: [
                       BoxShadow(
                         color: (_isRecording
                                 ? const Color(0xFFFF5252)
-                                : const Color(0xFFAB47BC))
+                                : const Color(0xFF2D6FD4))
                             .withOpacity(0.5),
                         blurRadius: 20,
                         spreadRadius: 4,
@@ -571,7 +571,7 @@ class _ErrorView extends StatelessWidget {
             const SizedBox(height: 24),
             ElevatedButton(
               onPressed: onRetry,
-              style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFAB47BC)),
+              style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF2D6FD4)),
               child: const Text('Retry', style: TextStyle(color: Colors.white)),
             ),
           ],

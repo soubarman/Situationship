@@ -240,7 +240,7 @@ class _CompleteProfileScreenState extends ConsumerState<CompleteProfileScreen>
 
       await _db.collection('users').doc(user.uid).set(data, SetOptions(merge: true));
       try {
-        await FirebaseFirestore.instanceFor(app: Firebase.app(), databaseId: '(default)')
+        await FirebaseFirestore.instanceFor(app: Firebase.app(), databaseId: 'default')
             .collection('users')
             .doc(user.uid)
             .set(data, SetOptions(merge: true));

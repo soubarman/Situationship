@@ -4,6 +4,7 @@ import 'package:situationship/core/theme/app_theme.dart';
 import '../models/spotlight_model.dart';
 import 'dart:math' as math;
 import '../../verification/presentation/widgets/s_badge_widget.dart';
+import '../../../shared/widgets/app_3d_icons.dart';
 
 class SpotlightCard extends StatelessWidget {
   final SpotlightBid bid;
@@ -12,8 +13,6 @@ class SpotlightCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    
     // Determine rank styling
     final bool isTop3 = bid.rank <= 3;
     final Color rankColor;
@@ -132,7 +131,7 @@ class SpotlightCard extends StatelessWidget {
                   top: -16,
                   child: Transform.rotate(
                     angle: math.pi / 12,
-                    child: const Text('👑', style: TextStyle(fontSize: 24)),
+                    child: const CrownVector(size: 26, is3dGold: true),
                   ),
                 ),
               Positioned(
@@ -184,13 +183,31 @@ class SpotlightCard extends StatelessWidget {
               color: Colors.black26,
               borderRadius: BorderRadius.circular(12),
             ),
-            child: Text(
-              isPlaceholder ? 'Min 🪙 ${bid.amount}' : '🪙 ${bid.amount}',
-              style: TextStyle(
-                color: isPlaceholder ? rankColor.withOpacity(0.8) : rankColor,
-                fontWeight: FontWeight.bold,
-                fontSize: 12,
-              ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (isPlaceholder) ...[
+                  Text(
+                    'Min',
+                    style: TextStyle(
+                      color: rankColor.withOpacity(0.8),
+                      fontWeight: FontWeight.bold,
+                      fontSize: 11,
+                    ),
+                  ),
+                  const SizedBox(width: 4),
+                ],
+                const Coin3dIcon(size: 11),
+                const SizedBox(width: 3.5),
+                Text(
+                  '${bid.amount}',
+                  style: TextStyle(
+                    color: isPlaceholder ? rankColor.withOpacity(0.8) : rankColor,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 12,
+                  ),
+                ),
+              ],
             ),
           ),
         ],
@@ -256,13 +273,20 @@ class SpotlightCard extends StatelessWidget {
               borderRadius: BorderRadius.circular(12),
               border: Border.all(color: AppTheme.primaryBlue.withOpacity(0.3)),
             ),
-            child: Text(
-              '🪙 ${bid.amount}',
-              style: TextStyle(
-                color: AppTheme.primaryBlue,
-                fontWeight: FontWeight.bold,
-                fontSize: 13,
-              ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Coin3dIcon(size: 13),
+                const SizedBox(width: 4),
+                Text(
+                  '${bid.amount}',
+                  style: TextStyle(
+                    color: AppTheme.primaryBlue,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 13,
+                  ),
+                ),
+              ],
             ),
           ),
         ],

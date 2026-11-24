@@ -1,3 +1,4 @@
+import 'package:go_router/go_router.dart';
 import 'dart:math';
 import 'dart:async';
 import 'dart:convert';
@@ -289,6 +290,37 @@ class _ChatDetailScreenState extends ConsumerState<ChatDetailScreen>
     });
   }
 
+    String _resolveOtherUserId(String myId) {
+    final fromExtra = (widget.userData['otherUserId'] ?? '').toString();
+    if (fromExtra.isNotEmpty) return fromExtra;
+    if (widget.chatId.startsWith('chat_')) {
+      final parts = widget.chatId.substring(5).split('_');
+      if (parts.length >= 2) {
+        return parts[0] == myId ? parts[1] : parts[0];
+      }
+    }
+    return '';
+  }
+
+  void _persistChatUpdate(String myId, String summaryText) {
+    final otherId = _resolveOtherUserId(myId);
+    final participants = [myId];
+    if (otherId.isNotEmpty && otherId != myId) {
+      participants.add(otherId);
+    }
+    ref.read(chatsProvider.notifier).updateLastMessage(
+      widget.chatId,
+      summaryText,
+      DateTime.now(),
+      participants: participants,
+      currentUserId: myId,
+      otherUserId: otherId.isNotEmpty ? otherId : null,
+      otherUserName: widget.userData['name'] as String?,
+      otherUserAvatar: widget.userData['avatarUrl'] as String?,
+      isConfession: widget.userData['isConfession'] as bool?,
+    );
+  }
+
   void _sendGif(String gifUrl) {
     HapticFeedback.lightImpact();
     final currentUser = ref.read(currentUserProvider);
@@ -303,7 +335,7 @@ class _ChatDetailScreenState extends ConsumerState<ChatDetailScreen>
     );
 
     ref.read(chatMessagesNotifierProvider(widget.chatId).notifier).addMessage(newMessage);
-    ref.read(chatsProvider.notifier).updateLastMessage(widget.chatId, '🎬 Sent a GIF', DateTime.now());
+    _persistChatUpdate(currentUser.id, '🎬 Sent a GIF');
     _scrollToBottom();
   }
 
@@ -374,7 +406,7 @@ class _ChatDetailScreenState extends ConsumerState<ChatDetailScreen>
 
     try {
       await ref.read(chatMessagesNotifierProvider(widget.chatId).notifier).addMessage(newMessage);
-      ref.read(chatsProvider.notifier).updateLastMessage(widget.chatId, text, DateTime.now());
+      _persistChatUpdate(currentUser.id, text);
 
       // ── Conversation depth reward (female users only) ───────────────────
       if (currentUser.isFemale) {
@@ -443,7 +475,7 @@ class _ChatDetailScreenState extends ConsumerState<ChatDetailScreen>
     );
 
     ref.read(chatMessagesNotifierProvider(widget.chatId).notifier).addMessage(newMessage);
-    ref.read(chatsProvider.notifier).updateLastMessage(widget.chatId, '📸 Sent a photo', DateTime.now());
+    _persistChatUpdate(currentUser.id, '📸 Sent a photo');
     _scrollToBottom();
   }
 
@@ -461,7 +493,7 @@ class _ChatDetailScreenState extends ConsumerState<ChatDetailScreen>
     );
 
     ref.read(chatMessagesNotifierProvider(widget.chatId).notifier).addMessage(newMessage);
-    ref.read(chatsProvider.notifier).updateLastMessage(widget.chatId, '🎨 Sent a sticker', DateTime.now());
+    _persistChatUpdate(currentUser.id, '🎨 Sent a sticker');
     _scrollToBottom();
   }
 
@@ -480,7 +512,7 @@ class _ChatDetailScreenState extends ConsumerState<ChatDetailScreen>
     );
 
     ref.read(chatMessagesNotifierProvider(widget.chatId).notifier).addMessage(newMessage);
-    ref.read(chatsProvider.notifier).updateLastMessage(widget.chatId, '🎙️ Voice note (${duration}s)', DateTime.now());
+    _persistChatUpdate(currentUser.id, '🎙️ Voice note (${duration}s)');
     _scrollToBottom();
   }
 
@@ -873,15 +905,18 @@ class _ChatDetailScreenState extends ConsumerState<ChatDetailScreen>
     final chats = ref.watch(chatsProvider);
     final chat = chats.firstWhere(
       (c) => c.id == widget.chatId,
-      orElse: () => ChatModel(
-        id: widget.chatId,
-        otherUserId: widget.userData['otherUserId'] ?? '',
-        otherUserName: widget.userData['name'] ?? 'User',
-        otherUserAvatar: widget.userData['avatarUrl'],
-        lastMessage: '',
-        lastMessageTime: DateTime.now(),
-        isConfession: widget.userData['isConfession'] ?? false,
-      ),
+      orElse: () {
+        final resolvedOther = _resolveOtherUserId(currentUser.id);
+        return ChatModel(
+          id: widget.chatId,
+          otherUserId: resolvedOther,
+          otherUserName: widget.userData['name'] ?? 'User',
+          otherUserAvatar: widget.userData['avatarUrl'],
+          lastMessage: '',
+          lastMessageTime: DateTime.now(),
+          isConfession: widget.userData['isConfession'] ?? false,
+        );
+      },
     );
 
     final isChatConfession = chat.isConfession ||
@@ -917,7 +952,11 @@ class _ChatDetailScreenState extends ConsumerState<ChatDetailScreen>
           // ── Main content ─────────────────────────────────────────────
           SafeArea(
             bottom: false,
-            child: Column(
+            child: Align(
+              alignment: Alignment.topCenter,
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 600),
+                child: Column(
               children: [
                 if (chat.isConfession &&
                     currentUser != null &&
@@ -959,16 +998,24 @@ class _ChatDetailScreenState extends ConsumerState<ChatDetailScreen>
                   _buildPendingConfessionBanner(context, chat, isDark)
                 else if (isPendingConfessionSender)
                   _buildPendingConfessionSenderBanner(context, isDark)
-                else ...[
+                else if (chat.status == 'requested' && isReceiver) ...[
+                  _buildChatRequestReceiverBanner(context, chat, isDark),
+                  if (_showEmoji) _buildEmojiBar(isDark),
+                  _buildInputBar(context, isDark),
+                ] else if (chat.status == 'requested' && !isReceiver) ...[
+                  _buildChatRequestSenderBanner(context, chat, isDark),
+                ] else ...[
                   if (_showEmoji) _buildEmojiBar(isDark),
                   _buildInputBar(context, isDark),
                 ],
               ],
             ),
           ),
-        ],
+        ),
       ),
-    );
+    ],
+  ),
+);
   }
 
   PreferredSizeWidget _buildAppBar(
@@ -1007,7 +1054,13 @@ class _ChatDetailScreenState extends ConsumerState<ChatDetailScreen>
               scrolledUnderElevation: 0,
               leading: IconButton(
                 icon: const Icon(Icons.arrow_back_ios_rounded, size: 20),
-                onPressed: () => Navigator.pop(context),
+                onPressed: () {
+                  if (Navigator.of(context).canPop()) {
+                    Navigator.of(context).pop();
+                  } else {
+                    context.go('/chats');
+                  }
+                },
               ),
               title: Row(
                 children: [
@@ -1535,6 +1588,92 @@ class _ChatDetailScreenState extends ConsumerState<ChatDetailScreen>
         ),
       );
     }
+  }
+
+    Widget _buildChatRequestReceiverBanner(BuildContext context, ChatModel chat, bool isDark) {
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: isDark ? const Color(0xFF1E2235) : Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: const Color(0xFF00C9FF).withOpacity(0.4),
+          width: 1.5,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFF00C9FF).withOpacity(0.12),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          const Text('⭐', style: TextStyle(fontSize: 22)),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Text(
+                  'Message Request',
+                  style: TextStyle(fontWeight: FontWeight.w800, fontSize: 13),
+                ),
+                Text(
+                  'Reply or accept to connect.',
+                  style: TextStyle(
+                    fontSize: 11,
+                    color: isDark ? Colors.white60 : Colors.black54,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              ref.read(chatsProvider.notifier).updateChatStatus(chat.id, 'accepted');
+              HapticFeedback.mediumImpact();
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF00C9FF),
+              foregroundColor: Colors.black,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+            ),
+            child: const Text('Accept', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 12)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildChatRequestSenderBanner(BuildContext context, ChatModel chat, bool isDark) {
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: isDark ? Colors.white.withOpacity(0.06) : Colors.black.withOpacity(0.04),
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          const Text('⏳', style: TextStyle(fontSize: 16)),
+          const SizedBox(width: 8),
+          Text(
+            'Request sent. Waiting for response.',
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+              color: isDark ? Colors.white70 : Colors.black54,
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   Widget _buildPendingConfessionBanner(BuildContext context, ChatModel chat, bool isDark) {

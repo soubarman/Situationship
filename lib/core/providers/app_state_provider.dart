@@ -654,7 +654,7 @@ class DiscoveryNotifier extends StateNotifier<AsyncValue<List<UserModel>>> {
 
       final following = ref.read(currentUserProvider).following;
       final users = snapshot.docs
-          .map((doc) => UserModel.fromMap(doc.data()))
+          .map((doc) => UserModel.fromMap({'id': doc.id, ...doc.data()}))
           .where((u) => u.id != _currentUserId && !u.isDemoOrTestAccount && u.isDiscoverable && !u.isCurrentlySuspended)
           .toList();
 
@@ -682,7 +682,7 @@ class DiscoveryNotifier extends StateNotifier<AsyncValue<List<UserModel>>> {
 
       final following = ref.read(currentUserProvider).following;
       final newUsers = snapshot.docs
-          .map((doc) => UserModel.fromMap(doc.data()))
+          .map((doc) => UserModel.fromMap({'id': doc.id, ...doc.data()}))
           .where((u) => u.id != _currentUserId && !u.isDemoOrTestAccount && u.isDiscoverable && !u.isCurrentlySuspended)
           .toList();
 
@@ -1053,11 +1053,45 @@ class ChatsNotifier extends StateNotifier<List<ChatModel>> {
     firestoreProvider.collection('chats').doc(chatId).update({'unreadCount': 0});
   }
 
-  void updateLastMessage(String chatId, String message, DateTime time) {
-    firestoreProvider.collection('chats').doc(chatId).update({
+  void updateLastMessage(
+    String chatId,
+    String message,
+    DateTime time, {
+    List<String>? participants,
+    String? currentUserId,
+    String? otherUserId,
+    String? otherUserName,
+    String? otherUserAvatar,
+    bool? isConfession,
+  }) {
+    final Map<String, dynamic> data = {
+      'id': chatId,
       'lastMessage': message,
       'lastMessageTime': time.millisecondsSinceEpoch,
-    });
+    };
+    if (participants != null && participants.isNotEmpty) {
+      data['participants'] = participants;
+    }
+    if (currentUserId != null && currentUserId.isNotEmpty) {
+      data['senderId'] = currentUserId;
+    }
+    if (otherUserId != null && otherUserId.isNotEmpty) {
+      data['receiverId'] = otherUserId;
+      data['otherUserId'] = otherUserId;
+    }
+    if (otherUserName != null && otherUserName.isNotEmpty) {
+      data['receiverName'] = otherUserName;
+      data['otherUserName'] = otherUserName;
+    }
+    if (otherUserAvatar != null) {
+      data['receiverAvatar'] = otherUserAvatar;
+      data['otherUserAvatar'] = otherUserAvatar;
+    }
+    if (isConfession != null) {
+      data['isConfession'] = isConfession;
+    }
+
+    firestoreProvider.collection('chats').doc(chatId).set(data, SetOptions(merge: true));
   }
 
   Future<void> deleteChat(String chatId) async {

@@ -66,7 +66,11 @@ class _ChatsScreenState extends ConsumerState<ChatsScreen>
       body: Stack(
         children: [
           const BackgroundOrbs(),
-          RefreshIndicator(
+          Align(
+            alignment: Alignment.topCenter,
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 580),
+              child: RefreshIndicator(
             onRefresh: () async {
               await Future.delayed(const Duration(milliseconds: 500));
             },
@@ -86,9 +90,11 @@ class _ChatsScreenState extends ConsumerState<ChatsScreen>
               ),
             ),
           ),
-        ],
+        ),
       ),
-    );
+    ],
+  ),
+);
   }
 
   Widget _buildSliverAppBar(BuildContext context, bool isDark) {
@@ -120,12 +126,12 @@ class _ChatsScreenState extends ConsumerState<ChatsScreen>
             height: 48,
             decoration: BoxDecoration(
               color: isDark
-                  ? Colors.white.withValues(alpha: 0.06)
+                  ? const Color(0xFF11141C)
                   : Colors.white.withValues(alpha: 0.75),
               borderRadius: BorderRadius.circular(20),
               border: Border.all(
                 color: isDark
-                    ? Colors.white.withValues(alpha: 0.1)
+                    ? Colors.white.withValues(alpha: 0.08)
                     : Colors.white.withValues(alpha: 0.9),
                 width: 1,
               ),
@@ -258,9 +264,11 @@ class _ChatsScreenState extends ConsumerState<ChatsScreen>
                   onTap: () {
                     ref.read(chatsProvider.notifier).markRead(chat.id);
                     context.push('/chats/${chat.id}', extra: {
+                      'otherUserId': chat.otherUserId,
                       'name': chat.otherUserName,
                       'avatarUrl': chat.otherUserAvatar,
                       'isOnline': chat.otherUserIsOnline,
+                      'isConfession': chat.isConfession,
                     });
                   },
                   child: Column(
@@ -625,14 +633,16 @@ class _ChatTileState extends ConsumerState<_ChatTile>
       onTapDown: (_) => _pressController.forward(),
       onTapUp: (_) {
         _pressController.reverse();
-        if (!widget.isExpired && !widget.isRequest) {
+        if (!widget.isExpired) {
           ref.read(chatsProvider.notifier).markRead(widget.chat.id);
           context.push(
             '/chats/${widget.chat.id}',
             extra: {
+              'otherUserId': widget.chat.otherUserId,
               'name': widget.chat.otherUserName,
               'avatarUrl': widget.chat.otherUserAvatar,
               'isOnline': widget.chat.otherUserIsOnline,
+              'isConfession': widget.chat.isConfession,
             },
           );
         }

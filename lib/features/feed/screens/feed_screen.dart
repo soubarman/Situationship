@@ -109,7 +109,11 @@ class _FeedScreenState extends ConsumerState<FeedScreen> {
       body: Stack(
         children: [
           const BackgroundOrbs(),
-          RefreshIndicator(
+          Align(
+            alignment: Alignment.topCenter,
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 580),
+              child: RefreshIndicator(
             onRefresh: () async {
               await ref.read(postsPaginationProvider.notifier).refresh();
             },
@@ -119,13 +123,13 @@ class _FeedScreenState extends ConsumerState<FeedScreen> {
               physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
               slivers: [
                 _buildAppBar(context, isDark, currentUser, ref, palette),
-                const SliverToBoxAdapter(child: SizedBox(height: 16)),
+                const SliverToBoxAdapter(child: SizedBox(height: 8)),
                 const SliverToBoxAdapter(child: StoriesRow()),
 
                 // ── Feed filter chips (ABOVE spotlight) ───────────────────────
                 SliverToBoxAdapter(
                   child: Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 10, 16, 6),
+                    padding: const EdgeInsets.fromLTRB(16, 6, 16, 6),
                     child: Row(
                       children: [
                         Expanded(child: _TabChip(label: 'All',         isSelected: activeFilter == 'all',         palette: palette, onTap: () => ref.read(feedFilterProvider.notifier).state = 'all')),
@@ -145,7 +149,7 @@ class _FeedScreenState extends ConsumerState<FeedScreen> {
                 ),
 
                 // spacing so spotlight and posts don't look merged
-                const SliverToBoxAdapter(child: SizedBox(height: 8)),
+                const SliverToBoxAdapter(child: SizedBox(height: 4)),
     
                 // ── Firestore error banner ─────────────────────────────────────
                 if (postsStream.hasError)
@@ -218,8 +222,10 @@ class _FeedScreenState extends ConsumerState<FeedScreen> {
               ],
             ),
           ),
-        ],
+        ),
       ),
+    ],
+  ),
       floatingActionButton: Padding(
         padding: const EdgeInsets.only(bottom: 80.0),
         child: FloatingActionButton(
@@ -621,7 +627,7 @@ class _TabChip extends StatelessWidget {
         duration: const Duration(milliseconds: 220),
         curve: Curves.easeOutCubic,
         alignment: Alignment.center,
-        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 8),
+        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 5),
         decoration: BoxDecoration(
           gradient: isSelected ? palette.primaryGradient : null,
           color: isSelected
@@ -655,7 +661,7 @@ class _TabChip extends StatelessWidget {
           child: Text(
             label,
             style: TextStyle(
-              fontSize: 12.5,
+              fontSize: 11.5,
               fontWeight: isSelected ? FontWeight.w900 : FontWeight.w700,
               color: isSelected ? Colors.white : (isDark ? Colors.white70 : Colors.black87),
               letterSpacing: -0.2,

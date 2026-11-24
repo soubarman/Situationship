@@ -1,3 +1,4 @@
+import '../../../core/services/like_service.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -190,13 +191,21 @@ class _MatchSuccessScreenState extends ConsumerState<MatchSuccessScreen>
                         scale: _heartPulse,
                         child: GestureDetector(
                           onTap: () {
-                            if (chatId != null) {
+                            final matchedId = (matchedUser?['id'] ?? '').toString();
+                            final realChatId = (chatId != null && !chatId.startsWith('chat_match_'))
+                                ? chatId
+                                : (currentUser.id.isNotEmpty && matchedId.isNotEmpty
+                                    ? LikeService.getCanonicalChatId(currentUser.id, matchedId)
+                                    : chatId);
+                            if (realChatId != null) {
                               context.go(
-                                '/chats/$chatId',
+                                '/chats/$realChatId',
                                 extra: {
+                                  'otherUserId': matchedId,
                                   'name': matchedName,
                                   'avatarUrl': matchedAvatar,
                                   'isOnline': true,
+                                  'isConfession': false,
                                 },
                               );
                             } else {
