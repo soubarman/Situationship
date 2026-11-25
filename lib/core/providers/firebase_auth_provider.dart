@@ -5,7 +5,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'dart:io';
-import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/foundation.dart' show kIsWeb, debugPrint;
 import 'package:google_sign_in/google_sign_in.dart';
 
 import 'firestore_provider.dart';
@@ -29,6 +29,59 @@ class AuthController extends StateNotifier<AsyncValue<User?>> {
 
   // Convenience getter for Firestore using the centralized provider
   FirebaseFirestore get _db => firestoreProvider;
+
+  static Map<String, dynamic> buildInitialUserProfileMap({
+    required String uid,
+    required String name,
+    required String bio,
+    required int age,
+    required String location,
+    String gender = 'other',
+    String? avatarUrl,
+    List<String> interests = const [],
+    List<String> photos = const [],
+    String? relationshipIntent,
+    List<String> interestedIn = const [],
+  }) {
+    return {
+      'id': uid,
+      'name': name,
+      'bio': bio,
+      'age': age,
+      'location': location,
+      'gender': gender,
+      'isPhonePublic': false,
+      'phoneVisibilityVersion': 1,
+      'avatarUrl': avatarUrl,
+      'interests': interests,
+      'photos': photos,
+      'followers': <String>[],
+      'following': <String>[],
+      'likedBy': <String>[],
+      'superLikedBy': <String>[],
+      'matches': <String>[],
+      'dislikedUsers': <String>[],
+      'postCount': 0,
+      'isOnline': true,
+      'isVerified': false,
+      'isSubscribed': false,
+      'isSuspended': false,
+      'coins': 0,
+      'totalEarnedCoins': 0,
+      'claimedMilestones': <String>[],
+      'role': 'user',
+      'unlockedUserPhones': <String>[],
+      'unlockedVisitors': <String>[],
+      'dailyLoginStreak': 0,
+      'conversationRewardsToday': 0,
+      'phoneUnlocksUsed': 0,
+      'phoneUnlockQuota': 0,
+      'subscriptionExpiry': null,
+      if (relationshipIntent != null) 'relationshipIntent': relationshipIntent,
+      if (interestedIn.isNotEmpty) 'interestedIn': interestedIn,
+      'createdAt': FieldValue.serverTimestamp(),
+    };
+  }
 
   // ── Email Sign In ───────────────────────────────────────────────────────────
 
@@ -86,7 +139,7 @@ class AuthController extends StateNotifier<AsyncValue<User?>> {
           final url = await storageRef.getDownloadURL();
           uploadedPhotoUrls.add(url);
         } catch (e) {
-          print('Storage upload failed for photo $i: $e');
+          debugPrint('Storage upload failed for photo $i: $e');
         }
       }
 
@@ -97,27 +150,19 @@ class AuthController extends StateNotifier<AsyncValue<User?>> {
         } catch (_) {}
       }
 
-      // 1. Create public profile document (PII excluded)
-      await _db.collection('users').doc(user.uid).set({
-        'id': user.uid,
-        'name': name,
-        'bio': bio,
-        'age': age,
-        'location': location,
-        'gender': gender,
-        'isPhonePublic': false,
-        'avatarUrl': photoUrl,
-        'interests': interests,
-        'isVerified': false,
-        'isOnline': true,
-        'photos': uploadedPhotoUrls,
-        'followers': [],
-        'following': [],
-        'likedBy': [],
-        'matches': [],
-        'postCount': 0,
-        'createdAt': FieldValue.serverTimestamp(),
-      });
+      // 1. Create public profile document (PII excluded, strict security rules compliant)
+      final publicProfile = buildInitialUserProfileMap(
+        uid: user.uid,
+        name: name,
+        bio: bio,
+        age: age,
+        location: location,
+        gender: gender,
+        avatarUrl: photoUrl,
+        interests: interests,
+        photos: uploadedPhotoUrls,
+      );
+      await _db.collection('users').doc(user.uid).set(publicProfile);
 
       // 2. Create private profile document (owner-only PII)
       await _db.collection('users').doc(user.uid).collection('private').doc('profile').set({
@@ -128,12 +173,8 @@ class AuthController extends StateNotifier<AsyncValue<User?>> {
 
       state = AsyncValue.data(user);
     } catch (e) {
-      if (_auth.currentUser != null) {
-        try {
-          await _auth.currentUser!.delete();
-        } catch (_) {}
-      }
-      state = const AsyncValue.data(null);
+      debugPrint('[AuthController] signUpWithEmail error: $e');
+      state = AsyncValue.data(_auth.currentUser);
       if (e is FirebaseAuthException) {
         throw _mapFirebaseError(e);
       }
@@ -178,25 +219,16 @@ class AuthController extends StateNotifier<AsyncValue<User?>> {
         final userDoc = await _db.collection('users').doc(user.uid).get();
 
         if (!userDoc.exists) {
-          await _db.collection('users').doc(user.uid).set({
-            'id': user.uid,
-            'name': user.displayName ?? 'User',
-            'bio': 'New to Situationship! ✨',
-            'age': 21,
-            'location': 'Earth 🌍',
-            'isPhonePublic': false,
-            'avatarUrl': user.photoURL,
-            'interests': [],
-            'isVerified': false,
-            'isOnline': true,
-            'photos': user.photoURL != null ? [user.photoURL] : [],
-            'followers': [],
-            'following': [],
-            'likedBy': [],
-            'matches': [],
-            'postCount': 0,
-            'createdAt': FieldValue.serverTimestamp(),
-          });
+          final initialProfile = buildInitialUserProfileMap(
+            uid: user.uid,
+            name: user.displayName ?? 'User',
+            bio: 'New to Situationship! ✨',
+            age: 21,
+            location: 'Earth 🌍',
+            avatarUrl: user.photoURL,
+            photos: user.photoURL != null ? [user.photoURL!] : [],
+          );
+          await _db.collection('users').doc(user.uid).set(initialProfile);
           await _db.collection('users').doc(user.uid).collection('private').doc('profile').set({
             'email': user.email ?? '',
             'phoneNumber': null,
@@ -233,25 +265,16 @@ class AuthController extends StateNotifier<AsyncValue<User?>> {
         final userDoc = await _db.collection('users').doc(user.uid).get();
 
         if (!userDoc.exists) {
-          await _db.collection('users').doc(user.uid).set({
-            'id': user.uid,
-            'name': user.displayName ?? 'User',
-            'bio': 'New to Situationship! ✨',
-            'age': 21,
-            'location': 'Earth 🌍',
-            'isPhonePublic': false,
-            'avatarUrl': user.photoURL,
-            'interests': [],
-            'isVerified': false,
-            'isOnline': true,
-            'photos': user.photoURL != null ? [user.photoURL] : [],
-            'followers': [],
-            'following': [],
-            'likedBy': [],
-            'matches': [],
-            'postCount': 0,
-            'createdAt': FieldValue.serverTimestamp(),
-          });
+          final initialProfile = buildInitialUserProfileMap(
+            uid: user.uid,
+            name: user.displayName ?? 'User',
+            bio: 'New to Situationship! ✨',
+            age: 21,
+            location: 'Earth 🌍',
+            avatarUrl: user.photoURL,
+            photos: user.photoURL != null ? [user.photoURL!] : [],
+          );
+          await _db.collection('users').doc(user.uid).set(initialProfile);
           await _db.collection('users').doc(user.uid).collection('private').doc('profile').set({
             'email': user.email ?? '',
             'phoneNumber': null,

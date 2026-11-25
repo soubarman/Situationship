@@ -197,19 +197,18 @@ class _CompleteProfileScreenState extends ConsumerState<CompleteProfileScreen>
       // Extract existing phone number from auth or empty string
       final String phoneNumber = user.phoneNumber ?? '';
 
-      // Build the public profile map (PII excluded)
+      // Build the public profile map (PII excluded, strict security rules compliant)
       final data = <String, dynamic>{
-        'uid': user.uid,
+        'id': user.uid,
         'name': _nameCtrl.text.trim().isNotEmpty
             ? _nameCtrl.text.trim()
             : (user.displayName ?? 'Anonymous'),
         'gender': _gender,
-        'interestedIn': _interestedIn,
+        'interestedIn': [_interestedIn],
         'relationshipIntent': _relationshipIntent,
         'bio': _bioCtrl.text.trim(),
         'age': int.tryParse(_ageCtrl.text.trim()) ?? 21,
         'avatarUrl': photoUrl,
-        'photoUrls': finalUrls,
         'photos': finalUrls,
         'location': _locationCtrl.text.trim().isNotEmpty
             ? _locationCtrl.text.trim()
@@ -217,12 +216,12 @@ class _CompleteProfileScreenState extends ConsumerState<CompleteProfileScreen>
         'interests': _selectedInterests,
         'isVerified': false,
         'isPhonePublic': false,
-        'unlockedUserPhones': [],
-        'unlockedVisitors': [],
+        'unlockedUserPhones': <String>[],
+        'unlockedVisitors': <String>[],
         'phoneVisibilityVersion': 1,
-        'coins': _gender == 'female' ? 50 : 20,
+        'coins': 0,
         'totalEarnedCoins': 0,
-        'claimedMilestones': [],
+        'claimedMilestones': <String>[],
         'isSubscribed': false,
         'subscriptionExpiry': null,
         'phoneUnlocksUsed': 0,
