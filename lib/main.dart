@@ -44,8 +44,7 @@ void main() async {
 
   // ── Firestore offline cache ─────────────────────────────────────────────────
   // Data loads instantly from cache on repeat visits — no loading spinner jank.
-  FirebaseFirestore.instanceFor(app: Firebase.app(), databaseId: 'default')
-      .settings = const Settings(
+  FirebaseFirestore.instance.settings = const Settings(
     persistenceEnabled: true,
     cacheSizeBytes: Settings.CACHE_SIZE_UNLIMITED,
   );

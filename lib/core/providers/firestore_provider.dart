@@ -1,8 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_core/firebase_core.dart';
 
 /// Centralized Firestore instance - use this instead of creating new instances
-final firestoreProvider = FirebaseFirestore.instanceFor(app: Firebase.app(), databaseId: 'default');
+final firestoreProvider = FirebaseFirestore.instance;
 
 /// Convenience extension for common Firestore operations
 extension FirestoreHelpers on FirebaseFirestore {

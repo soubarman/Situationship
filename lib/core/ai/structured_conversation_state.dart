@@ -147,10 +147,17 @@ class ConversationInterpretation {
   final bool isCorrection;
   final bool isTopicChange;
   final List<UserDatingPreference> extractedPreferences;
-  final String? emotionalTone; // 'boredom', 'loneliness', 'dating_fatigue', etc.
+  final String? emotionalTone; // 'boredom', 'loneliness', 'dating_fatigue', 'work_stress', etc.
   final double confidence;
   final bool needsClarification;
   final String? clarificationPrompt;
+  final String? userActualIntention;
+  final List<String> qualificationsAndExceptions;
+  final List<String> userSelfTraits;
+  final List<UserDatingPreference> positivePreferences;
+  final List<UserDatingPreference> negativePreferences;
+  final List<String> referencesToPreviousTurns;
+  final bool isAmbiguous;
 
   const ConversationInterpretation({
     required this.originalUtterance,
@@ -165,6 +172,13 @@ class ConversationInterpretation {
     this.confidence = 0.9,
     this.needsClarification = false,
     this.clarificationPrompt,
+    this.userActualIntention,
+    this.qualificationsAndExceptions = const [],
+    this.userSelfTraits = const [],
+    this.positivePreferences = const [],
+    this.negativePreferences = const [],
+    this.referencesToPreviousTurns = const [],
+    this.isAmbiguous = false,
   });
 }
 

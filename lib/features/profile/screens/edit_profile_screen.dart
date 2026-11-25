@@ -213,11 +213,11 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
 
       // 3. Mirror write to '(default)' for backward-compatibility
       try {
-        await FirebaseFirestore.instanceFor(app: Firebase.app(), databaseId: 'default')
+        await FirebaseFirestore.instance
             .collection('users')
             .doc(authUser.uid)
             .set(updates, SetOptions(merge: true));
-        await FirebaseFirestore.instanceFor(app: Firebase.app(), databaseId: 'default')
+        await FirebaseFirestore.instance
             .collection('users')
             .doc(authUser.uid)
             .collection('private')

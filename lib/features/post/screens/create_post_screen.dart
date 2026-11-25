@@ -13,7 +13,7 @@ import '../../../core/providers/app_state_provider.dart';
 import '../../../core/models/post_model.dart';
 import '../../wallet/widgets/coin_gate_sheet.dart';
 
-final _db = FirebaseFirestore.instanceFor(app: Firebase.app(), databaseId: 'default');
+final _db = FirebaseFirestore.instance;
 
 class CreatePostScreen extends ConsumerStatefulWidget {
   const CreatePostScreen({super.key});

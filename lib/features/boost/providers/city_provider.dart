@@ -58,6 +58,6 @@ class ChangeCityService {
     if (campusId != null) updates['campusId'] = campusId;
     if (homeCityId != null) updates['homeCityId'] = homeCityId;
 
-    await FirebaseFirestore.instanceFor(app: Firebase.app(), databaseId: 'default').collection('users').doc(user.id).update(updates);
+    await FirebaseFirestore.instance.collection('users').doc(user.id).update(updates);
   }
 }

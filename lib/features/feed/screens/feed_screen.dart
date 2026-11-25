@@ -73,7 +73,7 @@ class _FeedScreenState extends ConsumerState<FeedScreen> {
                 ElevatedButton(
                   onPressed: () async {
                     if (selectedGender == 'other') return; // Enforce selecting male or female if possible, but other is allowed. Wait, we can just save it.
-                    final db = FirebaseFirestore.instanceFor(app: Firebase.app(), databaseId: 'default');
+                    final db = FirebaseFirestore.instance;
                     await db.collection('users').doc(user.id).update({'gender': selectedGender});
                     if (context.mounted) Navigator.pop(context);
                   },

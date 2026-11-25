@@ -150,38 +150,35 @@ class AuthController extends StateNotifier<AsyncValue<User?>> {
         } catch (_) {}
       }
 
-      // 1. Create public profile document (PII excluded, strict security rules compliant)
-      final publicProfile = buildInitialUserProfileMap(
-        uid: user.uid,
-        name: name,
-        bio: bio,
-        age: age,
-        location: location,
-        gender: gender,
-        avatarUrl: photoUrl,
-        interests: interests,
-        photos: uploadedPhotoUrls,
-      );
-      await _db.collection('users').doc(user.uid).set(publicProfile);
+      try {
+        // 1. Create public profile document (PII excluded, strict security rules compliant)
+        final publicProfile = buildInitialUserProfileMap(
+          uid: user.uid,
+          name: name,
+          bio: bio,
+          age: age,
+          location: location,
+          gender: gender,
+          avatarUrl: photoUrl,
+          interests: interests,
+          photos: uploadedPhotoUrls,
+        );
+        await _db.collection('users').doc(user.uid).set(publicProfile);
 
-      // 2. Create private profile document (owner-only PII)
-      await _db.collection('users').doc(user.uid).collection('private').doc('profile').set({
-        'email': email,
-        'phoneNumber': phoneNumber,
-        'createdAt': FieldValue.serverTimestamp(),
-      });
+        // 2. Create private profile document (owner-only PII)
+        await _db.collection('users').doc(user.uid).collection('private').doc('profile').set({
+          'email': email,
+          'phoneNumber': phoneNumber,
+          'createdAt': FieldValue.serverTimestamp(),
+        });
+      } catch (firestoreErr) {
+        debugPrint('[AuthController] Error saving initial profile to Firestore: $firestoreErr');
+        // Do not delete or log out the auth account; user is authenticated and router handles completion
+      }
 
       state = AsyncValue.data(user);
     } catch (e) {
       debugPrint('[AuthController] signUpWithEmail error: $e');
-      // Ensure signup failures do not leave incomplete authenticated accounts without Firestore documents
-      if (_auth.currentUser != null) {
-        try {
-          await _auth.currentUser!.delete();
-        } catch (_) {
-          await _auth.signOut();
-        }
-      }
       state = const AsyncValue.data(null);
       if (e is FirebaseAuthException) {
         throw _mapFirebaseError(e);
@@ -201,8 +198,10 @@ class AuthController extends StateNotifier<AsyncValue<User?>> {
         final provider = GoogleAuthProvider();
         await _auth.signInWithPopup(provider);
       } else {
-        // ✅ Mobile
-        final GoogleSignIn googleSignIn = GoogleSignIn();
+        // ✅ Mobile (configured with Web Client ID as serverClientId to obtain OpenID idToken)
+        final GoogleSignIn googleSignIn = GoogleSignIn(
+          serverClientId: '990817672883-jsr66vh56ssf27qt78u9aqipdl0ktgtf.apps.googleusercontent.com',
+        );
         final GoogleSignInAccount? googleUser =
             await googleSignIn.signIn();
 

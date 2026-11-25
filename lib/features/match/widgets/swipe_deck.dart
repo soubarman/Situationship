@@ -702,7 +702,7 @@ class _SwipeDeckState extends ConsumerState<SwipeDeck> with SingleTickerProvider
     }
 
     try {
-      final db = FirebaseFirestore.instanceFor(app: Firebase.app(), databaseId: 'default');
+      final db = FirebaseFirestore.instance;
       final chatId = LikeService.getCanonicalChatId(currentUser.id, targetUser.id);
 
       // Ensure chat exists

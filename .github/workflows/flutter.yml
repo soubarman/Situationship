@@ -93,6 +93,20 @@ jobs:
           EOF
           fi
 
+      - name: Print Keystore Certificate Fingerprints (SHA-1 / SHA-256 for Firebase)
+        run: |
+          if [ -f android/key.properties ]; then
+            STORE_FILE=$(grep 'storeFile=' android/key.properties | cut -d'=' -f2)
+            STORE_PASS=$(grep 'storePassword=' android/key.properties | cut -d'=' -f2)
+            ALIAS=$(grep 'keyAlias=' android/key.properties | cut -d'=' -f2)
+            echo "============================================================"
+            echo "Signing Keystore: android/app/$STORE_FILE"
+            echo "Verifying certificate fingerprints for Firebase Console:"
+            echo "============================================================"
+            keytool -list -v -keystore "android/app/$STORE_FILE" -storepass "$STORE_PASS" -alias "$ALIAS" | grep -E "(SHA1|SHA256):" || true
+            echo "============================================================"
+          fi
+
       - name: Build Android ARM64 Release APK with Native llama.cpp
         run: |
           flutter build apk --release --target-platform android-arm64 --no-tree-shake-icons

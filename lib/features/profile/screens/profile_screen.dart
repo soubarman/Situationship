@@ -706,7 +706,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
 
   // ─── PROFILE VISITORS CARD ──────────────────────────────────────────────────
   Widget _buildVisitorsCard(BuildContext context, UserModel currentUser, bool isDark, AppPalette palette) {
-    final db = FirebaseFirestore.instanceFor(app: Firebase.app(), databaseId: 'default');
+    final db = FirebaseFirestore.instance;
 
     return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
       stream: db.collection('profile_views').where('targetId', isEqualTo: currentUser.id).snapshots(),
@@ -1084,7 +1084,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
     if (!allowed) return;
 
     try {
-      final db = FirebaseFirestore.instanceFor(app: Firebase.app(), databaseId: 'default');
+      final db = FirebaseFirestore.instance;
 
       await db.runTransaction((tx) async {
         final userRef = db.collection('users').doc(currentUser.id);

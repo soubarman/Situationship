@@ -234,7 +234,7 @@ class _CompleteProfileScreenState extends ConsumerState<CompleteProfileScreen>
       // 1. Write public profile document (PII excluded)
       await _db.collection('users').doc(user.uid).set(data, SetOptions(merge: true));
       try {
-        await FirebaseFirestore.instanceFor(app: Firebase.app(), databaseId: 'default')
+        await FirebaseFirestore.instance
             .collection('users')
             .doc(user.uid)
             .set(data, SetOptions(merge: true));
@@ -248,7 +248,7 @@ class _CompleteProfileScreenState extends ConsumerState<CompleteProfileScreen>
       };
       await _db.collection('users').doc(user.uid).collection('private').doc('profile').set(privateData, SetOptions(merge: true));
       try {
-        await FirebaseFirestore.instanceFor(app: Firebase.app(), databaseId: 'default')
+        await FirebaseFirestore.instance
             .collection('users')
             .doc(user.uid)
             .collection('private')

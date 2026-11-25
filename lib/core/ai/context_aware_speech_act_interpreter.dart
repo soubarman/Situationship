@@ -95,6 +95,7 @@ class ContextAwareSpeechActInterpreter {
         clean: clean,
         expectedType: expectedType,
         sourceTurn: history.length,
+        contextManager: contextManager,
       );
       if (answerInterpretation != null) {
         return answerInterpretation;
@@ -129,6 +130,11 @@ class ContextAwareSpeechActInterpreter {
           clean.contains('too') ||
           clean.contains('as well');
 
+      final qualifications = _extractQualifications(clean);
+      final selfTraits = _extractSelfTraits(clean);
+      final posPrefs = statedPreferences.where((p) => p.polarity == PreferencePolarity.positive && p.scope == PreferenceScope.datingRequirement).toList();
+      final negPrefs = statedPreferences.where((p) => p.polarity == PreferencePolarity.negative).toList();
+
       return ConversationInterpretation(
         originalUtterance: utterance,
         speechAct: SpeechAct.answering,
@@ -136,6 +142,11 @@ class ContextAwareSpeechActInterpreter {
         isAnswerToLastQuestion: isAdditive,
         isExplicitDiscoveryRequest: false, // Strict decision gate: NEVER search automatically
         extractedPreferences: statedPreferences,
+        qualificationsAndExceptions: qualifications,
+        userSelfTraits: selfTraits,
+        positivePreferences: posPrefs,
+        negativePreferences: negPrefs,
+        userActualIntention: _summarizeIntention(posPrefs, negPrefs, qualifications, selfTraits),
         confidence: 0.88,
       );
     }
@@ -202,12 +213,22 @@ class ContextAwareSpeechActInterpreter {
         clean.contains('no i mean') ||
         clean.contains('no, i mean') ||
         clean.contains('wait, instead') ||
-        clean.contains('change that to');
+        clean.contains('change that to') ||
+        clean.contains('maybe not') ||
+        clean.contains('on second thought') ||
+        clean.contains('scratch that');
   }
 
   static List<UserDatingPreference> _extractPreferencesFromCorrection(String clean, int turn) {
     final prefs = <UserDatingPreference>[];
-    if (clean.contains('outgoing') && clean.contains('calm')) {
+    if (clean.contains('not extremely outgoing') || clean.contains('not too outgoing') || (clean.contains('outgoing') && clean.contains('maybe not'))) {
+      prefs.add(UserDatingPreference(
+        category: 'personality',
+        value: 'moderately outgoing / balanced',
+        polarity: PreferencePolarity.positive,
+        sourceTurn: turn,
+      ));
+    } else if (clean.contains('outgoing') && clean.contains('calm')) {
       prefs.add(UserDatingPreference(
         category: 'personality',
         value: 'outgoing but calm',
@@ -240,6 +261,7 @@ class ContextAwareSpeechActInterpreter {
   }
 
   static String? _detectEmotionalTone(String clean) {
+    if (clean.contains('terrible day') || clean.contains('rough day') || clean.contains('day at work') || clean.contains('bad day') || clean.contains('exhausted') || clean.contains('exhausting') || clean.contains('awful day')) return 'work_stress';
     if (clean.contains('bored') || clean.contains('boring')) return 'boredom';
     if (clean.contains('lonel')) return 'loneliness';
     if (clean.contains('ghost')) return 'ghosting';
@@ -263,7 +285,49 @@ class ContextAwareSpeechActInterpreter {
     required String clean,
     required ExpectedAnswerType expectedType,
     required int sourceTurn,
+    required ConversationContextManager contextManager,
   }) {
+    if (clean == 'both' || clean == 'both actually' || clean == 'both of them' || clean.startsWith('both')) {
+      final lastQ = (contextManager.lastAssistantQuestion ?? '').toLowerCase();
+      final currentTopic = contextManager.structuredState.currentTopic;
+      String cat = 'lifestyle';
+      String val = 'shared passion';
+      if (lastQ.contains('photo') || currentTopic == ConversationTopic.photography) {
+        cat = 'photography';
+        val = 'photography';
+      } else if (lastQ.contains('travel') || currentTopic == ConversationTopic.travel) {
+        cat = 'travel';
+        val = 'travelling';
+      } else if (lastQ.contains('music') || currentTopic == ConversationTopic.music) {
+        cat = 'music';
+        val = 'music';
+      }
+
+      return ConversationInterpretation(
+        originalUtterance: utterance,
+        speechAct: SpeechAct.answering,
+        topic: currentTopic,
+        isAnswerToLastQuestion: true,
+        isExplicitDiscoveryRequest: false,
+        referencesToPreviousTurns: const ['both'],
+        userActualIntention: 'Applies preference to both personal activity and partner requirement',
+        extractedPreferences: [
+          UserDatingPreference(
+            category: cat,
+            value: val,
+            scope: PreferenceScope.datingRequirement,
+            sourceTurn: sourceTurn,
+          ),
+          UserDatingPreference(
+            category: cat,
+            value: val,
+            scope: PreferenceScope.personalInterest,
+            sourceTurn: sourceTurn,
+          ),
+        ],
+        confidence: 0.96,
+      );
+    }
     switch (expectedType) {
       case ExpectedAnswerType.humourStyle:
       case ExpectedAnswerType.partnerTrait:
@@ -436,7 +500,22 @@ class ContextAwareSpeechActInterpreter {
         sourceTurn: turn,
       ));
     }
-    if (clean.contains('quiet') || clean.contains('calm')) {
+    if (clean.contains('introvert')) {
+      prefs.add(UserDatingPreference(
+        category: 'personality',
+        value: 'introverted',
+        scope: PreferenceScope.datingRequirement,
+        sourceTurn: turn,
+      ));
+    }
+    final isUserQuieter = clean.contains('usually the quieter') ||
+        clean.contains('i m usually the quieter') ||
+        clean.contains('i am usually the quieter') ||
+        clean.contains('quieter one anyway') ||
+        clean.contains('i am quieter') ||
+        clean.contains('i m quieter');
+
+    if (!isUserQuieter && (clean.contains('quiet') || clean.contains('calm'))) {
       prefs.add(UserDatingPreference(
         category: 'personality',
         value: 'quiet & calm',
@@ -479,10 +558,33 @@ class ContextAwareSpeechActInterpreter {
         sourceTurn: turn,
       ));
     }
-    if (clean.contains('non smoker') || clean.contains('no smoking') || clean.contains('pakka non-smoker') || clean.contains('pakka non smoker') || clean.contains('strictly non smoker')) {
+    final hasNoSmoking = clean.contains('non smoker') ||
+        clean.contains('no smoking') ||
+        clean.contains('pakka non-smoker') ||
+        clean.contains('pakka non smoker') ||
+        clean.contains('strictly non smoker') ||
+        clean.contains("doesn't smoke") ||
+        clean.contains("doesnt smoke");
+
+    if (hasNoSmoking) {
       prefs.add(UserDatingPreference(
         category: 'dealbreaker',
         value: 'smoking',
+        polarity: PreferencePolarity.negative,
+        sourceTurn: turn,
+      ));
+    }
+
+    final isDrinkingAcceptable = clean.contains("drinking isn't a problem") ||
+        clean.contains("drinking isnt a problem") ||
+        clean.contains("occasional drinking") ||
+        clean.contains("drink occasionally") ||
+        clean.contains("drinks are fine");
+
+    if (!isDrinkingAcceptable && (clean.contains('non drinker') || clean.contains('no drinking') || clean.contains('strictly no alcohol'))) {
+      prefs.add(UserDatingPreference(
+        category: 'dealbreaker',
+        value: 'drinking',
         polarity: PreferencePolarity.negative,
         sourceTurn: turn,
       ));
@@ -496,6 +598,45 @@ class ContextAwareSpeechActInterpreter {
     }
 
     return prefs;
+  }
+
+  static List<String> _extractQualifications(String clean) {
+    final list = <String>[];
+    if (clean.contains('hold a conversation') || clean.contains('hold conversation') || clean.contains('can conversation')) {
+      list.add('can hold a conversation');
+    }
+    if (clean.contains('drinking') && (clean.contains('problem') || clean.contains('occasional') || clean.contains('fine'))) {
+      list.add('occasional drinking acceptable');
+    }
+    if (clean.contains('not offensive') || clean.contains('not the offensive')) {
+      list.add('not offensive');
+    }
+    return list;
+  }
+
+  static List<String> _extractSelfTraits(String clean) {
+    final list = <String>[];
+    if (clean.contains('usually the quieter') || clean.contains('i m usually the quieter') || clean.contains('quieter one anyway') || clean.contains('i am quieter') || clean.contains('i m quieter')) {
+      list.add('quieter');
+    }
+    if (clean.contains('not really into travelling myself') || clean.contains('not into travel myself') || clean.contains('not really into travel myself')) {
+      list.add('not into travelling');
+    }
+    return list;
+  }
+
+  static String _summarizeIntention(
+    List<UserDatingPreference> pos,
+    List<UserDatingPreference> neg,
+    List<String> quals,
+    List<String> self,
+  ) {
+    final parts = <String>[];
+    if (pos.isNotEmpty) parts.add('seeking ${pos.map((p) => p.value).join(", ")}');
+    if (quals.isNotEmpty) parts.add('qualifications: ${quals.join(", ")}');
+    if (neg.isNotEmpty) parts.add('dealbreakers: ${neg.map((p) => p.value).join(", ")}');
+    if (self.isNotEmpty) parts.add('self traits: ${self.join(", ")}');
+    return parts.join('; ');
   }
 
   static ConversationTopic _inferTopicFromPreferences(List<UserDatingPreference> prefs) {

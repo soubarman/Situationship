@@ -55,7 +55,7 @@ final spotlightSessionProvider = StreamProvider<SpotlightSession?>((ref) {
   final slotStart = getCurrentSlotStartTime();
   final slotEnd = getCurrentSlotEndTime();
 
-  return FirebaseFirestore.instanceFor(app: Firebase.app(), databaseId: 'default')
+  return FirebaseFirestore.instance
       .collection('spotlight_sessions')
       .doc(sessionId)
       .snapshots()
@@ -101,7 +101,7 @@ final spotlightBidsProvider =
   final user = authState.asData?.value;
   if (user == null) return Stream.value([]);
 
-  return FirebaseFirestore.instanceFor(app: Firebase.app(), databaseId: 'default')
+  return FirebaseFirestore.instance
       .collection('spotlight_sessions')
       .doc(sessionId)
       .collection('bids')
@@ -241,7 +241,7 @@ class SpotlightNotifier {
     final currentSlotId = getCurrentSlotId(now);
     final slotStart = getCurrentSlotStartTime(now);
 
-    final db = FirebaseFirestore.instanceFor(app: Firebase.app(), databaseId: 'default');
+    final db = FirebaseFirestore.instance;
     final sessionRef = db.collection('spotlight_sessions').doc(resolvedSessionId);
     final bidRef = sessionRef.collection('bids').doc(user.id);
     final userRef = db.collection('users').doc(user.id);

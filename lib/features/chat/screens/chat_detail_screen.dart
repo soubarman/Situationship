@@ -1382,7 +1382,7 @@ class _ChatDetailScreenState extends ConsumerState<ChatDetailScreen>
 
   void _executeReveal(String chatId) async {
     try {
-      final db = FirebaseFirestore.instanceFor(app: Firebase.app(), databaseId: 'default');
+      final db = FirebaseFirestore.instance;
       await db.collection('chats').doc(chatId).update({
         'isConfession': false,
         'revealStatus': 'revealed',
@@ -1461,7 +1461,7 @@ class _ChatDetailScreenState extends ConsumerState<ChatDetailScreen>
 
   void _submitRevealRequest(String chatId) async {
     try {
-      final db = FirebaseFirestore.instanceFor(app: Firebase.app(), databaseId: 'default');
+      final db = FirebaseFirestore.instance;
       await db.collection('chats').doc(chatId).update({
         'revealStatus': 'requested',
       });
@@ -1567,7 +1567,7 @@ class _ChatDetailScreenState extends ConsumerState<ChatDetailScreen>
 
   void _handleRevealResponse(String chatId, bool accept) async {
     try {
-      final db = FirebaseFirestore.instanceFor(app: Firebase.app(), databaseId: 'default');
+      final db = FirebaseFirestore.instance;
       await db.collection('chats').doc(chatId).update({
         'revealStatus': accept ? 'revealed' : 'declined',
       });

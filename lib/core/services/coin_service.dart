@@ -86,7 +86,7 @@ class CoinService {
       });
       if (success) {
         try {
-          await FirebaseFirestore.instanceFor(app: Firebase.app(), databaseId: 'default')
+          await FirebaseFirestore.instance
               .collection('users')
               .doc(userId)
               .update({'coins': FieldValue.increment(-amount)});
