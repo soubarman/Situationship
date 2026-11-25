@@ -8,6 +8,18 @@
 -keep class io.flutter.**  { *; }
 -keep class io.flutter.plugins.**  { *; }
 
+# Flutter Deferred Components / Play Core (when play-core library is not included)
+-dontwarn com.google.android.play.core.**
+-dontwarn com.google.android.play.core.splitcompat.**
+-dontwarn com.google.android.play.core.splitinstall.**
+-dontwarn com.google.android.play.core.tasks.**
+
+# Situationship Native LLM JNI Bridge
+-keep class com.example.situationship.CupidNativeLlm { *; }
+-keep class com.example.situationship.CupidNativeLlm$Companion { *; }
+-keep class com.example.situationship.CupidNativeLlm$TokenCallback { *; }
+-keep class com.example.situationship.MainActivity { *; }
+
 # Keep native methods and JNI bindings
 -keepclasseswithmembernames class * {
     native <methods>;
