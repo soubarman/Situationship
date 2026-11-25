@@ -3,26 +3,39 @@ import 'package:situationship/core/models/user_model.dart';
 import 'conversational_intent.dart';
 import 'conversation_context_manager.dart';
 import 'vibe_matrix_matcher.dart';
+import 'structured_conversation_state.dart';
 
-/// Pure on-device dynamic conversational response generator.
+/// Pure on-device context-aware conversational response generator.
 /// Synthesizes contextual, emotionally intelligent dialogue without rigid templates or cloud LLM calls.
 class ConversationalDialogueEngine {
   static final math.Random _rng = math.Random();
 
-  /// Generates a natural conversational response tailored to intent and context
+  /// Generates a natural conversational response tailored to intent, interpretation, and dialogue context
   static String generateResponse({
     required IntentClassificationResult classification,
     required ConversationContextManager contextManager,
     required UserModel currentUser,
     List<CupidMatchResult> matches = const [],
     int totalCandidatesAvailable = 0,
+    ConversationInterpretation? interpretation,
   }) {
+    // 1. If explicit interpretation is provided, drive response through Dialogue Policy
+    if (interpretation != null) {
+      return _generateContextualResponse(
+        interpretation: interpretation,
+        contextManager: contextManager,
+        currentUser: currentUser,
+        matches: matches,
+      );
+    }
+
+    // 2. Fallback to classification-based routing
     switch (classification.intent) {
       case ConversationalIntent.casualChat:
         return _handleCasualChat(classification, contextManager);
 
       case ConversationalIntent.emotionalSupport:
-        return _handleEmotionalSupport(classification);
+        return _handleEmotionalSupport(classification, contextManager);
 
       case ConversationalIntent.datingAdvice:
         return _handleDatingAdvice(classification);
@@ -40,6 +53,7 @@ class ConversationalDialogueEngine {
         return _handleClarification(classification);
 
       case ConversationalIntent.conversationReset:
+        contextManager.reset();
         return "I've reset our conversation context! Tell me fresh: what kind of person or vibe are you in the mood to discover?";
 
       case ConversationalIntent.unsupported:
@@ -57,203 +71,376 @@ class ConversationalDialogueEngine {
     }
   }
 
-  // ── 1. Casual Chat & Banter ────────────────────────────────────────────────
-  static String _handleCasualChat(IntentClassificationResult res, ConversationContextManager contextManager) {
-    final q = res.originalQuery.toLowerCase().trim();
+  // ── Contextual Dialogue Policy Dispatcher ───────────────────────────────────
 
-    if (q.contains('joke') || res.subCategory == 'joke') {
-      final jokes = [
-        'Why do dating apps make terrible chefs? Because they always end up burning the toast while waiting for the perfect match.',
-        'Are you a wifi signal? Because I\'m feeling a connection, but my signal drops every time I try to talk to people at parties.',
-        'My dating life is like a software release: full of unexpected bugs, constantly in beta, and waiting for an upgrade.',
-      ];
-      return jokes[_rng.nextInt(jokes.length)];
+  static String _generateContextualResponse({
+    required ConversationInterpretation interpretation,
+    required ConversationContextManager contextManager,
+    required UserModel currentUser,
+    required List<CupidMatchResult> matches,
+  }) {
+    // A. Explicit Action: Profile Discovery / Search
+    if (interpretation.isExplicitDiscoveryRequest) {
+      return _handleProfileDiscovery(
+        contextManager: contextManager,
+        matches: matches,
+      );
     }
 
-    if (q.contains('who are you') || q.contains('what are you')) {
-      return "I'm Cupid Concierge — Situationship's on-device wingman. I help you find real people with compatible energy, brainstorm icebreakers, or talk through dating ideas without the generic swiping fatigue.";
+    // B. Rejection of Recommended Profile
+    if (interpretation.speechAct == SpeechAct.rejectingProfile) {
+      return "Got it! I've noted that and won't show them again. Would you like to explore a different vibe, or adjust what you're looking for?";
+    }
+
+    // C. Preference Correction
+    if (interpretation.isCorrection) {
+      final summary = interpretation.extractedPreferences.map((p) => p.value).join(' and ');
+      contextManager.setAssistantQuestion(
+        "Want me to find people who align with your updated vibe?",
+        ExpectedAnswerType.confirmation,
+        topic: ConversationTopic.dating,
+      );
+      return "Got it, adjusted that! So you prefer someone $summary. Makes total sense. Would you like me to look for members nearby with that energy?";
+    }
+
+    // D. Topic Change Request
+    if (interpretation.isTopicChange) {
+      return _handleTopicChange(interpretation.topic, contextManager);
+    }
+
+    // E. Emotional Support
+    if (interpretation.speechAct == SpeechAct.expressingEmotion || interpretation.topic == ConversationTopic.emotionalSupport) {
+      return _handleEmotionalContext(interpretation.emotionalTone, contextManager);
+    }
+
+    // F. Answering Outstanding Assistant Question
+    if (interpretation.isAnswerToLastQuestion) {
+      return _handleAnswerToQuestion(interpretation, contextManager);
+    }
+
+    // G. Stating a Dating Preference (Without Asking to Search)
+    if (interpretation.extractedPreferences.isNotEmpty) {
+      return _handleStatedPreference(interpretation, contextManager);
+    }
+
+    // H. Ambiguous / Short Input Requiring Clarification
+    if (interpretation.needsClarification) {
+      return interpretation.clarificationPrompt ??
+          "I'm listening! Tell me a bit more about what kind of energy or connection you have in mind.";
+    }
+
+    // I. Casual Banter / Open Discourse
+    return _handleCasualDiscourse(interpretation, contextManager);
+  }
+
+  // ── Dialogue Handlers ───────────────────────────────────────────────────────
+
+  static String _handleAnswerToQuestion(
+    ConversationInterpretation interpretation,
+    ConversationContextManager contextManager,
+  ) {
+    final expected = contextManager.expectedAnswerType;
+    final q = interpretation.originalUtterance.toLowerCase();
+
+    if (expected == ExpectedAnswerType.humourStyle ||
+        expected == ExpectedAnswerType.partnerTrait ||
+        interpretation.topic == ConversationTopic.humour) {
+      if (q.contains('sarcas')) {
+        contextManager.setAssistantQuestion(
+          "What else stands out to you when you connect with someone?",
+          ExpectedAnswerType.partnerTrait,
+          topic: ConversationTopic.humour,
+        );
+        return "Dry wit and sharp comebacks—love that. It's rare to find someone who can banter back and forth like that. What else stands out to you when you meet someone new?";
+      }
+
+      if (q.contains('silly') || q.contains('joke')) {
+        contextManager.setAssistantQuestion(
+          "Would you like me to find members nearby who share that exact wavelength?",
+          ExpectedAnswerType.confirmation,
+          topic: ConversationTopic.dating,
+        );
+        return "So witty with a goofy side. You get the best of both worlds! Would you like me to find members nearby who share that exact wavelength?";
+      }
+
+      if (q.contains('funny') || q.contains('laugh')) {
+        contextManager.setAssistantQuestion(
+          "Are you more into witty sarcasm, silly humour, or playful teasing?",
+          ExpectedAnswerType.humourStyle,
+          topic: ConversationTopic.humour,
+        );
+        return "Someone who can make you laugh is such a good foundation. Are you more into witty sarcasm, silly humour, or playful teasing?";
+      }
+    }
+
+    if (expected == ExpectedAnswerType.hobbyOrPassion) {
+      if (q.contains('photo')) {
+        contextManager.setAssistantQuestion(
+          "Are you more into analog 35mm film, street photography, or capturing landscapes?",
+          ExpectedAnswerType.none,
+          topic: ConversationTopic.photography,
+        );
+        return "Photography is such a great creative outlet! Are you more into analog 35mm film, street photography, or capturing landscapes?";
+      }
+    }
+
+    if (expected == ExpectedAnswerType.confirmation) {
+      if (interpretation.isExplicitDiscoveryRequest) {
+        return "Searching for members who match that energy now...";
+      } else {
+        return "No problem at all! We can just chat or take things at your own pace. Tell me whatever is on your mind.";
+      }
+    }
+
+    // General answer acknowledgment
+    final prefValues = interpretation.extractedPreferences.map((p) => p.value).join(' & ');
+    if (prefValues.isNotEmpty) {
+      contextManager.setAssistantQuestion(
+        "Want me to find people who match that?",
+        ExpectedAnswerType.confirmation,
+        topic: ConversationTopic.dating,
+      );
+      return "That sounds like a wonderful quality. Having shared passions for $prefValues makes connecting so much easier. Would you like me to look for members with that vibe?";
+    }
+
+    return "I hear you! What other qualities do you value most in someone?";
+  }
+
+  static String _handleStatedPreference(
+    ConversationInterpretation interpretation,
+    ConversationContextManager contextManager,
+  ) {
+    final q = interpretation.originalUtterance.toLowerCase();
+
+    // Check if user is saying "I want someone interesting..."
+    if (q.contains('interesting')) {
+      contextManager.setAssistantQuestion(
+        "What does 'interesting' look like for you?",
+        ExpectedAnswerType.partnerTrait,
+        topic: ConversationTopic.dating,
+      );
+      return "'Interesting' can mean so many different things—creative artists, spontaneous travelers, or deep thinkers. What does 'interesting' look like for you?";
+    }
+
+    final hasTravel = q.contains('travel') || q.contains('travelling');
+    final hasPhoto = q.contains('photo') || q.contains('camera');
+
+    if (hasTravel && hasPhoto) {
+      contextManager.setAssistantQuestion(
+        "Want me to search for members nearby who love traveling and photography?",
+        ExpectedAnswerType.confirmation,
+        topic: ConversationTopic.dating,
+      );
+      return "Travel and photography go hand-in-hand—exploring new places and capturing the memories. Would you like me to find someone like that for you?";
+    }
+
+    if (hasTravel) {
+      contextManager.setAssistantQuestion(
+        "Do you picture spontaneous weekend getaways or big international trips?",
+        ExpectedAnswerType.none,
+        topic: ConversationTopic.travel,
+      );
+      return "An explorer at heart! Travelling tells you so much about how someone handles adventure. Do you picture spontaneous weekend getaways or big international trips?";
+    }
+
+    if (hasPhoto) {
+      contextManager.setAssistantQuestion(
+        "Want me to find people who share that passion?",
+        ExpectedAnswerType.confirmation,
+        topic: ConversationTopic.photography,
+      );
+      return "Photography is such a visual, observant passion. It says a lot about how someone sees the world. Would you like me to search for someone like that?";
+    }
+
+    final summary = interpretation.extractedPreferences.map((p) => p.value).join(' & ');
+    contextManager.setAssistantQuestion(
+      "Want me to find members who match that?",
+      ExpectedAnswerType.confirmation,
+      topic: ConversationTopic.dating,
+    );
+    return "Noted! Someone into $summary. What other vibes or qualities make you feel truly connected?";
+  }
+
+  static String _handleTopicChange(ConversationTopic newTopic, ConversationContextManager contextManager) {
+    contextManager.structuredState.currentTopic = newTopic;
+
+    switch (newTopic) {
+      case ConversationTopic.music:
+        contextManager.setAssistantQuestion(
+          "What artists or albums have you had on repeat lately?",
+          ExpectedAnswerType.musicGenre,
+          topic: ConversationTopic.music,
+        );
+        return "Let's dive into music! What artists or albums have you had on repeat lately?";
+
+      case ConversationTopic.travel:
+        contextManager.setAssistantQuestion(
+          "What's the best trip you've ever taken?",
+          ExpectedAnswerType.none,
+          topic: ConversationTopic.travel,
+        );
+        return "I love talking about travel. What's the most memorable place you've ever visited?";
+
+      case ConversationTopic.photography:
+        contextManager.setAssistantQuestion(
+          "Do you shoot film or digital?",
+          ExpectedAnswerType.none,
+          topic: ConversationTopic.photography,
+        );
+        return "Let's talk photography! Do you shoot analog 35mm film or digital?";
+
+      default:
+        return "Sure thing, let's switch gears! What's on your mind today?";
+    }
+  }
+
+  static String _handleEmotionalContext(String? tone, ConversationContextManager contextManager) {
+    contextManager.structuredState.currentTopic = ConversationTopic.emotionalSupport;
+
+    switch (tone) {
+      case 'boredom':
+        contextManager.setAssistantQuestion(
+          "What kind of conversations usually pull you out of a rut?",
+          ExpectedAnswerType.humourStyle,
+          topic: ConversationTopic.humour,
+        );
+        return "Boredom is usually just your mind asking for something that sparks curiosity. What kind of conversations usually pull you out of a rut? Deep banter, music debates, or funny jokes?";
+
+      case 'loneliness':
+        return "Feeling lonely is heavy, and it's completely okay to sit with that feeling. You don't need a crowd of people—just one or two authentic connections who really understand you. We'll take it one gentle step at a time.";
+
+      case 'ghosting':
+        return "Ghosting genuinely stings, and it's completely valid to feel frustrated by it. But remember: someone disappearing abruptly reflects their communication shortcomings, not your worth. You deserve effort that's mutual.";
+
+      default:
+        return "I hear you. Dating and social connections can feel exhausting at times. Whatever you're feeling right now is completely valid. If you want to talk it through, I'm here.";
+    }
+  }
+
+  static String _handleProfileDiscovery({
+    required ConversationContextManager contextManager,
+    required List<CupidMatchResult> matches,
+  }) {
+    if (matches.isEmpty) {
+      final summary = contextManager.criteria.naturalSummary();
+      return "I searched our community for members matching $summary, but didn't find an exact match nearby right now. Would you like me to widen our distance range or explore another passion you love?";
+    }
+
+    if (matches.length == 1) {
+      final m = matches.first;
+      final traits = m.highlightTraits.take(2).join(' and ');
+      return "I found a standout connection! ${m.candidate.name} (${m.candidate.age}) aligns with your shared passions for ${traits.isNotEmpty ? traits : 'compatible energy'}. Take a look at who stands out to you:";
+    }
+
+    final names = matches.map((m) => '${m.candidate.name} (${m.candidate.age})').join(' and ');
+    final shared = matches.first.highlightTraits.take(2).join(' & ');
+    return "Found standout members who match your wavelength! Here are $names, connected by ${shared.isNotEmpty ? shared : 'mutual chemistry'}. Take a look at who catches your eye:";
+  }
+
+  static String _handleCasualDiscourse(
+    ConversationInterpretation interpretation,
+    ConversationContextManager contextManager,
+  ) {
+    final q = interpretation.originalUtterance.toLowerCase().trim();
+
+    if (q.contains('interesting')) {
+      contextManager.setAssistantQuestion(
+        "What does 'interesting' look like for you?",
+        ExpectedAnswerType.partnerTrait,
+        topic: ConversationTopic.dating,
+      );
+      return "'Interesting' can mean so many different things—creative artists, spontaneous travelers, or deep thinkers. What does 'interesting' look like for you?";
     }
 
     if (q.contains('how are you') || q.contains('how r u')) {
-      final replies = [
-        "I'm feeling energized! More importantly, how is your day treating you? Ready to meet someone interesting, or just unwinding?",
-        "Doing great! Tuning into the community's wavelengths. What kind of energy are you looking to bring into your circle today?",
-      ];
-      return replies[_rng.nextInt(replies.length)];
+      return "I'm doing well, thank you! More importantly, how is your day going? Ready to explore new connections, or just relaxing?";
     }
 
-    if (q.contains('thank') || q.contains('thx')) {
-      return 'Anytime! I\'ve got your back. Let me know whenever you want to explore more vibes or chat.';
+    if (q.contains('who are you') || q.contains('what are you')) {
+      return "I'm Cupid Concierge — your on-device wingman for Situationship. I'm here to chat, brainstorm ideas, and help you find people who match your energy.";
     }
 
-    // Mid-conversation follow-up awareness
     if (contextManager.turnHistory.isNotEmpty) {
-      final ongoingReplies = [
-        'I\'m listening! Tell me what kind of person or energy would make your day a little brighter.',
-        'I hear you. What\'s a quality or passion you\'d really love to see in someone right now?',
-        'Sounds like a plan. Tell me what kind of person you\'d enjoy having a great conversation with!',
-      ];
-      return ongoingReplies[_rng.nextInt(ongoingReplies.length)];
+      return "I'm listening! Tell me what kind of person or energy would make your day a little brighter.";
     }
 
-    // Default warm greeting / casual check-in
-    final greetings = [
-      'Hey! Good to see you. Tell me what\'s on your mind — looking to discover someone new today, or need some thoughts on dating?',
-      'Hey there! What kind of vibe are you drawn to lately? Quiet bookish souls, spontaneous road trippers, or someone into great music?',
-    ];
-    return greetings[_rng.nextInt(greetings.length)];
+    contextManager.setAssistantQuestion(
+      "Looking to discover someone new today, or need some thoughts on dating?",
+      ExpectedAnswerType.datingGoal,
+      topic: ConversationTopic.general,
+    );
+    return "Hey! Good to see you. Tell me what's on your mind — looking to discover someone new today, or need some thoughts on dating?";
   }
 
-  // ── 2. Emotional Support & Empathy ─────────────────────────────────────────
-  static String _handleEmotionalSupport(IntentClassificationResult res) {
-    switch (res.subCategory) {
-      case 'boredom':
-        return 'Boredom is often just an invitation to find something that sparks your curiosity. What kind of conversations usually pull you out of a rut? Deep philosophy, music debates, or funny banter?';
+  // ── Legacy Compatibility Handlers ──────────────────────────────────────────
 
-      case 'ghosting':
-        return "Ghosting genuinely stings, and it's completely valid to feel frustrated by it. But remember: someone disappearing abruptly reflects their inability to communicate honestly, not your worth. You deserve connections where effort is mutual.";
-
-      case 'loneliness':
-        return "Feeling lonely is a heavy feeling, and it happens to almost everyone at some point. It's okay to feel that way. You don't need a hundred friends or matches—just one or two authentic people who truly get you. Take it one gentle step at a time.";
-
-      case 'dating_anxiety':
-        return "Nerves before meeting someone or sending a first message are totally normal. Remember, you don't have to perform or be flawless. The best connections happen when you show up as your real, slightly quirky self.";
-
-      case 'dating_fatigue':
-        return "Dating app burnout is real when swiping feels like a checklist. Give yourself permission to pause and take a breather. High-quality connections happen when you're genuinely curious, not when you're forcing it.";
-
-      default:
-        return 'I hear you. Dating and social connections can be messy and overwhelming at times. Whatever you\'re feeling right now is completely valid. If you want to talk it through or take a different angle, I\'m here.';
-    }
+  static String _handleCasualChat(IntentClassificationResult res, ConversationContextManager contextManager) {
+    return _handleCasualDiscourse(
+      ConversationInterpretation(
+        originalUtterance: res.originalQuery,
+        speechAct: SpeechAct.casualBanter,
+        topic: ConversationTopic.general,
+      ),
+      contextManager,
+    );
   }
 
-  // ── 3. Dating Advice & Social Guidance ─────────────────────────────────────
+  static String _handleEmotionalSupport(IntentClassificationResult res, ConversationContextManager contextManager) {
+    return _handleEmotionalContext(res.subCategory.isNotEmpty ? res.subCategory : 'general', contextManager);
+  }
+
   static String _handleDatingAdvice(IntentClassificationResult res) {
     switch (res.subCategory) {
       case 'first_date':
         return 'For a first date, low-pressure environments are best: an independent coffee shop with a short park stroll, an interesting dessert bar, or an interactive activity like an arcade or vintage flea market. Skip stiff 3-course dinners—they feel too much like a job interview.';
-
       case 'icebreaker':
         return 'The secret to a great opener is finding one specific detail in their bio or photos and asking an open question about it. Skip "Hey" or "How are you"—instead try: "I saw you\'re into indie rock—what\'s the one album you\'d never skip a track on?" It gives them something fun and easy to answer.';
-
       case 'flags':
         return 'A major green flag is consistent communication and someone who asks thoughtful follow-ups about your interests. A red flag is someone who runs hot and cold, cancels repeatedly without rescheduling, or only reaches out late at night when it\'s convenient for them.';
-
-      case 'profile_advice':
-        return 'Great profiles tell a visual story: 1) A clear, smiling headshot as photo #1 with good lighting, 2) A photo engaged in a hobby you love, 3) A candid full-body picture. In your bio, write what you\'re genuinely passionate about rather than listing generic clichés.';
-
       default:
-        return 'The best dating advice is usually simple: communicate your intentions clearly, pay attention to whether their actions match their words, and don\'t try to impress people you\'re not even sure you like yet.';
+        return 'Authenticity beats perfection every time. The most attractive thing you can bring to dating is curiosity about the other person and confidence in your own passions.';
     }
   }
 
-  // ── 4. Situationship App Features & FAQ ───────────────────────────────────
   static String _handleAppFeatures(IntentClassificationResult res) {
     switch (res.subCategory) {
       case 'coins':
-        return 'Coins are Situationship\'s internal economy. You can use them to unlock public phone numbers on verified profiles, send Super Likes to stand out in someone\'s queue, or activate Spotlight to boost your profile visibility.';
-
+        return 'Coins unlock premium perks on Situationship, like Super Likes, Rewinds, and Spotlight boosts. You can earn free coins through daily logins and genuine interactions, or top up in your Wallet.';
       case 'confession':
-        return 'Anonymous Confession lets you leave a secret, locked note on someone\'s profile. They will receive your message with your identity masked. Once you start chatting, you have the choice to request or reveal identities whenever you feel comfortable.';
-
+        return 'Anonymous Confessions allow you to post unfiltered thoughts or crush notes in your community. Members can interact with your confession without seeing your profile unless you choose to reveal yourself.';
       case 'spotlight':
-        return 'Spotlight is our local visibility booster. When activated, your profile is prioritized at the very top of the Discovery radar for everyone nearby in your city for the duration of the boost.';
-
+        return 'Spotlight is your local visibility booster. When activated, your profile is prioritized at the very top of the Discovery radar for everyone nearby in your city.';
       case 'verification':
-        return 'The Verified S-Badge confirms that a member is 100% authentic and matches their photos. You can complete verification in your profile by recording a quick private gesture challenge. It gives other members confidence that you\'re real.';
-
+        return 'The Verified S-Badge confirms that a member is 100% authentic and matches their photos. You can complete verification in your profile by recording a quick gesture challenge.';
       default:
-        return 'Situationship is designed to create real chemistry without traditional dating app friction. We feature pure on-device matching, video/photo verification, anonymous confessions, and privacy-first connections.';
+        return 'Situationship is designed for genuine chemistry without traditional dating app friction. We feature pure on-device matching, video/photo verification, anonymous confessions, and privacy-first connections.';
     }
   }
 
-  // ── 5. Inquiring About a Specific Profile ──────────────────────────────────
-  static String _handleProfileInquiry(
-    IntentClassificationResult res,
-    ConversationContextManager contextManager,
-  ) {
+  static String _handleProfileInquiry(IntentClassificationResult res, ConversationContextManager contextManager) {
     final targetMatch = contextManager.resolveProfileReference(res.entities);
-
-    if (targetMatch == null) {
-      if (contextManager.lastRecommendedMatches.isNotEmpty) {
-        final names = contextManager.activeProfileNames.join(', ');
-        return 'Which profile were you curious about? From our recent recommendations, I have $names on your radar.';
-      }
-      return 'I don\'t have a specific profile loaded in our conversation right now. Tell me what kind of person you\'re hoping to meet, and I\'ll curate fresh recommendations for you!';
+    if (targetMatch != null) {
+      final c = targetMatch.candidate;
+      return "${c.name} (${c.age}) stood out because of their shared passions. Here is their vibe: '${c.bio ?? 'Genuine energy and great compatibility.'}' Would you like to send them a like?";
+    } else {
+      return "Which profile were you curious about? Tell me their name or which recommendation caught your attention!";
     }
-
-    final c = targetMatch.candidate;
-    final traits = targetMatch.highlightTraits.take(3).join(', ');
-    final bioSnippet = (c.bio != null && c.bio!.trim().isNotEmpty) ? c.bio! : 'They share great natural chemistry with your preferences.';
-
-    return '${c.name} (${c.age}) stood out because of their ${traits.isNotEmpty ? traits : 'vibe'}. Here\'s what they say: "$bioSnippet" They look like a great match if you appreciate genuine ${c.interests.isNotEmpty ? c.interests.first : 'energy'}. Would you like to send them a like, or explore others?';
   }
 
-  // ── 6. Profile Feedback & Exclusion ───────────────────────────────────────
-  static String _handleProfileFeedback(
-    IntentClassificationResult res,
-    ConversationContextManager contextManager,
-  ) {
-    return 'Understood. I\'ve noted that preference and excluded those profiles from your current discovery pool. Tell me what direction you\'d like to steer in instead!';
+  static String _handleProfileFeedback(IntentClassificationResult res, ConversationContextManager contextManager) {
+    return "Got it! I've noted that and won't show them again. Would you like to explore a different vibe, or adjust what you're looking for?";
   }
 
-  // ── 7. Ambiguous or Short Replies ─────────────────────────────────────────
   static String _handleClarification(IntentClassificationResult res) {
-    final options = [
-      'Tell me a little more—what kind of vibe, passions, or qualities catch your attention?',
-      'I\'m listening! Are you in the mood to meet someone creative, someone outdoorsy, or maybe a quiet thinker?',
-      'Take your time! What\'s something you value most in someone you\'d like to spend an evening with?',
-    ];
-    return options[_rng.nextInt(options.length)];
+    return "I'm listening! Tell me a bit more about what kind of energy or connection you have in mind.";
   }
 
-  // ── 8. Profile Discovery & Recommendation Synthesis ───────────────────────
   static String _handleProfileDiscoveryResponse({
     required IntentClassificationResult classification,
     required ConversationContextManager contextManager,
     required List<CupidMatchResult> matches,
     required int totalCandidates,
   }) {
-    if (matches.isEmpty) {
-      if (classification.intent == ConversationalIntent.profileContinuation) {
-        return 'You\'ve explored all the active profiles currently matching those criteria in your community! You can reset our chat to explore a fresh vibe or tell me other passions you enjoy.';
-      }
-      return 'I couldn\'t find any active members matching all those specific criteria right now. Try broadening your preferences or exploring another passion (like indie music, travel, or photography)!';
-    }
-
-    final summary = contextManager.criteria.naturalSummary();
-
-    if (classification.intent == ConversationalIntent.preferenceRefinement) {
-      final intros = [
-        'Updated your criteria to include $summary. Here are the profiles that best match this refined wavelength:',
-        'Refining your search for $summary. Here are your top matches:',
-      ];
-      return intros[_rng.nextInt(intros.length)];
-    }
-
-    if (classification.intent == ConversationalIntent.profileContinuation) {
-      final intros = [
-        'Here are more members active nearby who match your $summary criteria:',
-        'Found more connections sharing your energy:',
-      ];
-      return intros[_rng.nextInt(intros.length)];
-    }
-
-    // Fresh discovery
-    if (contextManager.criteria.isEmpty) {
-      final generalIntros = [
-        'I curated some vibrant members active in your community right now. Take a look at who catches your eye:',
-        'Here are standout profiles with genuine chemistry to get you started. Tell me who sparks your curiosity:',
-        'Connecting you with energetic members on Situationship right now. Take a look at these top matches:',
-      ];
-      return generalIntros[_rng.nextInt(generalIntros.length)];
-    }
-
-    final intros = [
-      'Here are standout members who match your $summary vibe. Take a look at who stands out to you:',
-      'I curated these members based on your interest in $summary. Here are your top matches:',
-      'Found great mutual chemistry for $summary! Take a look at who catches your eye:',
-    ];
-    return intros[_rng.nextInt(intros.length)];
+    return _handleProfileDiscovery(contextManager: contextManager, matches: matches);
   }
 }

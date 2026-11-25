@@ -1,5 +1,6 @@
 import 'conversational_intent.dart';
 import 'vibe_matrix_matcher.dart';
+import 'structured_conversation_state.dart';
 
 /// Single turn in a multi-turn conversation
 class ConversationTurn {
@@ -8,6 +9,7 @@ class ConversationTurn {
   final String assistantReply;
   final DateTime timestamp;
   final List<String> matchedProfileIds;
+  final ConversationInterpretation? interpretation;
 
   const ConversationTurn({
     required this.userUtterance,
@@ -15,6 +17,7 @@ class ConversationTurn {
     required this.assistantReply,
     required this.timestamp,
     this.matchedProfileIds = const [],
+    this.interpretation,
   });
 }
 
@@ -63,6 +66,28 @@ class AccumulatedSearchCriteria {
     );
   }
 
+  AccumulatedSearchCriteria copyWith({
+    Set<String>? interests,
+    Set<String>? personalityTraits,
+    Set<String>? dealbreakers,
+    String? relationshipIntent,
+    String? genderHint,
+    int? minAge,
+    int? maxAge,
+    bool? prefersNearby,
+  }) {
+    return AccumulatedSearchCriteria(
+      interests: interests ?? this.interests,
+      personalityTraits: personalityTraits ?? this.personalityTraits,
+      dealbreakers: dealbreakers ?? this.dealbreakers,
+      relationshipIntent: relationshipIntent ?? this.relationshipIntent,
+      genderHint: genderHint ?? this.genderHint,
+      minAge: minAge ?? this.minAge,
+      maxAge: maxAge ?? this.maxAge,
+      prefersNearby: prefersNearby ?? this.prefersNearby,
+    );
+  }
+
   String naturalSummary() {
     final parts = <String>[];
     if (genderHint != null) {
@@ -106,6 +131,9 @@ class ConversationContextManager {
   String _activeTopic = 'welcome';
   DateTime _lastInteraction = DateTime.now();
 
+  /// Structured typed state for context-aware interpretation
+  final StructuredConversationState structuredState = StructuredConversationState();
+
   static const Duration _sessionTimeout = Duration(minutes: 45);
 
   AccumulatedSearchCriteria get criteria => _criteria;
@@ -118,9 +146,71 @@ class ConversationContextManager {
   List<String> get activeProfileNames =>
       _lastRecommendedMatches.map((m) => m.candidate.name).toList();
 
+  String? get lastAssistantQuestion => structuredState.lastAssistantQuestion;
+  ExpectedAnswerType get expectedAnswerType => structuredState.expectedAnswerType;
+  List<UserDatingPreference> get structuredPreferences => structuredState.preferences;
+
+  /// Records the question Cupid just asked so next turn can interpret answers contextually
+  void setAssistantQuestion(
+    String question,
+    ExpectedAnswerType expectedType, {
+    ConversationTopic? topic,
+    String? objective,
+  }) {
+    structuredState.lastAssistantQuestion = question;
+    structuredState.expectedAnswerType = expectedType;
+    if (topic != null) structuredState.currentTopic = topic;
+    if (objective != null) structuredState.currentObjective = objective;
+  }
+
   /// Explicitly updates search criteria ahead of response generation
   void updateCriteria(ExtractedEntities entities) {
     _criteria = _criteria.merge(entities);
+  }
+
+  /// Adds a structured preference and syncs to criteria
+  void addStructuredPreference(UserDatingPreference pref) {
+    structuredState.addOrUpdatePreference(pref);
+    _syncCriteriaFromPreferences();
+  }
+
+  /// Corrects an earlier preference
+  void correctStructuredPreference(UserDatingPreference pref, {String? oldCategory}) {
+    if (oldCategory != null) {
+      structuredState.removePreferenceCategory(oldCategory);
+    }
+    structuredState.addOrUpdatePreference(pref);
+    _syncCriteriaFromPreferences();
+  }
+
+  void _syncCriteriaFromPreferences() {
+    final interests = <String>{};
+    final traits = <String>{};
+    final dealbreakers = <String>{};
+    String? genderHint;
+    String? relationshipIntent;
+
+    for (final pref in structuredState.preferences) {
+      if (pref.polarity == PreferencePolarity.negative) {
+        dealbreakers.add(pref.value);
+      } else if (pref.category == 'personality' || pref.category == 'humour') {
+        traits.add(pref.value);
+      } else if (pref.category == 'gender') {
+        genderHint = pref.value;
+      } else if (pref.category == 'intent') {
+        relationshipIntent = pref.value;
+      } else {
+        interests.add(pref.value);
+      }
+    }
+
+    _criteria = AccumulatedSearchCriteria(
+      interests: interests,
+      personalityTraits: traits,
+      dealbreakers: dealbreakers,
+      genderHint: genderHint,
+      relationshipIntent: relationshipIntent,
+    );
   }
 
   /// Updates conversational memory with a new turn
@@ -129,6 +219,7 @@ class ConversationContextManager {
     required IntentClassificationResult classification,
     required String assistantReply,
     List<CupidMatchResult> newMatches = const [],
+    ConversationInterpretation? interpretation,
   }) {
     _checkExpiration();
     _lastInteraction = DateTime.now();
@@ -152,6 +243,7 @@ class ConversationContextManager {
     // 2. Track newly recommended matches
     if (newMatches.isNotEmpty) {
       _lastRecommendedMatches = newMatches;
+      structuredState.lastRecommendedMatches = newMatches;
     }
 
     // 3. Handle exclusion feedback
@@ -160,9 +252,11 @@ class ConversationContextManager {
           classification.entities.referencedProfileIndex! < _lastRecommendedMatches.length) {
         final excludedUser = _lastRecommendedMatches[classification.entities.referencedProfileIndex!].candidate;
         _rejectedProfileIds.add(excludedUser.id);
+        structuredState.rejectedProfileIds.add(excludedUser.id);
       } else {
         for (final m in _lastRecommendedMatches) {
           _rejectedProfileIds.add(m.candidate.id);
+          structuredState.rejectedProfileIds.add(m.candidate.id);
         }
       }
     }
@@ -174,6 +268,7 @@ class ConversationContextManager {
       assistantReply: assistantReply,
       timestamp: DateTime.now(),
       matchedProfileIds: newMatches.map((m) => m.candidate.id).toList(),
+      interpretation: interpretation,
     ));
 
     if (_turnHistory.length > 10) {
@@ -206,6 +301,7 @@ class ConversationContextManager {
   /// Explicitly marks a candidate profile as rejected by the user
   void rejectProfile(String profileId) {
     _rejectedProfileIds.add(profileId);
+    structuredState.rejectedProfileIds.add(profileId);
   }
 
   /// Checks if a profile ID was rejected in the current conversation
@@ -224,6 +320,7 @@ class ConversationContextManager {
     _turnHistory.clear();
     _activeTopic = 'welcome';
     _lastInteraction = DateTime.now();
+    structuredState.reset();
   }
 
   void _checkExpiration() {

@@ -6,6 +6,8 @@ import 'package:situationship/core/ai/conversation_context_manager.dart';
 import 'package:situationship/core/ai/on_device_nlu_engine.dart';
 import 'package:situationship/core/ai/conversational_intent.dart';
 import 'package:situationship/core/ai/conversational_dialogue_engine.dart';
+import 'package:situationship/core/ai/structured_conversation_state.dart';
+import 'package:situationship/core/ai/context_aware_speech_act_interpreter.dart';
 import 'package:situationship/core/ai/local_llm/model_spec.dart';
 import 'package:situationship/core/ai/local_llm/llm_runtime_adapter.dart';
 import 'package:situationship/core/ai/local_llm/cupid_tools.dart';
@@ -103,6 +105,23 @@ class CupidLocalAIOrchestrator {
     final toolCall = CupidTools.parseToolCall(sanitizedOutput);
 
     if (toolCall != null) {
+      // Strict Decision Gate for Tool Calling:
+      // Verify discoverProfiles is ONLY permitted if user explicitly requested discovery
+      final interpretation = ContextAwareSpeechActInterpreter.interpret(
+        query,
+        contextManager: contextManager,
+      );
+
+      if (toolCall.type == CupidToolType.discoverProfiles && !interpretation.isExplicitDiscoveryRequest) {
+        debugPrint('[DecisionGate] Premature discover_profiles tool call blocked; user did not request search.');
+        return _runSemanticFallback(
+          userUtterance: query,
+          currentUser: currentUser,
+          candidatePool: candidatePool,
+          excludedUserIds: excludedUserIds,
+        );
+      }
+
       return _executeTool(
         toolCall: toolCall,
         currentUser: currentUser,
@@ -382,62 +401,107 @@ class CupidLocalAIOrchestrator {
     return 'Refined your search to include $summary. Here are $names who best align with your updated vibe:';
   }
 
-  /// Instant local deterministic fallback when model is downloading or on constrained hardware
+  /// Instant local deterministic conversational engine driven by Context-Aware Interpretation
   CupidTurnResult _runSemanticFallback({
     required String userUtterance,
     required UserModel currentUser,
     required List<UserModel> candidatePool,
     required Set<String> excludedUserIds,
   }) {
-    final intent = OnDeviceNLUEngine.parse(
+    // 1. Run contextual interpretation considering surrounding turns and questions
+    final interpretation = ContextAwareSpeechActInterpreter.interpret(
       userUtterance,
-      hasActiveProfileContext: contextManager.hasActiveProfileContext,
-      activeProfileNames: contextManager.activeProfileNames,
+      contextManager: contextManager,
     );
 
-    final needsProfiles = intent.conversationalIntent == ConversationalIntent.profileDiscovery ||
-        intent.conversationalIntent == ConversationalIntent.preferenceRefinement;
+    // 2. Process preferences, corrections, and profile rejections
+    if (interpretation.isCorrection) {
+      for (final pref in interpretation.extractedPreferences) {
+        contextManager.correctStructuredPreference(pref);
+      }
+    } else {
+      for (final pref in interpretation.extractedPreferences) {
+        if (pref.scope == PreferenceScope.datingRequirement) {
+          contextManager.addStructuredPreference(pref);
+        }
+      }
+    }
 
+    if (interpretation.speechAct == SpeechAct.rejectingProfile) {
+      for (final m in contextManager.lastRecommendedMatches) {
+        contextManager.rejectProfile(m.candidate.id);
+      }
+    }
+
+    // 3. Strict Action Decision Gate: ONLY search when explicit discovery is requested
     List<CupidMatchResult> matches = const [];
-    if (needsProfiles) {
+    if (interpretation.isExplicitDiscoveryRequest) {
+      for (final pref in interpretation.extractedPreferences) {
+        contextManager.addStructuredPreference(pref);
+      }
       final effectiveExcluded = {...excludedUserIds, ...contextManager.rejectedProfileIds};
       matches = matcher.findMatches(
         currentUser: currentUser,
         candidates: candidatePool,
-        intent: intent,
+        intent: NLUIntentResult(
+          originalQuery: userUtterance,
+          denseVector: {for (final i in contextManager.criteria.interests) i: 1.0},
+          detectedDimensionIds: contextManager.criteria.interests.toList(),
+          dealbreakers: contextManager.criteria.dealbreakers.toList(),
+          targetRelationshipIntent: contextManager.criteria.relationshipIntent,
+          genderHint: contextManager.criteria.genderHint,
+          extractedKeywords: contextManager.criteria.interests.toList(),
+          naturalSummary: contextManager.criteria.naturalSummary(),
+          conversationalIntent: ConversationalIntent.profileDiscovery,
+        ),
         excludedIds: effectiveExcluded,
         limit: 3,
       );
-      if (intent.classification?.entities != null) {
-        contextManager.updateCriteria(intent.classification!.entities);
-      }
     }
 
+    // 4. Generate response via Dialogue Policy
     final reply = ConversationalDialogueEngine.generateResponse(
-      classification: intent.classification ??
-          IntentClassificationResult(
-            intent: intent.conversationalIntent,
-            confidence: 0.9,
-            entities: const ExtractedEntities(),
-            originalQuery: userUtterance,
-          ),
+      classification: IntentClassificationResult(
+        intent: interpretation.isExplicitDiscoveryRequest
+            ? ConversationalIntent.profileDiscovery
+            : (interpretation.speechAct == SpeechAct.expressingEmotion
+                ? ConversationalIntent.emotionalSupport
+                : (interpretation.speechAct == SpeechAct.askingQuestion
+                    ? ConversationalIntent.datingAdvice
+                    : ConversationalIntent.casualChat)),
+        confidence: interpretation.confidence,
+        entities: ExtractedEntities(
+          interests: contextManager.criteria.interests.toList(),
+          personalityTraits: contextManager.criteria.personalityTraits.toList(),
+          dealbreakers: contextManager.criteria.dealbreakers.toList(),
+          genderHint: contextManager.criteria.genderHint,
+          relationshipIntent: contextManager.criteria.relationshipIntent,
+        ),
+        originalQuery: userUtterance,
+      ),
       contextManager: contextManager,
       currentUser: currentUser,
       matches: matches,
       totalCandidatesAvailable: matches.length,
+      interpretation: interpretation,
     );
 
+    // 5. Record turn
     contextManager.recordTurn(
       userUtterance: userUtterance,
-      classification: intent.classification ??
-          IntentClassificationResult(
-            intent: intent.conversationalIntent,
-            confidence: 0.9,
-            entities: const ExtractedEntities(),
-            originalQuery: userUtterance,
-          ),
+      classification: IntentClassificationResult(
+        intent: interpretation.isExplicitDiscoveryRequest
+            ? ConversationalIntent.profileDiscovery
+            : (interpretation.speechAct == SpeechAct.rejectingProfile
+                ? ConversationalIntent.profileFeedback
+                : ConversationalIntent.casualChat),
+        confidence: interpretation.confidence,
+        entities: const ExtractedEntities(),
+        originalQuery: userUtterance,
+      ),
       assistantReply: reply,
       newMatches: matches,
+      interpretation: interpretation,
     );
 
     return CupidTurnResult(
