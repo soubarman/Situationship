@@ -63,10 +63,26 @@ jobs:
           flutter test test/intelligent_conversational_ai_test.dart
           flutter test test/on_device_ai_matcher_test.dart
           flutter test test/matching_algorithm_test.dart
+          flutter test test/multi_turn_conversational_simulation_test.dart
+          flutter test test/adversarial_conversational_evaluation_test.dart
 
       - name: Configure Android Build Keystore
+        env:
+          KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: |
-          if [ ! -f android/key.properties ] && [ -z "$ANDROID_KEYSTORE_PATH" ]; then
+          if [ -n "$KEYSTORE_BASE64" ]; then
+            echo "Configuring production signing keystore from GitHub Secrets..."
+            echo "$KEYSTORE_BASE64" | base64 --decode > android/app/upload-keystore.jks
+            cat <<EOF > android/key.properties
+          storePassword=$KEYSTORE_PASSWORD
+          keyPassword=$KEY_PASSWORD
+          keyAlias=$KEY_ALIAS
+          storeFile=upload-keystore.jks
+          EOF
+          elif [ ! -f android/key.properties ] && [ -z "$ANDROID_KEYSTORE_PATH" ]; then
             echo "Generating CI debug keystore for release artifact packaging..."
             keytool -genkey -v -keystore android/app/ci-release.keystore -alias androidkey -keyalg RSA -keysize 2048 -validity 10000 -storepass situationshipci -keypass situationshipci -dname "CN=Situationship CI, OU=Engineering, O=Situationship, L=City, S=State, C=US"
             cat <<EOF > android/key.properties

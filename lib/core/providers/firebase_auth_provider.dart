@@ -174,7 +174,15 @@ class AuthController extends StateNotifier<AsyncValue<User?>> {
       state = AsyncValue.data(user);
     } catch (e) {
       debugPrint('[AuthController] signUpWithEmail error: $e');
-      state = AsyncValue.data(_auth.currentUser);
+      // Ensure signup failures do not leave incomplete authenticated accounts without Firestore documents
+      if (_auth.currentUser != null) {
+        try {
+          await _auth.currentUser!.delete();
+        } catch (_) {
+          await _auth.signOut();
+        }
+      }
+      state = const AsyncValue.data(null);
       if (e is FirebaseAuthException) {
         throw _mapFirebaseError(e);
       }

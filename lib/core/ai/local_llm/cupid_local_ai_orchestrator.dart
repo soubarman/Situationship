@@ -439,6 +439,37 @@ class CupidLocalAIOrchestrator {
       for (final pref in interpretation.extractedPreferences) {
         contextManager.addStructuredPreference(pref);
       }
+
+      final hasSufficientCriteria = !contextManager.criteria.isEmpty || interpretation.extractedPreferences.isNotEmpty;
+      if (!hasSufficientCriteria) {
+        // Implied/indirect discovery request without prior criteria: prompt for partner vibe first
+        contextManager.setAssistantQuestion(
+          "What kind of vibe or energy do you usually connect with best?",
+          ExpectedAnswerType.partnerTrait,
+          topic: ConversationTopic.dating,
+        );
+        final askReply = "I'd love to introduce you to someone great! Before I search, tell me what kind of person, vibe, or shared passions you're looking for.";
+        contextManager.recordTurn(
+          userUtterance: userUtterance,
+          classification: IntentClassificationResult(
+            intent: ConversationalIntent.profileDiscovery,
+            confidence: 0.95,
+            entities: const ExtractedEntities(),
+            originalQuery: userUtterance,
+          ),
+          assistantReply: askReply,
+          newMatches: const [],
+          interpretation: interpretation,
+        );
+        return CupidTurnResult(
+          text: askReply,
+          matches: const [],
+          executedTool: null,
+          isOfflineReady: true,
+          modelId: 'semantic_fast_engine',
+        );
+      }
+
       final effectiveExcluded = {...excludedUserIds, ...contextManager.rejectedProfileIds};
       matches = matcher.findMatches(
         currentUser: currentUser,

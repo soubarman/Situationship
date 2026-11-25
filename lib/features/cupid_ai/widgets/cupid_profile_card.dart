@@ -77,6 +77,10 @@ class _CupidProfileCardState extends State<CupidProfileCard> {
                         return CachedNetworkImage(
                           imageUrl: photos[idx],
                           fit: BoxFit.cover,
+                          memCacheWidth: 600,
+                          memCacheHeight: 600,
+                          maxWidthDiskCache: 1200,
+                          maxHeightDiskCache: 1200,
                           errorWidget: (_, __, ___) => _buildPlaceholderAvatar(candidate),
                         );
                       },

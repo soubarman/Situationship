@@ -94,6 +94,14 @@ class ConversationalDialogueEngine {
 
     // C. Preference Correction
     if (interpretation.isCorrection) {
+      if (interpretation.extractedPreferences.isEmpty) {
+        contextManager.setAssistantQuestion(
+          "What did you have in mind instead?",
+          ExpectedAnswerType.partnerTrait,
+          topic: ConversationTopic.dating,
+        );
+        return "My mistake! Tell me what you meant—I want to make sure I understand the exact vibe you're looking for.";
+      }
       final summary = interpretation.extractedPreferences.map((p) => p.value).join(' and ');
       contextManager.setAssistantQuestion(
         "Want me to find people who align with your updated vibe?",
@@ -188,7 +196,7 @@ class ConversationalDialogueEngine {
       if (interpretation.isExplicitDiscoveryRequest) {
         return "Searching for members who match that energy now...";
       } else {
-        return "No problem at all! We can just chat or take things at your own pace. Tell me whatever is on your mind.";
+        return "No problem at all! Take all the time you need. We can chat or explore whenever you're ready.";
       }
     }
 
@@ -245,11 +253,11 @@ class ConversationalDialogueEngine {
 
     if (hasPhoto) {
       contextManager.setAssistantQuestion(
-        "Want me to find people who share that passion?",
-        ExpectedAnswerType.confirmation,
+        "Is photography something you enjoy yourself, or something you'd like in a partner?",
+        ExpectedAnswerType.partnerTrait,
         topic: ConversationTopic.photography,
       );
-      return "Photography is such a visual, observant passion. It says a lot about how someone sees the world. Would you like me to search for someone like that?";
+      return "Photography is such a visual, expressive passion! Is that something you enjoy yourself, or something you're specifically hoping to find in a partner?";
     }
 
     final summary = interpretation.extractedPreferences.map((p) => p.value).join(' & ');
@@ -271,7 +279,7 @@ class ConversationalDialogueEngine {
           ExpectedAnswerType.musicGenre,
           topic: ConversationTopic.music,
         );
-        return "Let's dive into music! What artists or albums have you had on repeat lately?";
+        return "I love talking about music! What music do you listen to the most? Any artists or albums you have on repeat?";
 
       case ConversationTopic.travel:
         contextManager.setAssistantQuestion(

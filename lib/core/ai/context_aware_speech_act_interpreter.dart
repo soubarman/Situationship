@@ -179,7 +179,12 @@ class ContextAwareSpeechActInterpreter {
         clean.startsWith('lets talk about') ||
         clean.contains('change topic') ||
         clean.contains('switch topic') ||
-        clean.contains('enough about dating');
+        clean.contains('enough about dating') ||
+        clean.contains('anyway') ||
+        clean.contains('by the way') ||
+        clean.contains('what music do you') ||
+        clean.contains('what songs do you') ||
+        clean.contains('what artists do you');
   }
 
   static ConversationTopic _extractNewTopic(String clean) {
@@ -247,7 +252,9 @@ class ContextAwareSpeechActInterpreter {
     return _matchesAny(clean, [
       'find someone', 'find me', 'show me profiles', 'recommend someone',
       'match me', 'find someone like that', 'can you find someone',
-      'show me people', 'look for someone', 'get me a date', 'who matches that'
+      'show me people', 'look for someone', 'get me a date', 'who matches that',
+      'know anyone', 'introduce me', 'connect me with', 'set me up with',
+      'who would get along with me', 'could introduce me', 'introduce me to somebody'
     ]);
   }
 
@@ -260,10 +267,29 @@ class ContextAwareSpeechActInterpreter {
     switch (expectedType) {
       case ExpectedAnswerType.humourStyle:
       case ExpectedAnswerType.partnerTrait:
-        if (clean.contains('funny') || clean.contains('sarcas') || clean.contains('banter') || clean.contains('joke') || clean.contains('witty') || clean.contains('silly') || clean.contains('laugh')) {
-          String val = 'funny banter';
+        if (clean.contains('dark')) {
+          return ConversationInterpretation(
+            originalUtterance: utterance,
+            speechAct: SpeechAct.answering,
+            topic: ConversationTopic.humour,
+            isAnswerToLastQuestion: true,
+            isExplicitDiscoveryRequest: false,
+            extractedPreferences: [
+              UserDatingPreference(
+                category: 'humour',
+                value: 'dark humour',
+                scope: PreferenceScope.datingRequirement,
+                sourceTurn: sourceTurn,
+              ),
+            ],
+            confidence: 0.95,
+          );
+        }
+        if (clean.contains('funny') || clean.contains('sarcas') || clean.contains('banter') || clean.contains('joke') || clean.contains('witty') || clean.contains('silly') || clean.contains('laugh') || clean.contains('humour') || clean.contains('humor')) {
+          String val = 'good sense of humour';
           if (clean.contains('sarcas')) val = 'sarcasm';
           if (clean.contains('silly')) val = 'silly jokes';
+          if (clean.contains('banter')) val = 'playful banter';
           return ConversationInterpretation(
             originalUtterance: utterance,
             speechAct: SpeechAct.answering,
@@ -329,7 +355,7 @@ class ContextAwareSpeechActInterpreter {
         );
 
       case ExpectedAnswerType.confirmation:
-        if (clean == 'yes' || clean == 'sure' || clean == 'yeah' || clean == 'yep' || clean == 'do it' || clean == 'please') {
+        if (clean == 'yes' || clean == 'sure' || clean == 'yeah' || clean == 'yep' || clean == 'do it' || clean == 'please' || clean.contains('yes please') || clean.contains('show me')) {
           return ConversationInterpretation(
             originalUtterance: utterance,
             speechAct: SpeechAct.requestingAction,
@@ -338,7 +364,14 @@ class ContextAwareSpeechActInterpreter {
             isExplicitDiscoveryRequest: true,
             confidence: 0.95,
           );
-        } else if (clean == 'no' || clean == 'not now' || clean == 'maybe later' || clean == 'nope') {
+        } else if (clean.startsWith('no') ||
+                   clean.contains('not now') ||
+                   clean.contains('maybe later') ||
+                   clean.contains('not right now') ||
+                   clean == 'nope' ||
+                   clean.contains('pass') ||
+                   clean.contains('later') ||
+                   clean.contains('hold on')) {
           return ConversationInterpretation(
             originalUtterance: utterance,
             speechAct: SpeechAct.answering,
@@ -376,7 +409,13 @@ class ContextAwareSpeechActInterpreter {
   static List<UserDatingPreference> _extractPreferences(String clean, int turn) {
     final prefs = <UserDatingPreference>[];
 
-    if (clean.contains('travel') || clean.contains('travelling') || clean.contains('traveler')) {
+    final isTravelNegated = clean.contains('care about travel') ||
+        clean.contains('not into travel') ||
+        clean.contains('not interested in travel') ||
+        clean.contains('hate travel') ||
+        clean.contains('no travel');
+
+    if (!isTravelNegated && (clean.contains('travel') || clean.contains('travelling') || clean.contains('traveler'))) {
       prefs.add(UserDatingPreference(
         category: 'travel',
         value: 'travelling',
@@ -387,6 +426,13 @@ class ContextAwareSpeechActInterpreter {
       prefs.add(UserDatingPreference(
         category: 'photography',
         value: 'photography',
+        sourceTurn: turn,
+      ));
+    }
+    if (clean.contains('creative') || clean.contains('art') || clean.contains('design') || clean.contains('artist')) {
+      prefs.add(UserDatingPreference(
+        category: 'personality',
+        value: 'creative',
         sourceTurn: turn,
       ));
     }
@@ -411,7 +457,13 @@ class ContextAwareSpeechActInterpreter {
         sourceTurn: turn,
       ));
     }
-    if (clean.contains('funny') || clean.contains('humor') || clean.contains('humour') || clean.contains('sarcas') || clean.contains('silly') || clean.contains('joke') || clean.contains('banter') || clean.contains('laugh')) {
+    if (clean.contains('dark humour') || clean.contains('dark humor')) {
+      prefs.add(UserDatingPreference(
+        category: 'humour',
+        value: 'dark humour',
+        sourceTurn: turn,
+      ));
+    } else if (clean.contains('funny') || clean.contains('humor') || clean.contains('humour') || clean.contains('sarcas') || clean.contains('silly') || clean.contains('joke') || clean.contains('banter') || clean.contains('laugh')) {
       prefs.add(UserDatingPreference(
         category: 'humour',
         value: clean.contains('sarcas')
@@ -427,11 +479,18 @@ class ContextAwareSpeechActInterpreter {
         sourceTurn: turn,
       ));
     }
-    if (clean.contains('non smoker') || clean.contains('no smoking')) {
+    if (clean.contains('non smoker') || clean.contains('no smoking') || clean.contains('pakka non-smoker') || clean.contains('pakka non smoker') || clean.contains('strictly non smoker')) {
       prefs.add(UserDatingPreference(
         category: 'dealbreaker',
         value: 'smoking',
         polarity: PreferencePolarity.negative,
+        sourceTurn: turn,
+      ));
+    }
+    if (clean.contains('timepass') || clean.contains('serious vibe') || clean.contains('serious relationship') || clean.contains('not looking for any timepass')) {
+      prefs.add(UserDatingPreference(
+        category: 'intent',
+        value: 'serious',
         sourceTurn: turn,
       ));
     }
