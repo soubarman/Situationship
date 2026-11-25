@@ -1,13 +1,17 @@
-import '../../../core/theme/app_theme.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import '../../../core/models/user_model.dart';
 import '../../../core/providers/app_state_provider.dart';
+import '../../../core/theme/app_theme.dart';
+import '../../../core/theme/design_tokens.dart';
 import '../../../core/utils/location_helper.dart';
 
-class SwipeCard extends ConsumerWidget {
+/// Signature Discovery Profile Card for Situationship.
+/// Features multi-photo touch cycling with segmented story indicators,
+/// cinematic multi-stop scrim, tactile info drawer, and high-fashion editorial typography.
+class SwipeCard extends ConsumerStatefulWidget {
   final UserModel user;
   final bool isBackground;
   final double? deviceLat;
@@ -21,265 +25,606 @@ class SwipeCard extends ConsumerWidget {
     this.deviceLon,
   });
 
-  // Dynamic Theme Gradients & Accent Colors based on user ID
-  static List<List<Color>> _themeGradients = [
-    // Theme 1: Electric Violet
-    [AppTheme.accentPurple, AppTheme.accentPurple, AppTheme.primaryBlue],
-    // Theme 2: Acid Lime to Coral Sunset
-    [Color(0xFFBEF264), Color(0xFFEAB308), Color(0xFFEA580C)],
-    // Theme 3: Neon Magenta Violet
-    [AppTheme.accentPurple, AppTheme.accentPurple, AppTheme.primaryBlue],
-    // Theme 4: Electric Cyan Cobalt
-    [Color(0xFF06B6D4), Color(0xFF2563EB), Color(0xFF1E3A8A)],
-  ];
+  @override
+  ConsumerState<SwipeCard> createState() => _SwipeCardState();
+}
 
-  static const List<Color> _accentColors = [
-    Color(0xFFE0FE10), // Acid Lime/Yellow
-    Color(0xFF0F172A), // Dark Navy
-    Color(0xFFFACC15), // Golden Yellow
-    Color(0xFFE0FE10), // Neon Lime
-  ];
+class _SwipeCardState extends ConsumerState<SwipeCard> {
+  int _currentPhotoIndex = 0;
+
+  List<String> get _photoList {
+    if (widget.user.photos.isNotEmpty) {
+      return widget.user.photos;
+    }
+    if (widget.user.avatarUrl != null && widget.user.avatarUrl!.isNotEmpty) {
+      return [widget.user.avatarUrl!];
+    }
+    return ['https://i.pravatar.cc/800?u=${widget.user.id}'];
+  }
+
+  void _nextPhoto() {
+    if (_photoList.length <= 1) return;
+    HapticFeedback.selectionClick();
+    setState(() {
+      _currentPhotoIndex = (_currentPhotoIndex + 1) % _photoList.length;
+    });
+  }
+
+  void _prevPhoto() {
+    if (_photoList.length <= 1) return;
+    HapticFeedback.selectionClick();
+    setState(() {
+      _currentPhotoIndex = (_currentPhotoIndex - 1 + _photoList.length) % _photoList.length;
+    });
+  }
+
+  void _openDetailsSheet(BuildContext context, int distance) {
+    HapticFeedback.lightImpact();
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => _ProfileDetailsModal(
+        user: widget.user,
+        distanceKm: distance,
+        photos: _photoList,
+      ),
+    );
+  }
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  Widget build(BuildContext context) {
     final currentUser = ref.watch(currentUserProvider);
-    final themeIndex = user.id.hashCode.abs() % _themeGradients.length;
-    final gradientColors = _themeGradients[themeIndex];
-    final accentColor = _accentColors[themeIndex];
-    final isDarkThemeText = themeIndex == 1; // Theme 2 uses dark text for contrast
 
     final distance = LocationHelper.getDistanceKm(
-      lat1: deviceLat,
-      lon1: deviceLon,
+      lat1: widget.deviceLat,
+      lon1: widget.deviceLon,
       loc1: currentUser.location,
-      loc2: user.location,
+      loc2: widget.user.location,
       id1: currentUser.id,
-      id2: user.id,
+      id2: widget.user.id,
     );
 
-    final primaryTextColor = isDarkThemeText ? const Color(0xFF0F172A) : Colors.white;
+    final photos = _photoList;
+    final activePhotoUrl = (_currentPhotoIndex < photos.length)
+        ? photos[_currentPhotoIndex]
+        : photos.first;
 
     return Container(
       decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: gradientColors,
+        color: DesignTokens.obsidianCard,
+        borderRadius: BorderRadius.circular(DesignTokens.radius2xl),
+        border: Border.all(
+          color: Colors.white.withValues(alpha: widget.isBackground ? 0.04 : 0.12),
+          width: 1.0,
         ),
-        borderRadius: BorderRadius.circular(32),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: isBackground ? 0.08 : 0.25),
-            blurRadius: 30,
-            offset: const Offset(0, 16),
-          ),
-        ],
+        boxShadow: widget.isBackground
+            ? [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.25),
+                  blurRadius: 16,
+                  offset: const Offset(0, 6),
+                ),
+              ]
+            : DesignTokens.cardShadow(glowColor: AppTheme.primaryPink),
       ),
       child: ClipRRect(
-        borderRadius: BorderRadius.circular(32),
-        child: LayoutBuilder(
-          builder: (context, constraints) {
-            final cardH = constraints.maxHeight;
-            final avatarSize = (cardH * 0.42).clamp(180.0, 260.0);
-
-            return Stack(
-              fit: StackFit.expand,
-              children: [
-                // Background tint layer for stack depth
-                if (isBackground)
-                  Container(
-                    color: Colors.black.withValues(alpha: 0.35),
+        borderRadius: BorderRadius.circular(DesignTokens.radius2xl),
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            // ── 1. Full-Bleed Photograph ─────────────────────────────────────
+            AnimatedSwitcher(
+              duration: const Duration(milliseconds: 220),
+              child: CachedNetworkImage(
+                key: ValueKey(activePhotoUrl),
+                imageUrl: activePhotoUrl,
+                fit: BoxFit.cover,
+                width: double.infinity,
+                height: double.infinity,
+                memCacheWidth: 800,
+                placeholder: (context, url) => Container(
+                  color: DesignTokens.obsidianElevated,
+                  child: const Center(
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: Colors.white24,
+                    ),
                   ),
+                ),
+                errorWidget: (context, url, error) => Container(
+                  color: DesignTokens.obsidianElevated,
+                  child: const Center(
+                    child: Icon(Icons.person_rounded, size: 64, color: Colors.white24),
+                  ),
+                ),
+              ),
+            ),
 
-                if (!isBackground)
-                  Padding(
-                    padding: const EdgeInsets.all(20),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        // ── Top Bar Header ────────────────────────────────
-                        Row(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  'New Matches',
-                                  style: GoogleFonts.syne(
-                                    fontSize: 24,
-                                    fontWeight: FontWeight.w900,
-                                    color: primaryTextColor,
-                                    letterSpacing: -0.5,
+            // ── 2. Tap Touch Zones for Multi-Photo Cycling ─────────────────
+            if (!widget.isBackground && photos.length > 1)
+              Row(
+                children: [
+                  Expanded(
+                    child: GestureDetector(
+                      behavior: HitTestBehavior.translucent,
+                      onTap: _prevPhoto,
+                      child: const SizedBox.expand(),
+                    ),
+                  ),
+                  Expanded(
+                    child: GestureDetector(
+                      behavior: HitTestBehavior.translucent,
+                      onTap: _nextPhoto,
+                      child: const SizedBox.expand(),
+                    ),
+                  ),
+                ],
+              ),
+
+            // ── 3. Background Dimming Layer for Stack Depth ────────────────
+            if (widget.isBackground)
+              Container(
+                color: Colors.black.withValues(alpha: 0.40),
+              ),
+
+            // ── 4. Cinematic Multi-Stop Scrim ──────────────────────────────
+            if (!widget.isBackground)
+              Positioned.fill(
+                child: IgnorePointer(
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                        colors: [
+                          Colors.black.withValues(alpha: 0.45),
+                          Colors.transparent,
+                          Colors.black.withValues(alpha: 0.35),
+                          Colors.black.withValues(alpha: 0.82),
+                          DesignTokens.obsidianBase,
+                        ],
+                        stops: const [0.0, 0.20, 0.52, 0.80, 1.0],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+
+            // ── 5. Segmented Story / Photo Progress Indicators ─────────────
+            if (!widget.isBackground && photos.length > 1)
+              Positioned(
+                top: 12,
+                left: 14,
+                right: 14,
+                child: Row(
+                  children: List.generate(photos.length, (idx) {
+                    final isCurrent = idx == _currentPhotoIndex;
+                    return Expanded(
+                      child: Container(
+                        margin: const EdgeInsets.symmetric(horizontal: 2.5),
+                        height: 3.5,
+                        decoration: BoxDecoration(
+                          color: isCurrent
+                              ? Colors.white
+                              : Colors.white.withValues(alpha: 0.35),
+                          borderRadius: BorderRadius.circular(DesignTokens.radiusFull),
+                          boxShadow: isCurrent
+                              ? [
+                                  BoxShadow(
+                                    color: Colors.white.withValues(alpha: 0.5),
+                                    blurRadius: 4,
                                   ),
-                                ),
-                                Text(
-                                  'Nearby',
-                                  style: GoogleFonts.playfairDisplay(
-                                    fontSize: 26,
-                                    fontStyle: FontStyle.italic,
-                                    fontWeight: FontWeight.w600,
-                                    color: accentColor,
-                                  ),
-                                ),
-                              ],
-                            ),
-                            const Spacer(),
-                            // Distance Badge
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 10,
-                                vertical: 5,
-                              ),
-                              decoration: BoxDecoration(
-                                color: primaryTextColor.withValues(alpha: 0.15),
-                                borderRadius: BorderRadius.circular(20),
-                              ),
-                              child: Text(
-                                '📍 $distance km',
-                                style: GoogleFonts.syne(
-                                  fontSize: 11,
-                                  fontWeight: FontWeight.w800,
-                                  color: primaryTextColor,
-                                ),
-                              ),
-                            ),
-                          ],
+                                ]
+                              : null,
                         ),
+                      ),
+                    );
+                  }),
+                ),
+              ),
 
-                        const SizedBox(height: 4),
-
-                        // Subtitle Location & Age
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            Text(
-                              user.location?.isNotEmpty == true
-                                  ? user.location!
-                                  : 'Nearby Soul',
-                              style: GoogleFonts.syne(
-                                fontSize: 13,
-                                fontWeight: FontWeight.w800,
-                                color: primaryTextColor.withValues(alpha: 0.8),
+            // ── 6. Active Card Foreground Overlay & Metadata ───────────────
+            if (!widget.isBackground)
+              Positioned.fill(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 26, 16, 18),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Top Badges Row
+                      Row(
+                        children: [
+                          // Distance Badge
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                            decoration: BoxDecoration(
+                              color: Colors.black.withValues(alpha: 0.55),
+                              borderRadius: BorderRadius.circular(DesignTokens.radiusFull),
+                              border: Border.all(
+                                color: Colors.white.withValues(alpha: 0.15),
+                                width: 1.0,
                               ),
                             ),
-                            Text(
-                              '${user.age} years',
-                              style: GoogleFonts.syne(
-                                fontSize: 18,
-                                fontWeight: FontWeight.w900,
-                                color: accentColor,
-                              ),
-                            ),
-                          ],
-                        ),
-
-                        // ── Center Hero Circular Photo ────────────────────
-                        Expanded(
-                          child: Center(
-                            child: Stack(
-                              alignment: Alignment.center,
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
                               children: [
-                                // Outer glow ring
-                                Container(
-                                  width: avatarSize + 12,
-                                  height: avatarSize + 12,
-                                  decoration: BoxDecoration(
-                                    shape: BoxShape.circle,
-                                    color: accentColor.withValues(alpha: 0.3),
-                                  ),
-                                ),
-                                // Main circular photo
-                                Container(
-                                  width: avatarSize,
-                                  height: avatarSize,
-                                  decoration: const BoxDecoration(
-                                    shape: BoxShape.circle,
-                                  ),
-                                  child: ClipOval(
-                                    child: CachedNetworkImage(
-                                      imageUrl: user.avatarUrl ??
-                                          'https://i.pravatar.cc/400?u=${user.id}',
-                                      fit: BoxFit.cover,
-                                      memCacheWidth: 800,
-                                      progressIndicatorBuilder: (context, url, progress) =>
-                                          Container(
-                                        color: accentColor.withValues(alpha: 0.2),
-                                        child: const Center(
-                                          child: CircularProgressIndicator(
-                                            color: Colors.white,
-                                            strokeWidth: 2,
-                                          ),
-                                        ),
-                                      ),
-                                    ),
-                                  ),
+                                const Icon(Icons.near_me_rounded, size: 12, color: Colors.white),
+                                const SizedBox(width: 4),
+                                Text(
+                                  '$distance km away',
+                                  style: DesignTokens.microBadge(color: Colors.white),
                                 ),
                               ],
                             ),
                           ),
-                        ),
+                          const Spacer(),
+                          // Info Button
+                          GestureDetector(
+                            onTap: () => _openDetailsSheet(context, distance),
+                            child: Container(
+                              padding: const EdgeInsets.all(7),
+                              decoration: BoxDecoration(
+                                color: Colors.black.withValues(alpha: 0.55),
+                                shape: BoxShape.circle,
+                                border: Border.all(
+                                  color: Colors.white.withValues(alpha: 0.20),
+                                  width: 1.0,
+                                ),
+                              ),
+                              child: const Icon(
+                                Icons.info_outline_rounded,
+                                size: 16,
+                                color: Colors.white,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
 
-                        // ── Giant Serif Name & Details ────────────────────
-                        Center(
-                          child: Column(
-                            mainAxisSize: MainAxisSize.min,
+                      const Spacer(),
+
+                      // Name, Age & Verified
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.baseline,
+                        textBaseline: TextBaseline.alphabetic,
+                        children: [
+                          Flexible(
+                            child: Text(
+                              widget.user.name,
+                              style: DesignTokens.headingLarge(color: Colors.white).copyWith(
+                                fontSize: 28,
+                                fontWeight: FontWeight.w800,
+                                letterSpacing: -0.6,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Text(
+                            '${widget.user.age}',
+                            style: DesignTokens.headingLarge(color: Colors.white70).copyWith(
+                              fontSize: 24,
+                              fontWeight: FontWeight.w400,
+                            ),
+                          ),
+                          if (widget.user.isVerified) ...[
+                            const SizedBox(width: 8),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                              decoration: BoxDecoration(
+                                gradient: const LinearGradient(
+                                  colors: [Color(0xFF38BDF8), Color(0xFF6366F1)],
+                                ),
+                                borderRadius: BorderRadius.circular(DesignTokens.radiusFull),
+                              ),
+                              child: const Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(Icons.verified_rounded, size: 11, color: Colors.white),
+                                  SizedBox(width: 3),
+                                  Text(
+                                    'VERIFIED',
+                                    style: TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 9.5,
+                                      fontWeight: FontWeight.w800,
+                                      letterSpacing: 0.4,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
+
+                      const SizedBox(height: 6),
+
+                      // Location & Intent Row
+                      Row(
+                        children: [
+                          if (widget.user.location != null && widget.user.location!.isNotEmpty) ...[
+                            Icon(Icons.location_on_rounded, size: 14, color: AppTheme.primaryPink),
+                            const SizedBox(width: 4),
+                            Text(
+                              widget.user.location!,
+                              style: DesignTokens.bodyMedium(color: Colors.white70),
+                            ),
+                            const SizedBox(width: 10),
+                          ],
+                          if (widget.user.relationshipIntent != null && widget.user.relationshipIntent!.isNotEmpty) ...[
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                              decoration: BoxDecoration(
+                                color: Colors.white.withValues(alpha: 0.12),
+                                borderRadius: BorderRadius.circular(DesignTokens.radiusFull),
+                                border: Border.all(
+                                  color: Colors.white.withValues(alpha: 0.18),
+                                  width: 0.8,
+                                ),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  const Text('✨', style: TextStyle(fontSize: 10)),
+                                  const SizedBox(width: 4),
+                                  Text(
+                                    widget.user.relationshipIntent!,
+                                    style: DesignTokens.microBadge(color: Colors.white),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
+
+                      // Bio snippet
+                      if (widget.user.bio != null && widget.user.bio!.trim().isNotEmpty) ...[
+                        const SizedBox(height: 8),
+                        Text(
+                          widget.user.bio!,
+                          style: DesignTokens.bodyMedium(color: Colors.white.withValues(alpha: 0.88)),
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ],
+
+                      // Interest tags
+                      if (widget.user.interests.isNotEmpty) ...[
+                        const SizedBox(height: 10),
+                        Wrap(
+                          spacing: 6,
+                          runSpacing: 6,
+                          children: widget.user.interests.take(3).map((interest) {
+                            return Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                              decoration: BoxDecoration(
+                                color: Colors.white.withValues(alpha: 0.12),
+                                borderRadius: BorderRadius.circular(DesignTokens.radiusFull),
+                                border: Border.all(
+                                  color: Colors.white.withValues(alpha: 0.15),
+                                  width: 0.8,
+                                ),
+                              ),
+                              child: Text(
+                                interest,
+                                style: DesignTokens.microBadge(color: Colors.white),
+                              ),
+                            );
+                          }).toList(),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Detailed profile modal bottom sheet
+class _ProfileDetailsModal extends StatelessWidget {
+  final UserModel user;
+  final int distanceKm;
+  final List<String> photos;
+
+  const _ProfileDetailsModal({
+    required this.user,
+    required this.distanceKm,
+    required this.photos,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      constraints: BoxConstraints(
+        maxHeight: MediaQuery.of(context).size.height * 0.75,
+      ),
+      decoration: BoxDecoration(
+        color: DesignTokens.obsidianModal,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(DesignTokens.radius2xl)),
+        border: Border.all(color: DesignTokens.hairline),
+      ),
+      child: Column(
+        children: [
+          // Drag handle
+          Container(
+            margin: const EdgeInsets.only(top: 12, bottom: 8),
+            width: 38,
+            height: 4,
+            decoration: BoxDecoration(
+              color: Colors.white24,
+              borderRadius: BorderRadius.circular(2),
+            ),
+          ),
+          Expanded(
+            child: ListView(
+              padding: const EdgeInsets.fromLTRB(20, 10, 20, 30),
+              children: [
+                // Header
+                Row(
+                  children: [
+                    CircleAvatar(
+                      radius: 30,
+                      backgroundImage: CachedNetworkImageProvider(photos.first),
+                    ),
+                    const SizedBox(width: 14),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
                             children: [
                               Text(
-                                user.name,
-                                style: GoogleFonts.playfairDisplay(
-                                  fontSize: 32,
-                                  fontWeight: FontWeight.w700,
-                                  color: accentColor,
-                                  letterSpacing: -0.5,
-                                ),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                textAlign: TextAlign.center,
+                                '${user.name}, ${user.age}',
+                                style: DesignTokens.headingLarge(color: Colors.white),
                               ),
-                              const SizedBox(height: 2),
-                              if (user.interests.isNotEmpty)
-                                Text(
-                                  user.interests.take(3).join(' / '),
-                                  style: GoogleFonts.playfairDisplay(
-                                    fontSize: 15,
-                                    fontStyle: FontStyle.italic,
-                                    fontWeight: FontWeight.w500,
-                                    color: primaryTextColor.withValues(alpha: 0.9),
-                                  ),
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  textAlign: TextAlign.center,
-                                ),
-                              if (user.bio != null && user.bio!.trim().isNotEmpty) ...[
-                                const SizedBox(height: 6),
-                                Padding(
-                                  padding: const EdgeInsets.symmetric(horizontal: 10),
-                                  child: Text(
-                                    user.bio!.toUpperCase(),
-                                    style: GoogleFonts.syne(
-                                      fontSize: 10.5,
-                                      fontWeight: FontWeight.w800,
-                                      color: primaryTextColor.withValues(alpha: 0.75),
-                                      letterSpacing: 0.5,
-                                    ),
-                                    maxLines: 2,
-                                    overflow: TextOverflow.ellipsis,
-                                    textAlign: TextAlign.center,
-                                  ),
-                                ),
+                              if (user.isVerified) ...[
+                                const SizedBox(width: 6),
+                                const Icon(Icons.verified_rounded, size: 18, color: Color(0xFF38BDF8)),
                               ],
                             ],
                           ),
-                        ),
-                        const SizedBox(height: 8),
-                      ],
+                          Text(
+                            '$distanceKm km away • ${user.location ?? "Nearby"}',
+                            style: DesignTokens.bodyMedium(color: Colors.white70),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 20),
+
+                // Bio
+                if (user.bio != null && user.bio!.isNotEmpty) ...[
+                  Text('About', style: DesignTokens.titleMedium(color: Colors.white)),
+                  const SizedBox(height: 6),
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(14),
+                    decoration: BoxDecoration(
+                      color: DesignTokens.obsidianElevated,
+                      borderRadius: BorderRadius.circular(DesignTokens.radiusLg),
+                      border: Border.all(color: DesignTokens.hairline),
+                    ),
+                    child: Text(
+                      user.bio!,
+                      style: DesignTokens.bodyLarge(color: Colors.white70),
                     ),
                   ),
+                  const SizedBox(height: 18),
+                ],
+
+                // Intent & Zodiac
+                if (user.relationshipIntent != null || user.zodiacSign != null) ...[
+                  Row(
+                    children: [
+                      if (user.relationshipIntent != null)
+                        Expanded(
+                          child: Container(
+                            padding: const EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              color: DesignTokens.obsidianElevated,
+                              borderRadius: BorderRadius.circular(DesignTokens.radiusLg),
+                              border: Border.all(color: DesignTokens.hairline),
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text('Looking for', style: DesignTokens.microBadge(color: Colors.white54)),
+                                const SizedBox(height: 4),
+                                Text(user.relationshipIntent!, style: DesignTokens.titleMedium(color: Colors.white)),
+                              ],
+                            ),
+                          ),
+                        ),
+                      if (user.relationshipIntent != null && user.zodiacSign != null)
+                        const SizedBox(width: 10),
+                      if (user.zodiacSign != null)
+                        Expanded(
+                          child: Container(
+                            padding: const EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              color: DesignTokens.obsidianElevated,
+                              borderRadius: BorderRadius.circular(DesignTokens.radiusLg),
+                              border: Border.all(color: DesignTokens.hairline),
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text('Zodiac', style: DesignTokens.microBadge(color: Colors.white54)),
+                                const SizedBox(height: 4),
+                                Text(user.zodiacSign!, style: DesignTokens.titleMedium(color: Colors.white)),
+                              ],
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                  const SizedBox(height: 18),
+                ],
+
+                // Interests
+                if (user.interests.isNotEmpty) ...[
+                  Text('Interests & Passions', style: DesignTokens.titleMedium(color: Colors.white)),
+                  const SizedBox(height: 8),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: user.interests.map((interest) {
+                      return Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+                        decoration: BoxDecoration(
+                          color: DesignTokens.obsidianElevated,
+                          borderRadius: BorderRadius.circular(DesignTokens.radiusFull),
+                          border: Border.all(color: DesignTokens.hairline),
+                        ),
+                        child: Text(
+                          interest,
+                          style: DesignTokens.bodyMedium(color: Colors.white),
+                        ),
+                      );
+                    }).toList(),
+                  ),
+                  const SizedBox(height: 18),
+                ],
+
+                // Photos Grid
+                if (photos.length > 1) ...[
+                  Text('Photos', style: DesignTokens.titleMedium(color: Colors.white)),
+                  const SizedBox(height: 10),
+                  GridView.builder(
+                    shrinkWrap: true,
+                    physics: const NeverScrollableScrollPhysics(),
+                    gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                      crossAxisCount: 2,
+                      crossAxisSpacing: 10,
+                      mainAxisSpacing: 10,
+                      childAspectRatio: 0.8,
+                    ),
+                    itemCount: photos.length,
+                    itemBuilder: (context, idx) {
+                      return ClipRRect(
+                        borderRadius: BorderRadius.circular(DesignTokens.radiusLg),
+                        child: CachedNetworkImage(
+                          imageUrl: photos[idx],
+                          fit: BoxFit.cover,
+                        ),
+                      );
+                    },
+                  ),
+                ],
               ],
-            );
-          },
-        ),
+            ),
+          ),
+        ],
       ),
     );
   }

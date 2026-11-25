@@ -1,6 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:situationship/core/ai/on_device_nlu_engine.dart';
-import 'package:situationship/core/ai/vibe_matrix_vocabulary.dart';
 import 'package:situationship/core/ai/vibe_matrix_matcher.dart';
 import 'package:situationship/core/ai/match_rationale_generator.dart';
 import 'package:situationship/core/models/user_model.dart';

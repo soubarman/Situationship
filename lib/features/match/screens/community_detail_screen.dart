@@ -1590,7 +1590,7 @@ class _CommunityDetailScreenState extends ConsumerState<CommunityDetailScreen> {
                               try {
                                 String finalImageUrl = imageUrlController.text.trim();
                                 if (pickedImageFile != null) {
-                                  final storageRef = FirebaseStorage.instance.ref('communities/${community.id}.jpg');
+                                  final storageRef = FirebaseStorage.instance.ref('communities/${community.id}/cover.jpg');
                                   if (kIsWeb) {
                                     final bytes = await pickedImageFile!.readAsBytes();
                                     await storageRef.putData(bytes);

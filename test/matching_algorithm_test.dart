@@ -13,7 +13,7 @@ void main() {
     final userA = UserModel(
       id: 'user_a',
       name: 'Alice',
-      email: 'a@test.com',
+      email: 'a@situationship.user',
       age: 24,
       gender: 'male',
       interestedIn: const ['female'],
@@ -24,7 +24,7 @@ void main() {
       final femaleCandidate = UserModel(
         id: 'candidate_b',
         name: 'Bella',
-        email: 'b@test.com',
+        email: 'b@situationship.user',
         age: 23,
         gender: 'female',
         interestedIn: const ['male'],
@@ -47,7 +47,7 @@ void main() {
       final maleCandidate = UserModel(
         id: 'candidate_c',
         name: 'Charlie',
-        email: 'c@test.com',
+        email: 'c@situationship.user',
         age: 25,
         gender: 'male',
         interestedIn: const ['female'],
@@ -69,7 +69,7 @@ void main() {
       final lesbianCandidate = UserModel(
         id: 'candidate_d',
         name: 'Diana',
-        email: 'd@test.com',
+        email: 'd@situationship.user',
         age: 24,
         gender: 'female',
         interestedIn: const ['female'], // Only wants females
@@ -92,7 +92,7 @@ void main() {
       final unconfiguredCandidate = UserModel(
         id: 'candidate_unconfigured',
         name: 'Sara',
-        email: 'sara@test.com',
+        email: 'sara@situationship.user',
         age: 23,
         gender: 'female',
         interestedIn: const [], // Not yet explicitly configured
@@ -115,7 +115,7 @@ void main() {
       final delhiUser = UserModel(
         id: 'delhi_user',
         name: 'Arjun',
-        email: 'arjun@test.com',
+        email: 'arjun@situationship.user',
         location: 'Delhi',
         age: 25,
         gender: 'male',
@@ -125,7 +125,7 @@ void main() {
       final mumbaiFemale = UserModel(
         id: 'mumbai_female',
         name: 'Pooja',
-        email: 'pooja@test.com',
+        email: 'pooja@situationship.user',
         location: 'Mumbai',
         age: 24,
         gender: 'female',
@@ -135,7 +135,7 @@ void main() {
       final mumbaiMale = UserModel(
         id: 'mumbai_male',
         name: 'Rohan',
-        email: 'rohan@test.com',
+        email: 'rohan@situationship.user',
         location: 'Mumbai',
         age: 26,
         gender: 'male',
@@ -162,7 +162,7 @@ void main() {
       final bisexualUser = UserModel(
         id: 'user_bi',
         name: 'Alex',
-        email: 'bi@test.com',
+        email: 'bi@situationship.user',
         age: 26,
         gender: 'male',
         interestedIn: const ['female', 'other'],
@@ -171,7 +171,7 @@ void main() {
       final femaleCandidate = UserModel(
         id: 'cand_f',
         name: 'Fiona',
-        email: 'f@test.com',
+        email: 'f@situationship.user',
         age: 25,
         gender: 'female',
         interestedIn: const ['male'],
@@ -180,7 +180,7 @@ void main() {
       final nbCandidate = UserModel(
         id: 'cand_nb',
         name: 'Rowan',
-        email: 'nb@test.com',
+        email: 'nb@situationship.user',
         age: 24,
         gender: 'other',
         interestedIn: const ['all'],
@@ -189,7 +189,7 @@ void main() {
       final maleCandidate = UserModel(
         id: 'cand_m',
         name: 'Mike',
-        email: 'm@test.com',
+        email: 'm@situationship.user',
         age: 27,
         gender: 'male',
         interestedIn: const ['male'],
@@ -237,7 +237,7 @@ void main() {
       final suspendedCandidate = UserModel(
         id: 'cand_susp',
         name: 'BannedUser',
-        email: 'banned@test.com',
+        email: 'banned@situationship.user',
         age: 24,
         gender: 'female',
         interestedIn: const ['male'],
@@ -261,7 +261,7 @@ void main() {
       final userBlockedCandidate = UserModel(
         id: 'cand_blocked_1',
         name: 'Target1',
-        email: 't1@test.com',
+        email: 't1@situationship.user',
         age: 24,
         gender: 'female',
         interestedIn: const ['male'],
@@ -283,7 +283,7 @@ void main() {
       final candidateWhoBlockedUser = UserModel(
         id: 'cand_blocked_2',
         name: 'Target2',
-        email: 't2@test.com',
+        email: 't2@situationship.user',
         age: 24,
         gender: 'female',
         interestedIn: const ['male'],
@@ -307,7 +307,7 @@ void main() {
       final alreadyMatched = UserModel(
         id: 'cand_matched',
         name: 'Matched',
-        email: 'm@test.com',
+        email: 'm@situationship.user',
         age: 24,
         gender: 'female',
         interestedIn: const ['male'],
@@ -329,7 +329,7 @@ void main() {
       final alreadyDisliked = UserModel(
         id: 'cand_disliked',
         name: 'Disliked',
-        email: 'd@test.com',
+        email: 'd@situationship.user',
         age: 24,
         gender: 'female',
         interestedIn: const ['male'],
@@ -353,7 +353,7 @@ void main() {
       final tooYoung = UserModel(
         id: 'cand_young',
         name: 'Young',
-        email: 'y@test.com',
+        email: 'y@situationship.user',
         age: 19,
         gender: 'female',
         interestedIn: const ['male'],
@@ -362,7 +362,7 @@ void main() {
       final tooOld = UserModel(
         id: 'cand_old',
         name: 'Old',
-        email: 'o@test.com',
+        email: 'o@situationship.user',
         age: 40,
         gender: 'female',
         interestedIn: const ['male'],
@@ -404,7 +404,7 @@ void main() {
     final currentUser = UserModel(
       id: 'current_user',
       name: 'Rahul',
-      email: 'rahul@test.com',
+      email: 'rahul@situationship.user',
       age: 25,
       gender: 'male',
       interestedIn: const ['female'],
@@ -417,7 +417,7 @@ void main() {
       final seriousMatch = UserModel(
         id: 'candidate_serious',
         name: 'Priya',
-        email: 'p@test.com',
+        email: 'p@situationship.user',
         age: 24,
         gender: 'female',
         interestedIn: const ['male'],
@@ -428,7 +428,7 @@ void main() {
       final casualMatch = UserModel(
         id: 'candidate_casual',
         name: 'Neha',
-        email: 'n@test.com',
+        email: 'n@situationship.user',
         age: 24,
         gender: 'female',
         interestedIn: const ['male'],
@@ -446,7 +446,7 @@ void main() {
       final normalInterests = UserModel(
         id: 'cand_norm',
         name: 'Simran',
-        email: 's@test.com',
+        email: 's@situationship.user',
         age: 25,
         gender: 'female',
         interestedIn: const ['male'],
@@ -456,7 +456,7 @@ void main() {
       final rareInterests = UserModel(
         id: 'cand_rare',
         name: 'Ananya',
-        email: 'a@test.com',
+        email: 'a@situationship.user',
         age: 25,
         gender: 'female',
         interestedIn: const ['male'],
@@ -473,7 +473,7 @@ void main() {
       final candidate = UserModel(
         id: 'cand_exp',
         name: 'Tara',
-        email: 'tara@test.com',
+        email: 'tara@situationship.user',
         age: 24,
         gender: 'female',
         interestedIn: const ['male'],
@@ -492,7 +492,7 @@ void main() {
         return UserModel(
           id: 'cand_$i',
           name: 'Candidate $i',
-          email: 'cand$i@test.com',
+          email: 'cand$i@situationship.user',
           age: 22 + (i % 6),
           gender: 'female',
           interestedIn: const ['male'],

@@ -1,5 +1,7 @@
 import 'dart:ui';
 import 'dart:math' as math;
+import 'dart:convert';
+import 'package:http/http.dart' as http;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -54,6 +56,9 @@ class _UserDetailScreenState extends ConsumerState<UserDetailScreen>
   bool _simulateVisitorView = false;
   bool _hasSuperLikedThisSession = false;
   final Set<String> _locallyUnlockedKeys = {};
+  final Map<String, String> _unlockedPhones = {};
+  bool _fetchingUnlockedPhone = false;
+  bool _isUnlockingPhone = false;
 
   // Animation controllers
   late final AnimationController _shimmerAnim;
@@ -2228,15 +2233,17 @@ class _UserDetailScreenState extends ConsumerState<UserDetailScreen>
         : (existingChat?.status == 'requested' ? 'Pending…' : 'Message');
 
     final hasBio = (user.bio ?? '').trim().isNotEmpty;
-    final hasPhone = (user.phoneNumber ?? '').trim().isNotEmpty;
     final isSelf = user.id == currentUser.id && !_simulateVisitorView;
+    final hasPhone = isSelf
+        ? ((currentUser.phoneNumber ?? '').trim().isNotEmpty)
+        : (user.isPhonePublic);
     final unlockKey = '${user.id}_${user.phoneVisibilityVersion}';
     final hasUnlocked = currentUser.unlockedUserPhones.contains(unlockKey) ||
         _locallyUnlockedKeys.contains(unlockKey) ||
         (user.phoneVisibilityVersion == 0 &&
             (currentUser.unlockedUserPhones.contains(user.id) ||
                 _locallyUnlockedKeys.contains(user.id)));
-    final showPhone = hasPhone && (isSelf || user.isPhonePublic || hasUnlocked);
+    final showPhone = isSelf ? hasPhone : (user.isPhonePublic || hasUnlocked);
     final distance = LocationHelper.getDistanceKm(
       lat1: _deviceLat, lon1: _deviceLon,
       loc1: currentUser.location, loc2: user.location,
@@ -2639,10 +2646,6 @@ class _UserDetailScreenState extends ConsumerState<UserDetailScreen>
   }
 
   Widget _buildPhoneSection(UserModel targetUser, UserModel currentUser, bool isDark) {
-    if (targetUser.phoneNumber == null || targetUser.phoneNumber!.trim().isEmpty) {
-      return const SizedBox.shrink();
-    }
-
     final isSelf = targetUser.id == currentUser.id && !_simulateVisitorView;
     final allowUnlock = targetUser.isPhonePublic; // repurposed from public to allow unlock
     final unlockKey = '${targetUser.id}_${targetUser.phoneVisibilityVersion}';
@@ -2656,7 +2659,38 @@ class _UserDetailScreenState extends ConsumerState<UserDetailScreen>
       return const SizedBox.shrink();
     }
 
-    final displayedPhone = (isSelf || hasUnlocked) ? targetUser.phoneNumber! : '••••• •••••';
+    // Determine displayed phone securely (never rely on client-side masking)
+    String displayedPhone;
+    if (isSelf) {
+      displayedPhone = currentUser.phoneNumber ?? 'Not provided';
+    } else if (_unlockedPhones.containsKey(targetUser.id)) {
+      displayedPhone = _unlockedPhones[targetUser.id]!;
+    } else if (hasUnlocked) {
+      if (!_fetchingUnlockedPhone && !_unlockedPhones.containsKey(targetUser.id)) {
+        _fetchingUnlockedPhone = true;
+        firestoreProvider
+            .collection('users')
+            .doc(targetUser.id)
+            .collection('unlocked_contacts')
+            .doc(currentUser.id)
+            .get()
+            .then((snap) {
+          if (mounted) {
+            setState(() {
+              if (snap.exists && snap.data()?['phoneNumber'] != null) {
+                _unlockedPhones[targetUser.id] = snap.data()!['phoneNumber'] as String;
+              }
+              _fetchingUnlockedPhone = false;
+            });
+          }
+        }).catchError((_) {
+          if (mounted) setState(() => _fetchingUnlockedPhone = false);
+        });
+      }
+      displayedPhone = _fetchingUnlockedPhone ? 'Loading contact…' : (_unlockedPhones[targetUser.id] ?? 'Unlocked (Tap to copy)');
+    } else {
+      displayedPhone = 'Hidden • Unlockable (50🪙)';
+    }
 
     // Render as a flat row inside the parent card (no extra container)
     return Padding(
@@ -2717,7 +2751,7 @@ class _UserDetailScreenState extends ConsumerState<UserDetailScreen>
                     color: isDark ? Colors.white.withOpacity(0.87) : Colors.black87,
                     fontSize: 15.5,
                     fontWeight: FontWeight.w800,
-                    letterSpacing: (isSelf || hasUnlocked) ? -0.3 : 2.0,
+                    letterSpacing: (isSelf || hasUnlocked) ? -0.3 : 1.0,
                   ),
                 ),
                 if (!isSelf && !hasUnlocked)
@@ -2735,8 +2769,10 @@ class _UserDetailScreenState extends ConsumerState<UserDetailScreen>
           if (isSelf || hasUnlocked)
             GestureDetector(
               onTap: () {
-                Clipboard.setData(ClipboardData(text: targetUser.phoneNumber ?? ''));
-                _showSuccess('Phone number copied to clipboard! 📋');
+                if (displayedPhone.isNotEmpty && !displayedPhone.contains('Hidden') && !displayedPhone.contains('Loading')) {
+                  Clipboard.setData(ClipboardData(text: displayedPhone));
+                  _showSuccess('Phone number copied to clipboard! 📋');
+                }
               },
               child: Container(
                 padding: const EdgeInsets.all(9),
@@ -2749,7 +2785,7 @@ class _UserDetailScreenState extends ConsumerState<UserDetailScreen>
             )
           else
             GestureDetector(
-              onTap: () => _unlockPhone(targetUser, currentUser),
+              onTap: _isUnlockingPhone ? null : () => _unlockPhone(targetUser, currentUser),
               child: Container(
                 padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
                 decoration: BoxDecoration(
@@ -2765,19 +2801,36 @@ class _UserDetailScreenState extends ConsumerState<UserDetailScreen>
                     ),
                   ],
                 ),
-                child: const Row(
+                child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Icon(Icons.lock_open_rounded, size: 14, color: Colors.white),
-                    SizedBox(width: 6),
-                    Text(
-                      'Unlock (50 🪙)',
-                      style: TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w800,
-                        color: Colors.white,
+                    if (_isUnlockingPhone) ...[
+                      const SizedBox(
+                        width: 14,
+                        height: 14,
+                        child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
                       ),
-                    ),
+                      const SizedBox(width: 6),
+                      const Text(
+                        'Unlocking…',
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w800,
+                          color: Colors.white,
+                        ),
+                      ),
+                    ] else ...[
+                      const Icon(Icons.lock_open_rounded, size: 14, color: Colors.white),
+                      const SizedBox(width: 6),
+                      const Text(
+                        'Unlock (50 🪙)',
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w800,
+                          color: Colors.white,
+                        ),
+                      ),
+                    ],
                   ],
                 ),
               ),
@@ -2788,57 +2841,108 @@ class _UserDetailScreenState extends ConsumerState<UserDetailScreen>
   }
 
   Future<void> _unlockPhone(UserModel targetUser, UserModel currentUser) async {
+    if (_isUnlockingPhone) return;
+
     final allowed = await showCoinGate(context, ref, 'phone_unlock');
     if (!allowed) return;
 
     final unlockKey = '${targetUser.id}_${targetUser.phoneVisibilityVersion}';
 
-    // Optimistically reveal immediately so the user sees the unmasked number with 0 delay
-    if (mounted) {
-      setState(() {
-        _locallyUnlockedKeys.add(unlockKey);
-      });
-    }
+    setState(() => _isUnlockingPhone = true);
 
     try {
       final db = firestoreProvider;
-      final isFree = currentUser.hasActiveSubscription && currentUser.phoneUnlocksRemaining > 0;
-      
-      await db.runTransaction((tx) async {
-        final userRef = db.collection('users').doc(currentUser.id);
-        final snap = await tx.get(userRef);
-        if (!snap.exists) return;
-        
-        final unlocked = List<String>.from(snap.data()?['unlockedUserPhones'] ?? []);
-        if (!unlocked.contains(unlockKey)) {
-          unlocked.add(unlockKey);
-        }
-        
-        final updates = <String, dynamic>{
-          'unlockedUserPhones': unlocked,
-        };
-        
-        if (isFree) {
-          updates['phoneUnlocksUsed'] = FieldValue.increment(1);
-        }
-        
-        tx.update(userRef, updates);
-      });
 
-      // Mirror write to (default) for cross-db sync
-      try {
-        await FirebaseFirestore.instanceFor(app: Firebase.app(), databaseId: 'default')
-            .collection('users')
-            .doc(currentUser.id)
-            .update({
-          'unlockedUserPhones': FieldValue.arrayUnion([unlockKey]),
-          if (isFree) 'phoneUnlocksUsed': FieldValue.increment(1),
-        });
-      } catch (_) {}
-      
-      _showSuccess('Phone number unlocked successfully! 🎉');
+      // 1. Fast-path: Check if already authorized locally in subcollection
+      final contactSnap = await db
+          .collection('users')
+          .doc(targetUser.id)
+          .collection('unlocked_contacts')
+          .doc(currentUser.id)
+          .get();
+
+      if (contactSnap.exists && contactSnap.data()?['phoneNumber'] != null) {
+        final version = contactSnap.data()?['phoneVisibilityVersion'] ?? 0;
+        if (version == targetUser.phoneVisibilityVersion) {
+          if (mounted) {
+            setState(() {
+              _unlockedPhones[targetUser.id] = contactSnap.data()!['phoneNumber'] as String;
+              _locallyUnlockedKeys.add(unlockKey);
+              _isUnlockingPhone = false;
+            });
+          }
+          _showSuccess('Phone number unlocked! 🎉');
+          return;
+        }
+      }
+
+      // 2. Call trusted backend Cloud Function /user/unlock-phone with idempotency
+      final authUser = FirebaseAuth.instance.currentUser;
+      if (authUser == null) {
+        throw Exception('Please sign in to unlock contact numbers.');
+      }
+
+      final idToken = await authUser.getIdToken();
+      final cleanCaller = currentUser.id.replaceAll(RegExp(r'[^a-zA-Z0-9_\-]'), '');
+      final cleanTarget = targetUser.id.replaceAll(RegExp(r'[^a-zA-Z0-9_\-]'), '');
+      final rawKey = 'unlock_${cleanCaller}_${cleanTarget}_${targetUser.phoneVisibilityVersion}';
+      final idempotencyKey = rawKey.length > 128
+          ? rawKey.substring(0, 128)
+          : (rawKey.length < 8 ? rawKey.padRight(8, '0') : rawKey);
+
+      final response = await http.post(
+        Uri.parse('https://us-central1-situation-ship.cloudfunctions.net/api/user/unlock-phone'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $idToken',
+        },
+        body: jsonEncode({
+          'targetUserId': targetUser.id,
+          'idempotencyKey': idempotencyKey,
+        }),
+      );
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body) as Map<String, dynamic>;
+        final phone = data['phoneNumber'] as String?;
+        if (mounted) {
+          setState(() {
+            if (phone != null && phone.isNotEmpty) {
+              _unlockedPhones[targetUser.id] = phone;
+            }
+            _locallyUnlockedKeys.add(unlockKey);
+            _isUnlockingPhone = false;
+          });
+          _showSuccess('Phone number unlocked successfully! 🎉');
+        }
+      } else {
+        String errorMsg = 'Failed to unlock phone';
+        Map<String, dynamic> errBody = {};
+        try {
+          errBody = jsonDecode(response.body) as Map<String, dynamic>;
+          errorMsg = errBody['detail'] ?? errorMsg;
+        } catch (_) {}
+
+        if (response.statusCode == 402) {
+          errorMsg = 'Insufficient coins or unlock quota (50🪙 required).';
+        } else if (response.statusCode == 403) {
+          errorMsg = 'Unable to unlock: Phone number is private or blocked.';
+        } else if (response.statusCode == 409) {
+          errorMsg = errBody['detail'] ?? 'Idempotency conflict: Operation already submitted with different parameters.';
+        } else if (response.statusCode == 400) {
+          errorMsg = errBody['detail'] ?? 'Invalid unlock request parameters.';
+        }
+
+        if (mounted) {
+          setState(() => _isUnlockingPhone = false);
+          _showError(errorMsg);
+        }
+      }
     } catch (e) {
-      _showError('Unlock failed: $e');
+      if (mounted) {
+        setState(() => _isUnlockingPhone = false);
+        _showError('Unlock failed: $e');
+      }
     }
   }
 

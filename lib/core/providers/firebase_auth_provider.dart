@@ -97,15 +97,14 @@ class AuthController extends StateNotifier<AsyncValue<User?>> {
         } catch (_) {}
       }
 
+      // 1. Create public profile document (PII excluded)
       await _db.collection('users').doc(user.uid).set({
         'id': user.uid,
         'name': name,
-        'email': email,
         'bio': bio,
         'age': age,
         'location': location,
         'gender': gender,
-        'phoneNumber': phoneNumber,
         'isPhonePublic': false,
         'avatarUrl': photoUrl,
         'interests': interests,
@@ -117,6 +116,13 @@ class AuthController extends StateNotifier<AsyncValue<User?>> {
         'likedBy': [],
         'matches': [],
         'postCount': 0,
+        'createdAt': FieldValue.serverTimestamp(),
+      });
+
+      // 2. Create private profile document (owner-only PII)
+      await _db.collection('users').doc(user.uid).collection('private').doc('profile').set({
+        'email': email,
+        'phoneNumber': phoneNumber,
         'createdAt': FieldValue.serverTimestamp(),
       });
 
@@ -175,7 +181,6 @@ class AuthController extends StateNotifier<AsyncValue<User?>> {
           await _db.collection('users').doc(user.uid).set({
             'id': user.uid,
             'name': user.displayName ?? 'User',
-            'email': user.email ?? '',
             'bio': 'New to Situationship! ✨',
             'age': 21,
             'location': 'Earth 🌍',
@@ -190,6 +195,11 @@ class AuthController extends StateNotifier<AsyncValue<User?>> {
             'likedBy': [],
             'matches': [],
             'postCount': 0,
+            'createdAt': FieldValue.serverTimestamp(),
+          });
+          await _db.collection('users').doc(user.uid).collection('private').doc('profile').set({
+            'email': user.email ?? '',
+            'phoneNumber': null,
             'createdAt': FieldValue.serverTimestamp(),
           });
         }
@@ -226,7 +236,6 @@ class AuthController extends StateNotifier<AsyncValue<User?>> {
           await _db.collection('users').doc(user.uid).set({
             'id': user.uid,
             'name': user.displayName ?? 'User',
-            'email': user.email ?? '',
             'bio': 'New to Situationship! ✨',
             'age': 21,
             'location': 'Earth 🌍',
@@ -241,6 +250,11 @@ class AuthController extends StateNotifier<AsyncValue<User?>> {
             'likedBy': [],
             'matches': [],
             'postCount': 0,
+            'createdAt': FieldValue.serverTimestamp(),
+          });
+          await _db.collection('users').doc(user.uid).collection('private').doc('profile').set({
+            'email': user.email ?? '',
+            'phoneNumber': null,
             'createdAt': FieldValue.serverTimestamp(),
           });
         }

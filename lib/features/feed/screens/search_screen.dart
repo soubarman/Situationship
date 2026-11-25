@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/theme/design_tokens.dart';
+import '../../../core/theme/app_palette.dart';
 import '../../verification/presentation/widgets/s_badge_widget.dart';
 import '../../../core/models/user_model.dart';
 import '../../../core/providers/app_state_provider.dart';
@@ -71,10 +73,10 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
         title: Container(
           height: 44,
           decoration: BoxDecoration(
-            color: isDark ? AppTheme.darkCard : const Color(0xFFF3F6FF),
-            borderRadius: BorderRadius.circular(16),
+            color: isDark ? DesignTokens.obsidianElevated : const Color(0xFFF3F6FF),
+            borderRadius: BorderRadius.circular(DesignTokens.radius16),
             border: Border.all(
-              color: isDark ? AppTheme.darkBorder : const Color(0xFFE5E7EB),
+              color: isDark ? DesignTokens.hairline : const Color(0xFFE5E7EB),
             ),
           ),
           child: TextField(

@@ -197,20 +197,35 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
             ? ['male', 'female', 'other']
             : [_interestedIn],
         'relationshipIntent': _relationshipIntent,
-        'phoneNumber': _phoneCtrl.text.trim().isEmpty ? null : _phoneCtrl.text.trim(),
         'isPhonePublic': _isPhonePublic,
         'phoneVisibilityVersion': newVersion,
       };
 
-      // 1. Primary write to centralized firestoreProvider ('default')
+      // 1. Primary write to centralized firestoreProvider ('default') for public profile (no PII)
       await firestoreProvider.collection('users').doc(authUser.uid).set(updates, SetOptions(merge: true));
 
-      // 2. Mirror write to '(default)' for backward-compatibility
+      // 2. Write private profile document (owner-only phone number storage)
+      final phoneVal = _phoneCtrl.text.trim().isEmpty ? null : _phoneCtrl.text.trim();
+      await firestoreProvider.collection('users').doc(authUser.uid).collection('private').doc('profile').set({
+        'phoneNumber': phoneVal,
+        'updatedAt': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
+
+      // 3. Mirror write to '(default)' for backward-compatibility
       try {
         await FirebaseFirestore.instanceFor(app: Firebase.app(), databaseId: 'default')
             .collection('users')
             .doc(authUser.uid)
             .set(updates, SetOptions(merge: true));
+        await FirebaseFirestore.instanceFor(app: Firebase.app(), databaseId: 'default')
+            .collection('users')
+            .doc(authUser.uid)
+            .collection('private')
+            .doc('profile')
+            .set({
+          'phoneNumber': phoneVal,
+          'updatedAt': FieldValue.serverTimestamp(),
+        }, SetOptions(merge: true));
       } catch (e) {
         debugPrint('[EditProfile] Mirror write notice: $e');
       }

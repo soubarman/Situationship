@@ -1,12 +1,28 @@
-// ignore_for_file: avoid_web_libraries_in_flutter
 import 'dart:async';
-import 'dart:js_util' as js_util;
+import 'dart:js_interop';
+
+@JS('startRecording')
+external JSPromise<JSBoolean> _startRecording();
+
+@JS('getLastRecordingError')
+external JSString? _getLastRecordingError();
+
+@JS('stopRecording')
+external JSPromise<JSString?> _stopRecording();
+
+@JS('playAudio')
+external void _playAudio(JSString url);
+
+@JS('pauseAudio')
+external void _pauseAudio();
+
+@JS('open')
+external void _open(JSString url);
 
 Future<bool> startJsRecording() async {
   try {
-    final promise = js_util.callMethod<dynamic>(js_util.globalThis, 'startRecording', []);
-    final success = await js_util.promiseToFuture<dynamic>(promise);
-    return success == true;
+    final jsBool = await _startRecording().toDart;
+    return jsBool.toDart;
   } catch (e) {
     print('Web JS helper startRecording error: $e');
     return false;
@@ -15,9 +31,9 @@ Future<bool> startJsRecording() async {
 
 String? getJsRecordingError() {
   try {
-    final err = js_util.callMethod<dynamic>(js_util.globalThis, 'getLastRecordingError', []);
-    if (err != null && err.toString().isNotEmpty) {
-      return err.toString();
+    final err = _getLastRecordingError();
+    if (err != null && err.toDart.isNotEmpty) {
+      return err.toDart;
     }
   } catch (_) {}
   return null;
@@ -25,9 +41,8 @@ String? getJsRecordingError() {
 
 Future<String?> stopJsRecording() async {
   try {
-    final promise = js_util.callMethod<dynamic>(js_util.globalThis, 'stopRecording', []);
-    final result = await js_util.promiseToFuture<dynamic>(promise);
-    return result?.toString();
+    final jsStr = await _stopRecording().toDart;
+    return jsStr?.toDart;
   } catch (e) {
     print('Web JS helper stopRecording error: $e');
     return null;
@@ -36,7 +51,7 @@ Future<String?> stopJsRecording() async {
 
 void playJsAudio(String url) {
   try {
-    js_util.callMethod<dynamic>(js_util.globalThis, 'playAudio', [url]);
+    _playAudio(url.toJS);
   } catch (e) {
     print('Web JS helper playAudio error: $e');
   }
@@ -44,7 +59,7 @@ void playJsAudio(String url) {
 
 void pauseJsAudio() {
   try {
-    js_util.callMethod<dynamic>(js_util.globalThis, 'pauseAudio', []);
+    _pauseAudio();
   } catch (e) {
     print('Web JS helper pauseAudio error: $e');
   }
@@ -52,7 +67,7 @@ void pauseJsAudio() {
 
 void openJsUrl(String url) {
   try {
-    js_util.callMethod<dynamic>(js_util.globalThis, 'open', [url]);
+    _open(url.toJS);
   } catch (e) {
     print('Web JS helper open error: $e');
   }

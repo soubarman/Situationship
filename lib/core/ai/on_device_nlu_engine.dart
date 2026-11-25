@@ -1,5 +1,6 @@
 import 'dart:math' as math;
 import 'vibe_matrix_vocabulary.dart';
+import 'conversational_intent.dart';
 
 /// Structured outcome of on-device semantic sentence understanding
 class NLUIntentResult {
@@ -12,6 +13,8 @@ class NLUIntentResult {
   final List<String> extractedKeywords;
   final String naturalSummary;
   final bool isMoreOrContinuation;
+  final ConversationalIntent conversationalIntent;
+  final IntentClassificationResult? classification;
 
   const NLUIntentResult({
     required this.originalQuery,
@@ -23,6 +26,8 @@ class NLUIntentResult {
     required this.extractedKeywords,
     required this.naturalSummary,
     this.isMoreOrContinuation = false,
+    this.conversationalIntent = ConversationalIntent.profileDiscovery,
+    this.classification,
   });
 
   bool get isEmpty => detectedDimensionIds.isEmpty && dealbreakers.isEmpty && !isMoreOrContinuation;
@@ -30,61 +35,57 @@ class NLUIntentResult {
 
 class OnDeviceNLUEngine {
   /// Analyzes a conversational user query completely on-device
-  static NLUIntentResult parse(String query) {
+  static NLUIntentResult parse(
+    String query, {
+    bool hasActiveProfileContext = false,
+    List<String> activeProfileNames = const [],
+  }) {
     if (query.trim().isEmpty) {
-      return NLUIntentResult(
-        originalQuery: query,
+      return const NLUIntentResult(
+        originalQuery: '',
         denseVector: {},
         detectedDimensionIds: [],
         dealbreakers: [],
         extractedKeywords: [],
         naturalSummary: 'Open to everyone',
         isMoreOrContinuation: false,
+        conversationalIntent: ConversationalIntent.casualChat,
       );
     }
+
+    // 0. Classify High-Level Conversational Intent & Entities
+    final classification = ConversationalIntentClassifier.classify(
+      query,
+      hasActiveProfileContext: hasActiveProfileContext,
+      activeProfileNames: activeProfileNames,
+    );
 
     final normalized = _cleanText(query);
     final tokens = normalized.split(RegExp(r'\s+')).where((t) => t.isNotEmpty).toList();
 
-    // 0. Continuation / Pagination intent detection
-    final isMore = _containsAny(normalized, [
-      'more profiles',
-      'no more profiles',
-      'no more',
-      'is there no more',
-      'any other profiles',
-      'other profiles',
-      'any other',
-      'show more',
-      'show me more',
-      'anyone else',
-      'who else',
-      'show others',
-      'different profiles',
-      'different people',
-      'different profiles',
-      'is that all',
-      'is that it',
-      'any more',
-      'next',
-      'more',
-      'others',
-    ]) || normalized.contains('other profile') || normalized.contains('any other');
+    final isMore = classification.intent == ConversationalIntent.profileContinuation ||
+        _containsAny(normalized, [
+          'more profiles', 'no more profiles', 'no more', 'is there no more',
+          'any other profiles', 'any other profile', 'other profiles', 'other profile',
+          'any other', 'another profile', 'another one', 'show more', 'show me more',
+          'anyone else', 'who else', 'someone else', 'show others', 'different profiles',
+          'different people', 'different one', 'different profile', 'is that all',
+          'is that it', 'any more', 'next', 'more', 'others',
+        ]);
 
     // 1. Gender intent detection
-    String? genderHint;
-    if (_containsAny(normalized, ['girl', 'woman', 'female', 'chick', 'lady', 'her', 'she'])) {
-      genderHint = 'female';
-    } else if (_containsAny(normalized, ['boy', 'guy', 'man', 'male', 'dude', 'him', 'he'])) {
-      genderHint = 'male';
-    }
+    final genderHint = classification.entities.genderHint ??
+        (_containsAny(normalized, ['girl', 'woman', 'female', 'chick', 'lady', 'her', 'she'])
+            ? 'female'
+            : (_containsAny(normalized, ['boy', 'guy', 'man', 'male', 'dude', 'him', 'he'])
+                ? 'male'
+                : null));
 
     // 2. Dealbreakers & Negation parsing
-    final dealbreakers = <String>[];
+    final dealbreakers = <String>{...classification.entities.dealbreakers};
     for (int i = 0; i < tokens.length; i++) {
       final token = tokens[i];
       if (VibeMatrixVocabulary.negationTokens.contains(token)) {
-        // Look ahead in the negated clause (up to 5 tokens)
         final clauseEnd = math.min(i + 6, tokens.length);
         final clause = tokens.sublist(i + 1, clauseEnd).join(' ');
 
@@ -100,7 +101,6 @@ class OnDeviceNLUEngine {
       }
     }
 
-    // Direct standalone mentions
     if (normalized.contains('non smoker') || normalized.contains('no smoking')) {
       dealbreakers.add('smoking');
     }
@@ -117,14 +117,12 @@ class OnDeviceNLUEngine {
       double matchScore = 0.0;
 
       for (final syn in dim.synonyms) {
-        // Multi-word phrase matching
         if (syn.contains(' ')) {
           if (normalized.contains(syn)) {
             matchScore += 2.0 * dim.defaultWeight;
             extractedWords.add(syn);
           }
         } else {
-          // Single word matching against tokens
           if (tokens.contains(syn)) {
             matchScore += 1.0 * dim.defaultWeight;
             extractedWords.add(syn);
@@ -139,13 +137,15 @@ class OnDeviceNLUEngine {
     }
 
     // 4. Intent classification
-    String? relationshipIntent;
-    if (rawScores.containsKey('intent_serious') || normalized.contains('serious') || normalized.contains('long term')) {
-      relationshipIntent = 'serious';
-    } else if (rawScores.containsKey('intent_casual') || normalized.contains('casual') || normalized.contains('situationship')) {
-      relationshipIntent = 'casual';
-    } else if (rawScores.containsKey('intent_friendship') || normalized.contains('friend')) {
-      relationshipIntent = 'friendship';
+    String? relationshipIntent = classification.entities.relationshipIntent;
+    if (relationshipIntent == null) {
+      if (rawScores.containsKey('intent_serious') || normalized.contains('serious') || normalized.contains('long term')) {
+        relationshipIntent = 'serious';
+      } else if (rawScores.containsKey('intent_casual') || normalized.contains('casual') || normalized.contains('situationship')) {
+        relationshipIntent = 'casual';
+      } else if (rawScores.containsKey('intent_friendship') || normalized.contains('friend')) {
+        relationshipIntent = 'friendship';
+      }
     }
 
     // 5. Vector Normalization (L2-norm so dot product == Cosine Similarity)
@@ -163,19 +163,21 @@ class OnDeviceNLUEngine {
       }
     }
 
-    // 6. Synthesize natural language summary of what the engine understood
-    final naturalSummary = _buildSummary(detectedIds, dealbreakers, relationshipIntent);
+    // 6. Synthesize natural language summary
+    final naturalSummary = _buildSummary(detectedIds, dealbreakers.toList(), relationshipIntent);
 
     return NLUIntentResult(
       originalQuery: query,
       denseVector: denseVector,
       detectedDimensionIds: detectedIds,
-      dealbreakers: dealbreakers.toSet().toList(),
+      dealbreakers: dealbreakers.toList(),
       targetRelationshipIntent: relationshipIntent,
       genderHint: genderHint,
       extractedKeywords: extractedWords.toSet().toList(),
       naturalSummary: naturalSummary,
       isMoreOrContinuation: isMore,
+      conversationalIntent: classification.intent,
+      classification: classification,
     );
   }
 

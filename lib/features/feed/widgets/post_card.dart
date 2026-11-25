@@ -10,6 +10,7 @@ import 'package:video_player/video_player.dart';
 import 'dart:io';
 import '../../../core/models/post_model.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/theme/design_tokens.dart';
 import '../../../core/theme/app_palette.dart';
 import '../../verification/presentation/widgets/s_badge_widget.dart';
 import '../../../core/constants/app_constants.dart';
@@ -299,37 +300,32 @@ class _PostCardState extends ConsumerState<PostCard>
     final isBoosted = boostStatus != null;
 
     return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+      margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
       decoration: BoxDecoration(
-        color: isDark ? palette.surfaceTint : Colors.white,
-        borderRadius: BorderRadius.circular(20),
+        color: isDark ? DesignTokens.obsidianCard : Colors.white,
+        borderRadius: BorderRadius.circular(DesignTokens.radiusXl),
         border: Border.all(
           color: isBoosted
               ? (boostStatus.boostTier == 'premium'
                   ? const Color(0xFFFFB800).withValues(alpha: 0.5)
                   : const Color(0xFF6366F1).withValues(alpha: 0.5))
-              : (isDark ? palette.primary.withValues(alpha: 0.20) : const Color(0xFFE8E4F2)),
-          width: isBoosted ? 1.5 : 1.2,
+              : (isDark ? DesignTokens.hairline : const Color(0xFFE8E4F2)),
+          width: isBoosted ? 1.5 : 1.0,
         ),
         boxShadow: [
           if (isBoosted)
             BoxShadow(
               color: (boostStatus.boostTier == 'premium'
                   ? const Color(0xFFFFB800)
-                  : const Color(0xFF6366F1)).withValues(alpha: isDark ? 0.16 : 0.08),
+                  : const Color(0xFF6366F1)).withValues(alpha: isDark ? 0.20 : 0.08),
               blurRadius: 20,
               spreadRadius: 1,
               offset: const Offset(0, 4),
             ),
           BoxShadow(
-            color: Colors.black.withValues(alpha: isDark ? 0.35 : 0.05),
+            color: Colors.black.withValues(alpha: isDark ? 0.40 : 0.05),
             blurRadius: 18,
             offset: const Offset(0, 6),
-          ),
-          BoxShadow(
-            color: palette.primary.withValues(alpha: isDark ? 0.06 : 0.03),
-            blurRadius: 24,
-            offset: const Offset(0, 8),
           ),
         ],
       ),

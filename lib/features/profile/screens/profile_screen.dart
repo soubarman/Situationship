@@ -9,6 +9,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_core/firebase_core.dart';
 
 import '../../../core/theme/app_theme.dart';
+import '../../../core/theme/design_tokens.dart';
 import '../../../core/theme/app_palette.dart';
 import '../../../core/providers/app_state_provider.dart';
 import '../../../core/providers/theme_provider.dart';
@@ -259,20 +260,20 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
       margin: const EdgeInsets.fromLTRB(16, 12, 16, 12),
       padding: const EdgeInsets.all(22),
       decoration: BoxDecoration(
-        color: isDark ? const Color(0xFF161226).withOpacity(0.88) : Colors.white.withOpacity(0.92),
-        borderRadius: BorderRadius.circular(32),
+        color: isDark ? DesignTokens.obsidianElevated : Colors.white.withValues(alpha: 0.95),
+        borderRadius: BorderRadius.circular(DesignTokens.radius2xl),
         border: Border.all(
-          color: isDark ? const Color(0xFF9B5DE5).withOpacity(0.28) : const Color(0xFFD4C1FF).withOpacity(0.85),
-          width: 1.4,
+          color: isDark ? DesignTokens.hairline : const Color(0xFFD4C1FF).withValues(alpha: 0.85),
+          width: 1.0,
         ),
         boxShadow: [
           BoxShadow(
-            color: const Color(0xFF9B5DE5).withOpacity(isDark ? 0.22 : 0.08),
+            color: palette.primary.withValues(alpha: isDark ? 0.15 : 0.08),
             blurRadius: 28,
             offset: const Offset(0, 8),
           ),
           BoxShadow(
-            color: Colors.black.withOpacity(isDark ? 0.35 : 0.04),
+            color: Colors.black.withValues(alpha: isDark ? 0.35 : 0.04),
             blurRadius: 14,
             offset: const Offset(0, 4),
           ),

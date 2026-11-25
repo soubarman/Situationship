@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import '../../core/theme/app_theme.dart';
+import '../../core/theme/design_tokens.dart';
 
 class GradientButton extends StatefulWidget {
   final String text;
@@ -7,7 +9,6 @@ class GradientButton extends StatefulWidget {
   final bool isLoading;
   final double height;
   final IconData? icon;
-
   final Gradient? gradient;
   final Color? shadowColor;
 
@@ -16,7 +17,7 @@ class GradientButton extends StatefulWidget {
     required this.text,
     this.onPressed,
     this.isLoading = false,
-    this.height = 56,
+    this.height = 54,
     this.icon,
     this.gradient,
     this.shadowColor,
@@ -36,10 +37,10 @@ class _GradientButtonState extends State<GradientButton>
     super.initState();
     _controller = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 120),
+      duration: DesignTokens.durationFast,
     );
-    _scaleAnim = Tween<double>(begin: 1, end: 0.96).animate(
-      CurvedAnimation(parent: _controller, curve: Curves.easeInOut),
+    _scaleAnim = Tween<double>(begin: 1.0, end: 0.96).animate(
+      CurvedAnimation(parent: _controller, curve: DesignTokens.curveSpring),
     );
   }
 
@@ -59,6 +60,7 @@ class _GradientButtonState extends State<GradientButton>
           ? null
           : (_) {
               _controller.reverse();
+              HapticFeedback.lightImpact();
               widget.onPressed?.call();
             },
       onTapCancel: () => _controller.reverse(),
@@ -69,8 +71,8 @@ class _GradientButtonState extends State<GradientButton>
           child: child,
         ),
         child: AnimatedOpacity(
-          duration: const Duration(milliseconds: 200),
-          opacity: isDisabled ? 0.65 : 1.0,
+          duration: DesignTokens.durationFast,
+          opacity: isDisabled ? 0.55 : 1.0,
           child: Container(
             width: double.infinity,
             height: widget.height,
@@ -79,24 +81,26 @@ class _GradientButtonState extends State<GradientButton>
               borderRadius: BorderRadius.circular(widget.height / 2),
               boxShadow: [
                 BoxShadow(
-                  color: widget.shadowColor ?? AppTheme.primaryBlue.withOpacity(0.4),
-                  blurRadius: 24,
-                  offset: const Offset(0, 8),
+                  color: widget.shadowColor ??
+                      AppTheme.primaryBlue.withValues(alpha: 0.35),
+                  blurRadius: 22,
+                  offset: const Offset(0, 6),
                 ),
               ],
             ),
             child: Center(
               child: widget.isLoading
                   ? const SizedBox(
-                      width: 24,
-                      height: 24,
+                      width: 22,
+                      height: 22,
                       child: CircularProgressIndicator(
                         color: Colors.white,
-                        strokeWidth: 2.5,
+                        strokeWidth: 2.2,
                       ),
                     )
                   : Row(
                       mainAxisSize: MainAxisSize.min,
+                      mainAxisAlignment: MainAxisAlignment.center,
                       children: [
                         if (widget.icon != null) ...[
                           Icon(widget.icon, color: Colors.white, size: 20),
@@ -104,11 +108,9 @@ class _GradientButtonState extends State<GradientButton>
                         ],
                         Text(
                           widget.text,
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 16,
-                            fontWeight: FontWeight.w700,
-                            letterSpacing: 0.3,
+                          style: DesignTokens.labelBold(color: Colors.white).copyWith(
+                            fontSize: 15,
+                            letterSpacing: 0.2,
                           ),
                         ),
                       ],

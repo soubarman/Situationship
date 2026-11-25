@@ -1,3 +1,6 @@
+import 'dart:convert';
+import 'package:http/http.dart' as http;
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:go_router/go_router.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -510,22 +513,88 @@ class _MaleWalletState extends ConsumerState<_MaleWallet> {
     if (_purchasing) return;
     setState(() => _purchasing = true);
 
-    // TODO: Integrate Razorpay payment here.
-    // On payment success, call CoinService.grantPurchasedCoins(...)
-    // For now simulating a successful purchase after a short delay.
-    await Future.delayed(const Duration(milliseconds: 800));
-    final user = ref.read(currentUserProvider);
-    await CoinService.grantPurchasedCoins(userId: user.id, amount: coins);
+    try {
+      final authUser = FirebaseAuth.instance.currentUser;
+      if (authUser == null) {
+        throw Exception('Please sign in to purchase coins.');
+      }
+      final idToken = await authUser.getIdToken();
+      final packMapping = {
+        'starter': 'pack_100',
+        'popular': 'pack_500',
+        'power': 'pack_1200',
+      };
+      final serverPackId = packMapping[pack] ?? 'pack_100';
 
-    if (mounted) {
-      setState(() => _purchasing = false);
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text('✅ $coins coins added to your wallet!'),
-        backgroundColor: AppTheme.success,
-        behavior: SnackBarBehavior.floating,
-        margin: const EdgeInsets.only(left: 16, right: 16, bottom: 28),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-      ));
+      final response = await http.post(
+        Uri.parse('https://us-central1-situation-ship.cloudfunctions.net/api/payments/create-order'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $idToken',
+        },
+        body: jsonEncode({'packId': serverPackId}),
+      );
+
+      if (response.statusCode == 503) {
+        if (mounted) {
+          showDialog(
+            context: context,
+            builder: (ctx) => AlertDialog(
+              backgroundColor: const Color(0xFF16233B),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              title: const Row(
+                children: [
+                  Icon(Icons.shield_outlined, color: Colors.amber, size: 24),
+                  SizedBox(width: 8),
+                  Text('Payment Gateway Setup', style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
+                ],
+              ),
+              content: const Text(
+                'Payment gateway integration is currently in configuration mode.\n\nBackend credentials (RAZORPAY_KEY_ID and RAZORPAY_KEY_SECRET) must be configured in Cloud Functions to process live INR transactions.',
+                style: TextStyle(color: Colors.white70, fontSize: 14),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(ctx).pop(),
+                  child: const Text('OK', style: TextStyle(color: Colors.amber)),
+                ),
+              ],
+            ),
+          );
+        }
+        return;
+      }
+
+      if (response.statusCode != 200) {
+        throw Exception('Order creation failed: ${response.body}');
+      }
+
+      final orderData = jsonDecode(response.body);
+      final orderId = orderData['orderId'];
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text('Order created ($orderId). Awaiting payment gateway processing.'),
+          backgroundColor: AppTheme.primaryBlue,
+          behavior: SnackBarBehavior.floating,
+          margin: const EdgeInsets.only(left: 16, right: 16, bottom: 28),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+        ));
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text('Payment request: $e'),
+          backgroundColor: Colors.redAccent,
+          behavior: SnackBarBehavior.floating,
+          margin: const EdgeInsets.only(left: 16, right: 16, bottom: 28),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+        ));
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _purchasing = false);
+      }
     }
   }
 
@@ -533,24 +602,61 @@ class _MaleWalletState extends ConsumerState<_MaleWallet> {
     if (_purchasing) return;
     setState(() => _purchasing = true);
 
-    // TODO: Integrate Razorpay subscription here.
-    await Future.delayed(const Duration(milliseconds: 800));
-    final user = ref.read(currentUserProvider);
-    await CoinService.activateSubscription(
-      userId: user.id,
-      duration: const Duration(days: 30),
-      phoneUnlockQuota: 10,
-    );
+    try {
+      final authUser = FirebaseAuth.instance.currentUser;
+      if (authUser == null) {
+        throw Exception('Please sign in to subscribe.');
+      }
+      final idToken = await authUser.getIdToken();
+      final response = await http.post(
+        Uri.parse('https://us-central1-situation-ship.cloudfunctions.net/api/payments/create-order'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $idToken',
+        },
+        body: jsonEncode({'packId': 'pack_500'}),
+      );
 
-    if (mounted) {
-      setState(() => _purchasing = false);
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: const Text('⭐ Premium activated! Enjoy all features.'),
-        backgroundColor: AppTheme.primaryBlue,
-        behavior: SnackBarBehavior.floating,
-        margin: const EdgeInsets.only(left: 16, right: 16, bottom: 28),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-      ));
+      if (response.statusCode == 503) {
+        if (mounted) {
+          showDialog(
+            context: context,
+            builder: (ctx) => AlertDialog(
+              backgroundColor: const Color(0xFF16233B),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              title: const Row(
+                children: [
+                  Icon(Icons.star_border, color: Colors.amber, size: 24),
+                  SizedBox(width: 8),
+                  Text('Subscription Gateway Setup', style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
+                ],
+              ),
+              content: const Text(
+                'Subscription recurring payment integration is in configuration mode.\n\nRazorpay credentials must be set on the server before live subscriptions can be activated.',
+                style: TextStyle(color: Colors.white70, fontSize: 14),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(ctx).pop(),
+                  child: const Text('OK', style: TextStyle(color: Colors.amber)),
+                ),
+              ],
+            ),
+          );
+        }
+        return;
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text('Subscription request: $e'),
+          backgroundColor: Colors.redAccent,
+        ));
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _purchasing = false);
+      }
     }
   }
 }

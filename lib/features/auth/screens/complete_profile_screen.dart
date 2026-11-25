@@ -6,6 +6,7 @@ import 'package:firebase_storage/firebase_storage.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_core/firebase_core.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/theme/design_tokens.dart';
 import '../../../core/providers/firebase_auth_provider.dart';
 import '../../../core/providers/firestore_provider.dart';
 import '../../../shared/widgets/multi_photo_manager.dart';
@@ -13,10 +14,6 @@ import '../../../shared/widgets/multi_photo_manager.dart';
 // ─── Provider ────────────────────────────────────────────────────────────────
 
 final _db = firestoreProvider;
-
-const Color _onboardText = Color(0xFF0F172A);
-const Color _onboardSub = Color(0xFF475569);
-const Color _onboardTertiary = Color(0xFF64748B);
 
 // ─── Screen ──────────────────────────────────────────────────────────────────
 
@@ -64,11 +61,11 @@ class _CompleteProfileScreenState extends ConsumerState<CompleteProfileScreen>
     super.initState();
     _progressController = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 400),
+      duration: const Duration(milliseconds: 350),
     );
     _entryController = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 600),
+      duration: const Duration(milliseconds: 500),
     )..forward();
     _progressAnimation = Tween<double>(begin: 0, end: 1 / _steps.length)
         .animate(CurvedAnimation(parent: _progressController, curve: Curves.easeInOut));
@@ -111,7 +108,7 @@ class _CompleteProfileScreenState extends ConsumerState<CompleteProfileScreen>
     // Step 0: Gender must be selected
     if (_currentStep == 0 && _gender.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        _snack('Please select who you are 💙'),
+        _snack('Please select who you are 💫'),
       );
       return;
     }
@@ -141,7 +138,7 @@ class _CompleteProfileScreenState extends ConsumerState<CompleteProfileScreen>
     if (_currentStep < _steps.length - 1) {
       setState(() => _currentStep++);
       _pageController.nextPage(
-        duration: const Duration(milliseconds: 400),
+        duration: const Duration(milliseconds: 350),
         curve: Curves.easeInOut,
       );
       _progressAnimation = Tween<double>(
@@ -160,7 +157,7 @@ class _CompleteProfileScreenState extends ConsumerState<CompleteProfileScreen>
     if (_currentStep > 0) {
       setState(() => _currentStep--);
       _pageController.previousPage(
-        duration: const Duration(milliseconds: 400),
+        duration: const Duration(milliseconds: 350),
         curve: Curves.easeInOut,
       );
     }
@@ -197,36 +194,33 @@ class _CompleteProfileScreenState extends ConsumerState<CompleteProfileScreen>
 
       final String? photoUrl = finalUrls.isNotEmpty ? finalUrls.first : null;
 
-      // Build the profile map
-      final isFemale = _gender == 'female';
+      // Extract existing phone number from auth or empty string
+      final String phoneNumber = user.phoneNumber ?? '';
+
+      // Build the public profile map (PII excluded)
       final data = <String, dynamic>{
-        'id': user.uid,
-        'name': _nameCtrl.text.trim(),
-        'email': user.email ?? '',
-        'bio': _bioCtrl.text.trim(),
-        'age': int.parse(_ageCtrl.text.trim()),
-        'avatarUrl': photoUrl,
-        'location': _locationCtrl.text.trim().isEmpty ? null : _locationCtrl.text.trim(),
-        'interests': _selectedInterests.map((i) => i.substring(3)).toList(),
-        'isVerified': false,
-        'isOnline': true,
-        'photos': finalUrls,
-        'followers': [],
-        'following': [],
-        'likedBy': [],
-        'matches': [],
-        'postCount': 0,
-        'createdAt': FieldValue.serverTimestamp(),
-        // ── New economy & matching fields ──
+        'uid': user.uid,
+        'name': _nameCtrl.text.trim().isNotEmpty
+            ? _nameCtrl.text.trim()
+            : (user.displayName ?? 'Anonymous'),
         'gender': _gender,
-        'interestedIn': _interestedIn == 'all'
-            ? ['male', 'female', 'other']
-            : [_interestedIn],
+        'interestedIn': _interestedIn,
         'relationshipIntent': _relationshipIntent,
-        'phoneNumber': '+91 98765 ${10000 + user.uid.hashCode % 90000}',
+        'bio': _bioCtrl.text.trim(),
+        'age': int.tryParse(_ageCtrl.text.trim()) ?? 21,
+        'avatarUrl': photoUrl,
+        'photoUrls': finalUrls,
+        'photos': finalUrls,
+        'location': _locationCtrl.text.trim().isNotEmpty
+            ? _locationCtrl.text.trim()
+            : 'Nearby',
+        'interests': _selectedInterests,
+        'isVerified': false,
+        'isPhonePublic': false,
         'unlockedUserPhones': [],
         'unlockedVisitors': [],
-        'coins': isFemale ? 0 : 100, // Men get 100 starter coins; women earn theirs
+        'phoneVisibilityVersion': 1,
+        'coins': _gender == 'female' ? 50 : 20,
         'totalEarnedCoins': 0,
         'claimedMilestones': [],
         'isSubscribed': false,
@@ -238,12 +232,29 @@ class _CompleteProfileScreenState extends ConsumerState<CompleteProfileScreen>
         'conversationRewardsToday': 0,
       };
 
+      // 1. Write public profile document (PII excluded)
       await _db.collection('users').doc(user.uid).set(data, SetOptions(merge: true));
       try {
         await FirebaseFirestore.instanceFor(app: Firebase.app(), databaseId: 'default')
             .collection('users')
             .doc(user.uid)
             .set(data, SetOptions(merge: true));
+      } catch (_) {}
+
+      // 2. Write private profile document (owner-only PII)
+      final privateData = <String, dynamic>{
+        'email': user.email ?? '',
+        'phoneNumber': phoneNumber,
+        'updatedAt': FieldValue.serverTimestamp(),
+      };
+      await _db.collection('users').doc(user.uid).collection('private').doc('profile').set(privateData, SetOptions(merge: true));
+      try {
+        await FirebaseFirestore.instanceFor(app: Firebase.app(), databaseId: 'default')
+            .collection('users')
+            .doc(user.uid)
+            .collection('private')
+            .doc('profile')
+            .set(privateData, SetOptions(merge: true));
       } catch (_) {}
 
       if (mounted) context.go('/feed');
@@ -260,9 +271,9 @@ class _CompleteProfileScreenState extends ConsumerState<CompleteProfileScreen>
   SnackBar _snack(String msg, {bool isError = false}) {
     return SnackBar(
       content: Text(msg),
-      backgroundColor: isError ? AppTheme.error : AppTheme.primaryBlue,
+      backgroundColor: isError ? DesignTokens.error : AppTheme.primaryBlue,
       behavior: SnackBarBehavior.floating,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(DesignTokens.radiusMd)),
     );
   }
 
@@ -272,16 +283,24 @@ class _CompleteProfileScreenState extends ConsumerState<CompleteProfileScreen>
     final size = MediaQuery.of(context).size;
 
     return Scaffold(
+      backgroundColor: DesignTokens.obsidianBase,
       body: Stack(
         children: [
-          // Background gradient
-          Container(
-            decoration: const BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [Color(0xFFB8EDFF), Color(0xFFB8FFE8), Color(0xFFE8BBFF)],
-                stops: [0.0, 0.5, 1.0],
+          // Background ambient gradient
+          Positioned(
+            top: -100,
+            right: -80,
+            child: Container(
+              width: 320,
+              height: 320,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                gradient: RadialGradient(
+                  colors: [
+                    AppTheme.primaryBlue.withValues(alpha: 0.14),
+                    Colors.transparent,
+                  ],
+                ),
               ),
             ),
           ),
@@ -319,14 +338,17 @@ class _CompleteProfileScreenState extends ConsumerState<CompleteProfileScreen>
           // Saving overlay
           if (_isSaving)
             Container(
-              color: Colors.black54,
-              child: const Center(
+              color: Colors.black.withValues(alpha: 0.75),
+              child: Center(
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    CircularProgressIndicator(color: Colors.white),
-                    SizedBox(height: 16),
-                    Text('Setting up your vibe...', style: TextStyle(color: Colors.white, fontSize: 16)),
+                    CircularProgressIndicator(color: AppTheme.primaryPink),
+                    const SizedBox(height: 16),
+                    Text(
+                      'Setting up your vibe...',
+                      style: DesignTokens.titleMedium(color: Colors.white),
+                    ),
                   ],
                 ),
               ),
@@ -338,49 +360,42 @@ class _CompleteProfileScreenState extends ConsumerState<CompleteProfileScreen>
 
   Widget _buildHeader(bool isDark) {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(24, 16, 24, 0),
+      padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
       child: Row(
         children: [
           if (_currentStep > 0)
             GestureDetector(
               onTap: _prevStep,
               child: Container(
-                width: 40,
-                height: 40,
+                width: 38,
+                height: 38,
                 decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.6),
-                  borderRadius: BorderRadius.circular(12),
+                  color: DesignTokens.obsidianCard,
+                  borderRadius: BorderRadius.circular(DesignTokens.radiusSm),
+                  border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
                 ),
-                child: const Icon(Icons.arrow_back_ios_new_rounded, size: 18),
+                child: const Icon(Icons.arrow_back_ios_new_rounded, size: 16, color: Colors.white),
               ),
             )
           else
-            const SizedBox(width: 40),
+            const SizedBox(width: 38),
           Expanded(
             child: Column(
               children: [
                 Text(
                   'Step ${_currentStep + 1} of ${_steps.length}',
-                  style: const TextStyle(
-                    fontSize: 12,
-                    color: _onboardSub,
-                    fontWeight: FontWeight.w500,
-                  ),
+                  style: DesignTokens.microBadge(color: DesignTokens.textMuted),
                 ),
                 const SizedBox(height: 2),
                 Text(
                   _steps[_currentStep],
-                  style: const TextStyle(
-                    fontSize: 20,
-                    fontWeight: FontWeight.w800,
-                    color: _onboardText,
-                  ),
+                  style: DesignTokens.headingMedium(color: DesignTokens.textPrimary),
                   textAlign: TextAlign.center,
                 ),
               ],
             ),
           ),
-          const SizedBox(width: 40),
+          const SizedBox(width: 38),
         ],
       ),
     );
@@ -390,9 +405,9 @@ class _CompleteProfileScreenState extends ConsumerState<CompleteProfileScreen>
     return Padding(
       padding: const EdgeInsets.fromLTRB(24, 16, 24, 0),
       child: Container(
-        height: 6,
+        height: 4,
         decoration: BoxDecoration(
-          color: Colors.white.withOpacity(0.5),
+          color: Colors.white.withValues(alpha: 0.08),
           borderRadius: BorderRadius.circular(99),
         ),
         child: AnimatedBuilder(
@@ -403,9 +418,15 @@ class _CompleteProfileScreenState extends ConsumerState<CompleteProfileScreen>
             child: Container(
               decoration: BoxDecoration(
                 gradient: LinearGradient(
-                  colors: [AppTheme.primaryBlue, AppTheme.accentPurple],
+                  colors: [AppTheme.primaryPink, AppTheme.primaryBlue],
                 ),
                 borderRadius: BorderRadius.circular(99),
+                boxShadow: [
+                  BoxShadow(
+                    color: AppTheme.primaryPink.withValues(alpha: 0.5),
+                    blurRadius: 8,
+                  ),
+                ],
               ),
             ),
           ),
@@ -421,52 +442,52 @@ class _CompleteProfileScreenState extends ConsumerState<CompleteProfileScreen>
       padding: const EdgeInsets.all(24),
       child: Column(
         children: [
-          const SizedBox(height: 24),
-          const Text(
+          const SizedBox(height: 18),
+          Text(
             'Who are you? 💫',
-            style: TextStyle(fontSize: 28, fontWeight: FontWeight.w800, color: _onboardText),
+            style: DesignTokens.displayHero(color: DesignTokens.textPrimary).copyWith(fontSize: 26),
             textAlign: TextAlign.center,
           ),
           const SizedBox(height: 8),
-          const Text(
-            'This helps us tailor your experience.',
-            style: TextStyle(fontSize: 15, color: _onboardSub),
+          Text(
+            'This helps us tailor your match feed and experience.',
+            style: DesignTokens.bodyMedium(color: DesignTokens.textSecondary),
             textAlign: TextAlign.center,
           ),
-          const SizedBox(height: 40),
+          const SizedBox(height: 32),
           _genderCard(
             value: 'male',
             label: 'Man',
             emoji: '🙋‍♂️',
             description: 'Buy coins, unlock features\n& connect with people',
-            gradient: const LinearGradient(colors: [Color(0xFF4FC3F7), Color(0xFF0288D1)]),
+            accentColor: const Color(0xFF2563EB),
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 14),
           _genderCard(
             value: 'female',
             label: 'Woman',
             emoji: '🙋‍♀️',
             description: 'Earn coins through conversations\n& redeem for gift cards',
-            gradient: const LinearGradient(colors: [Color(0xFFF48FB1), Color(0xFFAD1457)]),
+            accentColor: const Color(0xFFFF3366),
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 14),
           _genderCard(
             value: 'other',
             label: 'Other',
             emoji: '✨',
             description: 'Express yourself freely\non Situationship',
-            gradient: const LinearGradient(colors: [Color(0xFFCE93D8), Color(0xFF6A1B9A)]),
+            accentColor: const Color(0xFFA855F7),
           ),
           if (_gender.isNotEmpty) ...[
             const SizedBox(height: 28),
-            const Align(
+            Align(
               alignment: Alignment.centerLeft,
               child: Text(
                 'Who would you like to date? 💕',
-                style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: _onboardText),
+                style: DesignTokens.titleMedium(color: DesignTokens.textPrimary),
               ),
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: 10),
             Row(
               children: [
                 _buildPreferenceChip('Women 🌸', 'female'),
@@ -477,14 +498,14 @@ class _CompleteProfileScreenState extends ConsumerState<CompleteProfileScreen>
               ],
             ),
             const SizedBox(height: 20),
-            const Align(
+            Align(
               alignment: Alignment.centerLeft,
               child: Text(
                 'What are you looking for? 🎯',
-                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: _onboardText),
+                style: DesignTokens.titleMedium(color: DesignTokens.textPrimary),
               ),
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: 10),
             Wrap(
               spacing: 8,
               runSpacing: 8,
@@ -507,24 +528,24 @@ class _CompleteProfileScreenState extends ConsumerState<CompleteProfileScreen>
       child: GestureDetector(
         onTap: () => setState(() => _interestedIn = value),
         child: AnimatedContainer(
-          duration: const Duration(milliseconds: 200),
+          duration: const Duration(milliseconds: 180),
           padding: const EdgeInsets.symmetric(vertical: 12),
           decoration: BoxDecoration(
-            color: isSelected ? AppTheme.primaryBlue : Colors.white.withOpacity(0.7),
-            borderRadius: BorderRadius.circular(14),
+            color: isSelected
+                ? AppTheme.primaryBlue.withValues(alpha: 0.2)
+                : DesignTokens.obsidianCard,
+            borderRadius: BorderRadius.circular(DesignTokens.radiusMd),
             border: Border.all(
-              color: isSelected ? AppTheme.primaryBlue : Colors.white,
-              width: 1.5,
+              color: isSelected ? AppTheme.primaryBlue : Colors.white.withValues(alpha: 0.10),
+              width: 1.2,
             ),
           ),
           alignment: Alignment.center,
           child: Text(
             label,
-            style: TextStyle(
-              fontSize: 13,
-              fontWeight: isSelected ? FontWeight.w700 : FontWeight.w600,
-              color: isSelected ? Colors.white : _onboardText,
-            ),
+            style: DesignTokens.labelBold(
+              color: isSelected ? Colors.white : DesignTokens.textSecondary,
+            ).copyWith(fontSize: 12),
           ),
         ),
       ),
@@ -536,23 +557,23 @@ class _CompleteProfileScreenState extends ConsumerState<CompleteProfileScreen>
     return GestureDetector(
       onTap: () => setState(() => _relationshipIntent = value),
       child: AnimatedContainer(
-        duration: const Duration(milliseconds: 200),
+        duration: const Duration(milliseconds: 180),
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
         decoration: BoxDecoration(
-          color: isSelected ? AppTheme.primaryBlue : Colors.white.withOpacity(0.7),
-          borderRadius: BorderRadius.circular(14),
+          color: isSelected
+              ? AppTheme.primaryPink.withValues(alpha: 0.2)
+              : DesignTokens.obsidianCard,
+          borderRadius: BorderRadius.circular(DesignTokens.radiusFull),
           border: Border.all(
-            color: isSelected ? AppTheme.primaryBlue : Colors.white,
-            width: 1.5,
+            color: isSelected ? AppTheme.primaryPink : Colors.white.withValues(alpha: 0.10),
+            width: 1.2,
           ),
         ),
         child: Text(
           label,
-          style: TextStyle(
-            fontSize: 13,
-            fontWeight: isSelected ? FontWeight.w700 : FontWeight.w600,
-            color: isSelected ? Colors.white : _onboardText,
-          ),
+          style: DesignTokens.labelBold(
+            color: isSelected ? Colors.white : DesignTokens.textSecondary,
+          ).copyWith(fontSize: 12),
         ),
       ),
     );
@@ -563,11 +584,12 @@ class _CompleteProfileScreenState extends ConsumerState<CompleteProfileScreen>
     required String label,
     required String emoji,
     required String description,
-    required Gradient gradient,
+    required Color accentColor,
   }) {
     final selected = _gender == value;
     return GestureDetector(
       onTap: () {
+        HapticFeedback.lightImpact();
         setState(() {
           _gender = value;
           if (value == 'male') {
@@ -582,22 +604,29 @@ class _CompleteProfileScreenState extends ConsumerState<CompleteProfileScreen>
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 200),
         width: double.infinity,
-        padding: const EdgeInsets.all(20),
+        padding: const EdgeInsets.all(18),
         decoration: BoxDecoration(
-          gradient: selected ? gradient : null,
-          color: selected ? null : Colors.white.withOpacity(0.65),
-          borderRadius: BorderRadius.circular(20),
+          color: selected
+              ? accentColor.withValues(alpha: 0.15)
+              : DesignTokens.obsidianCard,
+          borderRadius: BorderRadius.circular(DesignTokens.radiusLg),
           border: Border.all(
-            color: selected ? Colors.white.withOpacity(0.5) : Colors.white.withOpacity(0.9),
-            width: 2,
+            color: selected ? accentColor : Colors.white.withValues(alpha: 0.08),
+            width: selected ? 1.6 : 1.0,
           ),
           boxShadow: selected
-              ? [BoxShadow(color: Colors.black.withOpacity(0.18), blurRadius: 20, offset: const Offset(0, 6))]
-              : [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 8)],
+              ? [
+                  BoxShadow(
+                    color: accentColor.withValues(alpha: 0.25),
+                    blurRadius: 18,
+                    offset: const Offset(0, 4),
+                  ),
+                ]
+              : DesignTokens.cardShadow(),
         ),
         child: Row(
           children: [
-            Text(emoji, style: const TextStyle(fontSize: 36)),
+            Text(emoji, style: const TextStyle(fontSize: 32)),
             const SizedBox(width: 16),
             Expanded(
               child: Column(
@@ -605,28 +634,21 @@ class _CompleteProfileScreenState extends ConsumerState<CompleteProfileScreen>
                 children: [
                   Text(
                     label,
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.w800,
-                      color: selected ? Colors.white : _onboardText,
-                    ),
+                    style: DesignTokens.titleMedium(color: Colors.white).copyWith(fontSize: 17),
                   ),
-                  const SizedBox(height: 4),
+                  const SizedBox(height: 3),
                   Text(
                     description,
-                    style: TextStyle(
-                      fontSize: 12,
-                      height: 1.4,
-                      color: selected ? Colors.white.withOpacity(0.85) : _onboardSub,
-                    ),
+                    style: DesignTokens.bodyMedium(color: DesignTokens.textSecondary).copyWith(fontSize: 12),
                   ),
                 ],
               ),
             ),
-            if (selected)
-              const Icon(Icons.check_circle_rounded, color: Colors.white, size: 24)
-            else
-              const Icon(Icons.radio_button_unchecked_rounded, color: _onboardTertiary, size: 24),
+            Icon(
+              selected ? Icons.check_circle_rounded : Icons.radio_button_unchecked_rounded,
+              color: selected ? accentColor : DesignTokens.textMuted,
+              size: 22,
+            ),
           ],
         ),
       ),
@@ -641,15 +663,15 @@ class _CompleteProfileScreenState extends ConsumerState<CompleteProfileScreen>
       child: Column(
         children: [
           const SizedBox(height: 8),
-          const Text(
+          Text(
             'Add your best photos ✨',
-            style: TextStyle(fontSize: 26, fontWeight: FontWeight.w800, color: _onboardText),
+            style: DesignTokens.displayHero(color: DesignTokens.textPrimary).copyWith(fontSize: 26),
             textAlign: TextAlign.center,
           ),
           const SizedBox(height: 6),
-          const Text(
+          Text(
             'Upload up to 4 photos. Drag or tap arrows to pick your #1 main picture!',
-            style: TextStyle(fontSize: 14, color: _onboardSub, height: 1.4),
+            style: DesignTokens.bodyMedium(color: DesignTokens.textSecondary),
             textAlign: TextAlign.center,
           ),
           const SizedBox(height: 24),
@@ -664,11 +686,9 @@ class _CompleteProfileScreenState extends ConsumerState<CompleteProfileScreen>
           Container(
             padding: const EdgeInsets.all(14),
             decoration: BoxDecoration(
-              color: isDark ? Colors.white.withOpacity(0.05) : Colors.white.withOpacity(0.7),
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(
-                color: isDark ? Colors.white.withOpacity(0.08) : Colors.black.withOpacity(0.05),
-              ),
+              color: DesignTokens.obsidianCard,
+              borderRadius: BorderRadius.circular(DesignTokens.radiusMd),
+              border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
             ),
             child: Row(
               children: [
@@ -677,7 +697,7 @@ class _CompleteProfileScreenState extends ConsumerState<CompleteProfileScreen>
                 Expanded(
                   child: Text(
                     'The 1st photo is your main avatar. Up to 4 photos will be shown in your profile!',
-                    style: TextStyle(fontSize: 13, color: AppTheme.textSecondary),
+                    style: DesignTokens.bodyMedium(color: DesignTokens.textSecondary).copyWith(fontSize: 12.5),
                   ),
                 ),
               ],
@@ -698,17 +718,17 @@ class _CompleteProfileScreenState extends ConsumerState<CompleteProfileScreen>
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const SizedBox(height: 16),
-            const Text(
+            const SizedBox(height: 12),
+            Text(
               'Tell us about you 🌟',
-              style: TextStyle(fontSize: 28, fontWeight: FontWeight.w800, color: _onboardText),
+              style: DesignTokens.displayHero(color: DesignTokens.textPrimary).copyWith(fontSize: 26),
             ),
-            const SizedBox(height: 8),
-            const Text(
-              'This is what people see on your profile.',
-              style: TextStyle(fontSize: 15, color: _onboardSub),
+            const SizedBox(height: 6),
+            Text(
+              'This is what people see on your profile card.',
+              style: DesignTokens.bodyMedium(color: DesignTokens.textSecondary),
             ),
-            const SizedBox(height: 32),
+            const SizedBox(height: 28),
             _label('Your Name'),
             const SizedBox(height: 8),
             _glassField(
@@ -716,7 +736,7 @@ class _CompleteProfileScreenState extends ConsumerState<CompleteProfileScreen>
               hint: 'e.g. Alex Chen',
               icon: Icons.person_rounded,
             ),
-            const SizedBox(height: 20),
+            const SizedBox(height: 18),
             _label('Your Age'),
             const SizedBox(height: 8),
             _glassField(
@@ -726,7 +746,7 @@ class _CompleteProfileScreenState extends ConsumerState<CompleteProfileScreen>
               keyboardType: TextInputType.number,
               inputFormatters: [FilteringTextInputFormatter.digitsOnly],
             ),
-            const SizedBox(height: 20),
+            const SizedBox(height: 18),
             _label('Bio / Vibe ✨'),
             const SizedBox(height: 8),
             _glassField(
@@ -749,34 +769,37 @@ class _CompleteProfileScreenState extends ConsumerState<CompleteProfileScreen>
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const SizedBox(height: 16),
-          const Text(
+          const SizedBox(height: 12),
+          Text(
             "What's your vibe? 🎯",
-            style: TextStyle(fontSize: 28, fontWeight: FontWeight.w800, color: _onboardText),
+            style: DesignTokens.displayHero(color: DesignTokens.textPrimary).copyWith(fontSize: 26),
           ),
-          const SizedBox(height: 8),
-          const Text(
+          const SizedBox(height: 6),
+          Text(
             'Pick at least 3 interests to find your match.',
-            style: TextStyle(fontSize: 15, color: _onboardSub),
+            style: DesignTokens.bodyMedium(color: DesignTokens.textSecondary),
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 12),
           AnimatedContainer(
             duration: const Duration(milliseconds: 200),
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
             decoration: BoxDecoration(
               color: _selectedInterests.length >= 3
-                  ? AppTheme.primaryGreen.withOpacity(0.15)
-                  : Colors.white.withOpacity(0.5),
-              borderRadius: BorderRadius.circular(12),
+                  ? DesignTokens.success.withValues(alpha: 0.15)
+                  : DesignTokens.obsidianCard,
+              borderRadius: BorderRadius.circular(DesignTokens.radiusSm),
+              border: Border.all(
+                color: _selectedInterests.length >= 3
+                    ? DesignTokens.success.withValues(alpha: 0.4)
+                    : Colors.white.withValues(alpha: 0.08),
+              ),
             ),
             child: Text(
               _selectedInterests.isEmpty
                   ? 'None selected'
                   : '${_selectedInterests.length} selected ${_selectedInterests.length >= 3 ? "✅" : ""}',
-              style: TextStyle(
-                fontSize: 13,
-                fontWeight: FontWeight.w600,
-                color: _selectedInterests.length >= 3 ? AppTheme.primaryBlue : AppTheme.textSecondary,
+              style: DesignTokens.labelBold(
+                color: _selectedInterests.length >= 3 ? DesignTokens.success : DesignTokens.textSecondary,
               ),
             ),
           ),
@@ -788,6 +811,7 @@ class _CompleteProfileScreenState extends ConsumerState<CompleteProfileScreen>
               final selected = _selectedInterests.contains(interest);
               return GestureDetector(
                 onTap: () {
+                  HapticFeedback.selectionClick();
                   setState(() {
                     if (selected) {
                       _selectedInterests.remove(interest);
@@ -797,26 +821,28 @@ class _CompleteProfileScreenState extends ConsumerState<CompleteProfileScreen>
                   });
                 },
                 child: AnimatedContainer(
-                  duration: const Duration(milliseconds: 200),
+                  duration: const Duration(milliseconds: 180),
                   padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                   decoration: BoxDecoration(
-                    color: selected ? AppTheme.primaryBlue : Colors.white.withOpacity(0.7),
-                    borderRadius: BorderRadius.circular(50),
+                    color: selected
+                        ? AppTheme.primaryPink.withValues(alpha: 0.22)
+                        : DesignTokens.obsidianCard,
+                    borderRadius: BorderRadius.circular(DesignTokens.radiusFull),
                     border: Border.all(
-                      color: selected ? AppTheme.primaryBlue : Colors.white,
-                      width: 1.5,
+                      color: selected
+                          ? AppTheme.primaryPink
+                          : Colors.white.withValues(alpha: 0.10),
+                      width: selected ? 1.4 : 1.0,
                     ),
                     boxShadow: selected
-                        ? [BoxShadow(color: AppTheme.primaryBlue.withOpacity(0.3), blurRadius: 12)]
+                        ? [BoxShadow(color: AppTheme.primaryPink.withValues(alpha: 0.25), blurRadius: 10)]
                         : [],
                   ),
                   child: Text(
                     interest,
-                    style: TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w600,
-                      color: selected ? Colors.white : _onboardText,
-                    ),
+                    style: DesignTokens.labelBold(
+                      color: selected ? Colors.white : DesignTokens.textSecondary,
+                    ).copyWith(fontSize: 13),
                   ),
                 ),
               );
@@ -835,17 +861,17 @@ class _CompleteProfileScreenState extends ConsumerState<CompleteProfileScreen>
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const SizedBox(height: 16),
-          const Text(
+          const SizedBox(height: 12),
+          Text(
             "Where are you? 📍",
-            style: TextStyle(fontSize: 28, fontWeight: FontWeight.w800, color: _onboardText),
+            style: DesignTokens.displayHero(color: DesignTokens.textPrimary).copyWith(fontSize: 26),
           ),
-          const SizedBox(height: 8),
-          const Text(
+          const SizedBox(height: 6),
+          Text(
             'Optional — helps find people near you.',
-            style: TextStyle(fontSize: 15, color: _onboardSub),
+            style: DesignTokens.bodyMedium(color: DesignTokens.textSecondary),
           ),
-          const SizedBox(height: 32),
+          const SizedBox(height: 28),
           _label('City / Location'),
           const SizedBox(height: 8),
           _glassField(
@@ -857,23 +883,24 @@ class _CompleteProfileScreenState extends ConsumerState<CompleteProfileScreen>
           Container(
             padding: const EdgeInsets.all(20),
             decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.6),
-              borderRadius: BorderRadius.circular(20),
-              border: Border.all(color: Colors.white.withOpacity(0.8), width: 1.5),
+              color: DesignTokens.obsidianCard,
+              borderRadius: BorderRadius.circular(DesignTokens.radiusLg),
+              border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+              boxShadow: DesignTokens.cardShadow(),
             ),
             child: Column(
               children: [
-                const Text('🎉', style: TextStyle(fontSize: 40)),
+                const Text('🎉', style: TextStyle(fontSize: 38)),
                 const SizedBox(height: 12),
-                const Text(
+                Text(
                   "You're all set!",
-                  style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: _onboardText),
+                  style: DesignTokens.headingMedium(color: DesignTokens.textPrimary),
                   textAlign: TextAlign.center,
                 ),
                 const SizedBox(height: 8),
-                const Text(
+                Text(
                   "Hit Launch to enter the vibe and start making connections 🔥",
-                  style: TextStyle(fontSize: 14, color: _onboardSub, height: 1.5),
+                  style: DesignTokens.bodyMedium(color: DesignTokens.textSecondary),
                   textAlign: TextAlign.center,
                 ),
               ],
@@ -891,21 +918,20 @@ class _CompleteProfileScreenState extends ConsumerState<CompleteProfileScreen>
     return Padding(
       padding: const EdgeInsets.fromLTRB(24, 16, 24, 24),
       child: GestureDetector(
-        onTap: _nextStep,
+        onTap: () {
+          HapticFeedback.lightImpact();
+          _nextStep();
+        },
         child: Container(
-          height: 58,
+          height: 56,
           decoration: BoxDecoration(
-            gradient: LinearGradient(
-              colors: [AppTheme.primaryBlue, AppTheme.accentPurple],
-              begin: Alignment.centerLeft,
-              end: Alignment.centerRight,
-            ),
-            borderRadius: BorderRadius.circular(18),
+            gradient: AppTheme.primaryGradient,
+            borderRadius: BorderRadius.circular(DesignTokens.radiusFull),
             boxShadow: [
               BoxShadow(
-                color: AppTheme.primaryBlue.withOpacity(0.4),
+                color: AppTheme.primaryPink.withValues(alpha: 0.35),
                 blurRadius: 20,
-                offset: const Offset(0, 8),
+                offset: const Offset(0, 6),
               ),
             ],
           ),
@@ -914,15 +940,11 @@ class _CompleteProfileScreenState extends ConsumerState<CompleteProfileScreen>
             children: [
               Text(
                 isLast ? '🚀 Launch into Situationship' : 'Continue',
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 16,
-                  fontWeight: FontWeight.w700,
-                ),
+                style: DesignTokens.labelBold(color: Colors.white).copyWith(fontSize: 15),
               ),
               if (!isLast) ...[
                 const SizedBox(width: 8),
-                const Icon(Icons.arrow_forward_rounded, color: Colors.white, size: 20),
+                const Icon(Icons.arrow_forward_rounded, color: Colors.white, size: 18),
               ],
             ],
           ),
@@ -936,7 +958,7 @@ class _CompleteProfileScreenState extends ConsumerState<CompleteProfileScreen>
   Widget _label(String text) {
     return Text(
       text,
-      style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: _onboardText),
+      style: DesignTokens.labelBold(color: DesignTokens.textPrimary),
     );
   }
 
@@ -950,23 +972,20 @@ class _CompleteProfileScreenState extends ConsumerState<CompleteProfileScreen>
   }) {
     return Container(
       decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.7),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.white.withOpacity(0.9), width: 1.5),
-        boxShadow: [
-          BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 12, offset: const Offset(0, 4)),
-        ],
+        color: DesignTokens.obsidianInput,
+        borderRadius: BorderRadius.circular(DesignTokens.radiusMd),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
       ),
       child: TextField(
         controller: controller,
         keyboardType: keyboardType,
         inputFormatters: inputFormatters,
         maxLines: maxLines,
-        style: const TextStyle(fontSize: 15, color: _onboardText),
+        style: DesignTokens.bodyLarge(color: Colors.white),
         decoration: InputDecoration(
           hintText: hint,
-          hintStyle: const TextStyle(color: _onboardTertiary, fontSize: 14),
-          prefixIcon: Icon(icon, color: AppTheme.primaryBlue, size: 20),
+          hintStyle: DesignTokens.bodyMedium(color: DesignTokens.textMuted),
+          prefixIcon: Icon(icon, color: AppTheme.primaryPink, size: 20),
           border: InputBorder.none,
           contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
         ),

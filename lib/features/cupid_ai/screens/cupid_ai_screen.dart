@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:situationship/core/theme/app_theme.dart';
 import 'package:situationship/core/theme/app_palette.dart';
 import '../providers/cupid_ai_provider.dart';
 import '../widgets/cupid_profile_card.dart';
@@ -91,7 +90,7 @@ class _CupidAIScreenState extends ConsumerState<CupidAIScreen>
         child: Column(
           children: [
             // ── 1. Top Header ──────────────────────────────────────────────
-            _buildHeader(isDark, palette),
+            _buildHeader(isDark, palette, state),
 
             // ── 2. Chat Stream ─────────────────────────────────────────────
             Expanded(
@@ -117,7 +116,7 @@ class _CupidAIScreenState extends ConsumerState<CupidAIScreen>
     );
   }
 
-  Widget _buildHeader(bool isDark, AppPalette palette) {
+  Widget _buildHeader(bool isDark, AppPalette palette, CupidAIState state) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
       decoration: BoxDecoration(
@@ -203,18 +202,18 @@ class _CupidAIScreenState extends ConsumerState<CupidAIScreen>
                     Container(
                       width: 6,
                       height: 6,
-                      decoration: const BoxDecoration(
+                      decoration: BoxDecoration(
                         shape: BoxShape.circle,
-                        color: Color(0xFF10B981),
+                        color: state.isOfflineReady ? const Color(0xFF10B981) : const Color(0xFF3B82F6),
                       ),
                     ),
                     const SizedBox(width: 6),
                     Text(
-                      'Personal Matchmaker • Active Now',
+                      state.isOfflineReady ? '100% On-Device AI • Offline' : 'On-Device AI Engine',
                       style: TextStyle(
                         fontSize: 11,
-                        fontWeight: FontWeight.w500,
-                        color: isDark ? Colors.white60 : AppTheme.textSecondary,
+                        fontWeight: FontWeight.w600,
+                        color: isDark ? const Color(0xFF10B981) : const Color(0xFF059669),
                       ),
                     ),
                   ],
@@ -384,7 +383,7 @@ class _CupidAIScreenState extends ConsumerState<CupidAIScreen>
         ),
         const SizedBox(width: 10),
         Text(
-          'Curating compatible profiles...',
+          'Consulting Cupid Concierge...',
           style: TextStyle(
             fontSize: 12.5,
             fontStyle: FontStyle.italic,

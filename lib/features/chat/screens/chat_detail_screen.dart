@@ -15,6 +15,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../../../core/models/chat_model.dart';
 import '../../../core/models/user_model.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/theme/design_tokens.dart';
 import '../../../core/providers/app_state_provider.dart';
 import 'package:intl/intl.dart';
 import 'package:firebase_storage/firebase_storage.dart';
@@ -2727,8 +2728,8 @@ class _MessageBubble extends StatelessWidget {
                             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 11),
                             decoration: BoxDecoration(
                               color: isDark
-                                  ? Colors.white.withValues(alpha: 0.1)
-                                  : Colors.white.withValues(alpha: 0.85),
+                                  ? DesignTokens.obsidianElevated
+                                  : Colors.white.withValues(alpha: 0.92),
                               borderRadius: const BorderRadius.only(
                                 topLeft: Radius.circular(20),
                                 topRight: Radius.circular(20),
@@ -2737,10 +2738,17 @@ class _MessageBubble extends StatelessWidget {
                               ),
                               border: Border.all(
                                 color: isDark
-                                    ? Colors.white.withValues(alpha: 0.12)
+                                    ? DesignTokens.hairline
                                     : Colors.black.withValues(alpha: 0.06),
-                                width: 0.8,
+                                width: 1.0,
                               ),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.black.withValues(alpha: isDark ? 0.35 : 0.06),
+                                  blurRadius: 10,
+                                  offset: const Offset(0, 3),
+                                ),
+                              ],
                             ),
                             child: _buildMessageTextWithColorEmojis(message.text, false, isDark),
                           ),

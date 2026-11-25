@@ -5,6 +5,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/models/chat_model.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/theme/design_tokens.dart';
+import '../../../core/theme/app_palette.dart';
 import '../../../core/providers/app_state_provider.dart';
 import 'package:timeago/timeago.dart' as timeago;
 import '../../../shared/widgets/background_orbs.dart';
@@ -55,6 +57,7 @@ class _ChatsScreenState extends ConsumerState<ChatsScreen>
   @override
   Widget build(BuildContext context) {
     final chats = ref.watch(chatsProvider);
+    final palette = ref.watch(appPaletteProvider);
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
     final acceptedChats = chats.where((c) => c.status == 'accepted' && !c.isConfession).toList();
@@ -78,7 +81,7 @@ class _ChatsScreenState extends ConsumerState<ChatsScreen>
             child: NestedScrollView(
               headerSliverBuilder: (context, innerBoxIsScrolled) => [
                 _buildSliverAppBar(context, isDark),
-                SliverToBoxAdapter(child: _buildTabBar(isDark)),
+                SliverToBoxAdapter(child: _buildTabBar(isDark, palette)),
               ],
               body: TabBarView(
                 controller: _tabController,
@@ -115,53 +118,47 @@ class _ChatsScreenState extends ConsumerState<ChatsScreen>
     );
   }
 
-  Widget _buildTabBar(bool isDark) {
+  Widget _buildTabBar(bool isDark, AppPalette palette) {
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(20),
-        child: BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
-          child: Container(
-            height: 48,
-            decoration: BoxDecoration(
-              color: isDark
-                  ? const Color(0xFF11141C)
-                  : Colors.white.withValues(alpha: 0.75),
-              borderRadius: BorderRadius.circular(20),
-              border: Border.all(
-                color: isDark
-                    ? Colors.white.withValues(alpha: 0.08)
-                    : Colors.white.withValues(alpha: 0.9),
-                width: 1,
-              ),
-            ),
-            child: TabBar(
-              controller: _tabController,
-              indicatorSize: TabBarIndicatorSize.tab,
-              dividerColor: Colors.transparent,
-              indicator: BoxDecoration(
-                borderRadius: BorderRadius.circular(17),
-                gradient: AppTheme.primaryGradient,
-                boxShadow: [
-                  BoxShadow(
-                    color: AppTheme.primaryBlue.withValues(alpha: 0.35),
-                    blurRadius: 12,
-                    offset: const Offset(0, 4),
-                  ),
-                ],
-              ),
-              labelColor: Colors.white,
-              unselectedLabelColor: isDark ? Colors.white54 : AppTheme.textSecondary,
-              labelStyle: const TextStyle(fontWeight: FontWeight.w800, fontSize: 13.5),
-              unselectedLabelStyle: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13.5),
-              tabs: const [
-                Tab(text: 'Messages'),
-                Tab(text: 'Requests'),
-                Tab(text: 'Confessions'),
-              ],
-            ),
+      child: Container(
+        height: 48,
+        decoration: BoxDecoration(
+          color: isDark
+              ? DesignTokens.obsidianElevated
+              : Colors.white.withValues(alpha: 0.85),
+          borderRadius: BorderRadius.circular(DesignTokens.radiusFull),
+          border: Border.all(
+            color: isDark
+                ? DesignTokens.hairline
+                : const Color(0xFFE2E8F0),
+            width: 1,
           ),
+        ),
+        child: TabBar(
+          controller: _tabController,
+          indicatorSize: TabBarIndicatorSize.tab,
+          dividerColor: Colors.transparent,
+          indicator: BoxDecoration(
+            borderRadius: BorderRadius.circular(DesignTokens.radiusFull),
+            gradient: palette.primaryGradient,
+            boxShadow: [
+              BoxShadow(
+                color: palette.primary.withValues(alpha: 0.35),
+                blurRadius: 12,
+                offset: const Offset(0, 4),
+              ),
+            ],
+          ),
+          labelColor: Colors.white,
+          unselectedLabelColor: isDark ? DesignTokens.textSecondary : const Color(0xFF64748B),
+          labelStyle: const TextStyle(fontWeight: FontWeight.w800, fontSize: 13.5),
+          unselectedLabelStyle: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13.5),
+          tabs: const [
+            Tab(text: 'Messages'),
+            Tab(text: 'Requests'),
+            Tab(text: 'Confessions'),
+          ],
         ),
       ),
     );
@@ -666,16 +663,16 @@ class _ChatTileState extends ConsumerState<_ChatTile>
                   padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
                   decoration: BoxDecoration(
                     color: isDark
-                        ? Colors.white.withValues(alpha: hasUnread ? 0.07 : 0.04)
+                        ? (hasUnread ? DesignTokens.obsidianElevated : DesignTokens.obsidianCard)
                         : Colors.white.withValues(alpha: hasUnread ? 0.92 : 0.78),
-                    borderRadius: BorderRadius.circular(22),
+                    borderRadius: BorderRadius.circular(DesignTokens.radiusXl),
                     border: Border.all(
                       color: hasUnread
-                          ? AppTheme.primaryBlue.withValues(alpha: 0.35)
+                          ? AppTheme.primaryBlue.withValues(alpha: 0.50)
                           : (isDark
-                              ? Colors.white.withValues(alpha: 0.08)
+                              ? DesignTokens.hairline
                               : Colors.white.withValues(alpha: 0.85)),
-                      width: hasUnread ? 1.2 : 0.8,
+                      width: hasUnread ? 1.2 : 1.0,
                     ),
                     boxShadow: [
                       if (hasUnread)
@@ -1019,53 +1016,7 @@ class _SectionHeader extends StatelessWidget {
   }
 }
 
-// ─── Glass Icon Button ───────────────────────────────────────────────────────
 
-class _GlassIconButton extends StatelessWidget {
-  final bool isDark;
-  final IconData icon;
-  final VoidCallback onTap;
-
-  const _GlassIconButton({
-    required this.isDark,
-    required this.icon,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(14),
-        child: BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-          child: Container(
-            width: 40,
-            height: 40,
-            decoration: BoxDecoration(
-              color: isDark
-                  ? Colors.white.withValues(alpha: 0.08)
-                  : Colors.white.withValues(alpha: 0.55),
-              borderRadius: BorderRadius.circular(14),
-              border: Border.all(
-                color: isDark
-                    ? Colors.white.withValues(alpha: 0.12)
-                    : Colors.white.withValues(alpha: 0.9),
-                width: 0.8,
-              ),
-            ),
-            child: Icon(
-              icon,
-              size: 20,
-              color: isDark ? Colors.white70 : AppTheme.textSecondary,
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
 
 // ─── Animated Empty State ────────────────────────────────────────────────────
 

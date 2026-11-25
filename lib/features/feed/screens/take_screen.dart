@@ -701,7 +701,7 @@ class _TakeScreenState extends ConsumerState<TakeScreen>
       // Image / thumbnail
       if (uploadBytes != null) {
         final ext = _overlays.isEmpty ? 'jpg' : 'png';
-        final ref = FirebaseStorage.instance.ref('stories/$storyId.$ext');
+        final ref = FirebaseStorage.instance.ref('stories/${currentUser.id}/$storyId.$ext');
         uploadFutures.add(
           ref.putData(uploadBytes, SettableMetadata(contentType: 'image/$ext'))
               .then((_) => ref.getDownloadURL()),
@@ -724,7 +724,7 @@ class _TakeScreenState extends ConsumerState<TakeScreen>
           }
         }
         
-        final vRef = FirebaseStorage.instance.ref('stories/$storyId.$ext');
+        final vRef = FirebaseStorage.instance.ref('stories/${currentUser.id}/$storyId.$ext');
         uploadFutures.add(
           vRef.putData(_capturedVideoBytes!, SettableMetadata(contentType: mime))
               .then((_) => vRef.getDownloadURL()),

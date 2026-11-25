@@ -1,5 +1,6 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -7,6 +8,7 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/theme/design_tokens.dart';
 import '../../../core/theme/app_palette.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../core/providers/app_state_provider.dart';
@@ -571,13 +573,17 @@ class _PostShimmer extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final c = isDark ? Colors.white.withOpacity(0.06) : Colors.black.withOpacity(0.05);
+    final c = isDark ? Colors.white.withValues(alpha: 0.06) : Colors.black.withValues(alpha: 0.05);
     return Container(
       margin: const EdgeInsets.fromLTRB(16, 8, 16, 8),
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: isDark ? AppTheme.darkCard : Colors.white,
-        borderRadius: BorderRadius.circular(28),
+        color: isDark ? DesignTokens.obsidianCard : Colors.white,
+        borderRadius: BorderRadius.circular(DesignTokens.radius24),
+        border: Border.all(
+          color: isDark ? DesignTokens.hairline : const Color(0xFFE2E8F0),
+          width: 1,
+        ),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -594,7 +600,7 @@ class _PostShimmer extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 14),
-          Container(width: double.infinity, height: 220, decoration: BoxDecoration(color: c, borderRadius: BorderRadius.circular(20))),
+          Container(width: double.infinity, height: 220, decoration: BoxDecoration(color: c, borderRadius: BorderRadius.circular(16))),
           const SizedBox(height: 12),
           Container(width: 200, height: 12, decoration: BoxDecoration(color: c, borderRadius: BorderRadius.circular(6))),
         ],
@@ -622,48 +628,45 @@ class _TabChip extends StatelessWidget {
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     return GestureDetector(
-      onTap: onTap,
+      onTap: () {
+        HapticFeedback.selectionClick();
+        onTap();
+      },
       child: AnimatedContainer(
-        duration: const Duration(milliseconds: 220),
-        curve: Curves.easeOutCubic,
+        duration: DesignTokens.durationFast,
+        curve: DesignTokens.curveDecelerate,
         alignment: Alignment.center,
-        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 5),
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 7),
         decoration: BoxDecoration(
           gradient: isSelected ? palette.primaryGradient : null,
           color: isSelected
               ? null
-              : (isDark ? Colors.white.withOpacity(0.08) : Colors.white),
-          borderRadius: BorderRadius.circular(50),
+              : (isDark ? DesignTokens.obsidianElevated : Colors.white),
+          borderRadius: BorderRadius.circular(DesignTokens.radiusFull),
           border: Border.all(
             color: isSelected
-                ? Colors.white.withOpacity(0.4)
-                : (isDark ? Colors.white.withOpacity(0.12) : Colors.black.withOpacity(0.08)),
-            width: 1.2,
+                ? Colors.transparent
+                : (isDark ? DesignTokens.hairline : const Color(0xFFE2E8F0)),
+            width: 1.0,
           ),
           boxShadow: isSelected
               ? [
                   BoxShadow(
-                    color: palette.primary.withOpacity(0.35),
+                    color: palette.primary.withValues(alpha: 0.35),
                     blurRadius: 10,
                     offset: const Offset(0, 3),
                   ),
                 ]
-              : [
-                  BoxShadow(
-                    color: Colors.black.withOpacity(isDark ? 0.2 : 0.04),
-                    blurRadius: 6,
-                    offset: const Offset(0, 2),
-                  ),
-                ],
+              : null,
         ),
         child: FittedBox(
           fit: BoxFit.scaleDown,
           child: Text(
             label,
             style: TextStyle(
-              fontSize: 11.5,
-              fontWeight: isSelected ? FontWeight.w900 : FontWeight.w700,
-              color: isSelected ? Colors.white : (isDark ? Colors.white70 : Colors.black87),
+              fontSize: 12,
+              fontWeight: isSelected ? FontWeight.w800 : FontWeight.w600,
+              color: isSelected ? Colors.white : (isDark ? DesignTokens.textSecondary : const Color(0xFF475569)),
               letterSpacing: -0.2,
             ),
           ),
@@ -683,30 +686,17 @@ class _GlassIcon extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(12),
-      child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
-        child: Container(
-          padding: const EdgeInsets.all(8),
-          decoration: BoxDecoration(
-            color: isDark ? Colors.white.withOpacity(0.08) : Colors.white.withOpacity(0.85),
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(
-              color: isDark ? Colors.white.withOpacity(0.12) : Colors.white.withOpacity(0.9),
-              width: 1.0,
-            ),
-            boxShadow: isDark ? [] : [
-              BoxShadow(
-                color: Colors.black.withOpacity(0.03),
-                blurRadius: 8,
-                offset: const Offset(0, 2),
-              )
-            ],
-          ),
-          child: Icon(icon, size: 20, color: color),
+    return Container(
+      padding: const EdgeInsets.all(8),
+      decoration: BoxDecoration(
+        color: isDark ? DesignTokens.obsidianElevated : Colors.white,
+        borderRadius: BorderRadius.circular(DesignTokens.radius12),
+        border: Border.all(
+          color: isDark ? DesignTokens.hairline : const Color(0xFFE2E8F0),
+          width: 1.0,
         ),
       ),
+      child: Icon(icon, size: 20, color: color),
     );
   }
 }

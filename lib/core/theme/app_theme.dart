@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'app_palette.dart';
+import 'design_tokens.dart';
 
 class AppTheme {
   static AppPalette _activePalette = AppPalette.male;
@@ -10,13 +11,13 @@ class AppTheme {
   }
   static AppPalette get activePalette => _activePalette;
 
-  // ─── Brand Color Palette (Gen-Z Neon & Obsidian) ───────────────────────────
+  // ─── Brand Color Palette (Obsidian & Luminescence) ─────────────────────────
   static Color get primaryPink   => _activePalette.primary;
   static Color get hotPink       => _activePalette.primary;
   static Color get blushPink     => _activePalette.backgroundTint;
-  static const Color deepPlum    = Color(0xFF1E0A30);
+  static const Color deepPlum    = Color(0xFF160A22);
 
-  // Backward compat aliases — all map dynamically to active palette
+  // Dynamic aliases mapping to active palette
   static Color get primaryBlue  => _activePalette.primary;
   static Color get primaryGreen => _activePalette.secondary;
   static Color get accentPurple => _activePalette.secondary;
@@ -25,25 +26,26 @@ class AppTheme {
   // ─── Dark Mode Surfaces (Midnight Obsidian) ─────────────────────────────────
   static Color get darkBg      => _activePalette.backgroundTint;
   static Color get darkSurface => _activePalette.surfaceTint;
-  static const Color darkCard    = Color(0xFF19112E);
-  static const Color darkBorder  = Color(0x24FFFFFF);
-  static const Color darkGlass   = Color(0x1AFFFFFF); // 10% white
+  static const Color darkCard    = Color(0xFF15141E);
+  static const Color darkBorder  = Color(0x1FFFFFFF);
+  static const Color darkGlass   = Color(0x0FFFFFFF);
 
-  // ─── Light Mode Surfaces ───────────────────────────────────────────────────
-  static const Color lightBg      = Color(0xFFF7F5FC);
-  static const Color lightSurface = Color(0xFFFFFFFF);
-  static const Color lightCard    = Color(0xFFFAF8FF);
-  static const Color lightGlass   = Color(0xBFFFFFFF); // 75% white
+  // ─── Light Mode Surfaces (Mapped to dark obsidian for uniform elegance) ─────
+  static const Color lightBg      = Color(0xFF09090D);
+  static const Color lightSurface = Color(0xFF13131A);
+  static const Color lightCard    = Color(0xFF161620);
+  static const Color lightGlass   = Color(0x1AFFFFFF);
 
-  // ─── Text ──────────────────────────────────────────────────────────────────
-  static const Color textPrimary   = Colors.white;
-  static const Color textSecondary = Color(0xFFA0ABBA);
-  static const Color textTertiary  = Color(0xFF718096);
+  // ─── Text Tokens ───────────────────────────────────────────────────────────
+  static const Color textPrimary   = DesignTokens.textPrimary;
+  static const Color textSecondary = DesignTokens.textSecondary;
+  static const Color textTertiary  = DesignTokens.textMuted;
 
-  // ─── Semantic ──────────────────────────────────────────────────────────────
-  static Color get success => _activePalette.primary;
-  static const Color error   = Color(0xFFF87171);
-  static const Color warning = Color(0xFFFBBF24);
+  // ─── Semantic Tokens ───────────────────────────────────────────────────────
+  static Color get success => DesignTokens.success;
+  static const Color error   = DesignTokens.error;
+  static const Color warning = DesignTokens.warning;
+  static const Color gold    = DesignTokens.gold;
 
   // ─── Gradients ─────────────────────────────────────────────────────────────
   static LinearGradient get primaryGradient => _activePalette.primaryGradient;
@@ -52,58 +54,58 @@ class AppTheme {
   static const LinearGradient darkGradient = LinearGradient(
     begin: Alignment.topCenter,
     end: Alignment.bottomCenter,
-    colors: [Color(0xFF17102C), Color(0xFF0B0715)],
+    colors: [Color(0xFF14121E), Color(0xFF09090D)],
   );
 
   static const LinearGradient cardGradient = LinearGradient(
     begin: Alignment.topCenter,
     end: Alignment.bottomCenter,
-    colors: [Colors.transparent, Color(0xDD000000)],
+    colors: [Colors.transparent, Color(0xEE09090D)],
   );
 
   static LinearGradient get matchGradient => _activePalette.primaryGradient;
   static LinearGradient get limeGradient => _activePalette.primaryGradient;
 
-  // ─── Glassmorphism ─────────────────────────────────────────────────────────
+  // ─── Glassmorphism & Card Decorators ───────────────────────────────────────
 
-  /// Core glass card (dark or light)
-  static BoxDecoration glassDecoration({required bool isDark, double radius = 24}) {
+  /// Core micro-glass card
+  static BoxDecoration glassDecoration({required bool isDark, double radius = 20}) {
     return BoxDecoration(
-      color: isDark ? Colors.white.withOpacity(0.06) : Colors.white.withOpacity(0.72),
+      color: Colors.white.withValues(alpha: 0.05),
       borderRadius: BorderRadius.circular(radius),
       border: Border.all(
-        color: isDark ? Colors.white.withOpacity(0.12) : Colors.white.withOpacity(0.9),
+        color: Colors.white.withValues(alpha: 0.10),
         width: 1.0,
       ),
       boxShadow: [
         BoxShadow(
-          color: isDark ? Colors.black.withOpacity(0.3) : Colors.black.withOpacity(0.07),
-          blurRadius: 24,
-          offset: const Offset(0, 8),
+          color: Colors.black.withValues(alpha: 0.35),
+          blurRadius: 20,
+          offset: const Offset(0, 6),
         ),
       ],
     );
   }
 
-  /// Premium elevated card used for post cards
-  static BoxDecoration premiumCard({required bool isDark, double radius = 28}) {
+  /// Premium elevated card with crisp hairline border and soft glow
+  static BoxDecoration premiumCard({required bool isDark, double radius = 22}) {
     return BoxDecoration(
-      color: isDark ? darkCard.withOpacity(0.82) : Colors.white.withOpacity(0.88),
+      color: darkCard,
       borderRadius: BorderRadius.circular(radius),
       border: Border.all(
-        color: isDark ? Colors.white.withOpacity(0.08) : Colors.black.withOpacity(0.045),
+        color: Colors.white.withValues(alpha: 0.08),
         width: 1.0,
       ),
       boxShadow: [
         BoxShadow(
-          color: isDark ? Colors.black.withOpacity(0.28) : Colors.black.withOpacity(0.06),
-          blurRadius: 28,
-          offset: const Offset(0, 12),
+          color: Colors.black.withValues(alpha: 0.40),
+          blurRadius: 24,
+          offset: const Offset(0, 8),
         ),
         BoxShadow(
-          color: primaryBlue.withOpacity(isDark ? 0.06 : 0.04),
-          blurRadius: 48,
-          offset: const Offset(0, 24),
+          color: primaryBlue.withValues(alpha: 0.06),
+          blurRadius: 36,
+          offset: const Offset(0, 12),
         ),
       ],
     );
@@ -112,10 +114,10 @@ class AppTheme {
   /// Frosted pill badge
   static BoxDecoration frostPill({required bool isDark}) {
     return BoxDecoration(
-      color: isDark ? Colors.white.withOpacity(0.1) : Colors.white.withOpacity(0.7),
-      borderRadius: BorderRadius.circular(50),
+      color: Colors.white.withValues(alpha: 0.08),
+      borderRadius: BorderRadius.circular(DesignTokens.radiusFull),
       border: Border.all(
-        color: isDark ? Colors.white.withOpacity(0.15) : Colors.black.withOpacity(0.06),
+        color: Colors.white.withValues(alpha: 0.12),
         width: 0.8,
       ),
     );
@@ -143,7 +145,7 @@ class AppTheme {
         primary: primary,
         secondary: secondary,
         tertiary: accent,
-        surface: darkSurface,
+        surface: p.surfaceTint,
         surfaceContainerHighest: darkCard,
         onPrimary: Colors.white,
         onSecondary: Colors.white,
@@ -156,44 +158,54 @@ class AppTheme {
         elevation: 0,
         scrolledUnderElevation: 0,
         centerTitle: false,
-        titleTextStyle: GoogleFonts.outfit(
-          fontSize: 24,
+        titleTextStyle: GoogleFonts.plusJakartaSans(
+          fontSize: 22,
           fontWeight: FontWeight.w800,
           color: Colors.white,
-          letterSpacing: -0.5,
+          letterSpacing: -0.4,
         ),
         iconTheme: const IconThemeData(color: Colors.white),
       ),
       cardTheme: CardThemeData(
         color: darkCard,
         elevation: 0,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(DesignTokens.radiusLg),
+          side: BorderSide(color: Colors.white.withValues(alpha: 0.07), width: 1.0),
+        ),
       ),
       chipTheme: ChipThemeData(
-        backgroundColor: Colors.white.withOpacity(0.06),
-        selectedColor: primary.withOpacity(0.2),
-        labelStyle: GoogleFonts.outfit(fontSize: 12, fontWeight: FontWeight.w600, color: Colors.white),
+        backgroundColor: Colors.white.withValues(alpha: 0.06),
+        selectedColor: primary.withValues(alpha: 0.22),
+        labelStyle: GoogleFonts.plusJakartaSans(
+          fontSize: 12.5,
+          fontWeight: FontWeight.w600,
+          color: Colors.white,
+        ),
         shape: const StadiumBorder(),
-        side: BorderSide(color: Colors.white.withOpacity(0.1)),
+        side: BorderSide(color: Colors.white.withValues(alpha: 0.1)),
       ),
-      inputDecorationTheme: _buildInputTheme(isDark: true),
+      inputDecorationTheme: _buildInputTheme(isDark: true, primaryColor: primary),
       elevatedButtonTheme: _buildElevatedButtonTheme(primary),
-      outlinedButtonTheme: _buildOutlinedButtonTheme(),
-      navigationBarTheme: _buildNavBarTheme(isDark: true),
+      outlinedButtonTheme: _buildOutlinedButtonTheme(primary),
+      navigationBarTheme: _buildNavBarTheme(isDark: true, primaryColor: primary),
       dialogTheme: DialogThemeData(
-        backgroundColor: darkSurface,
+        backgroundColor: DesignTokens.obsidianModal,
         surfaceTintColor: Colors.transparent,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(DesignTokens.radiusXl),
+          side: BorderSide(color: Colors.white.withValues(alpha: 0.10), width: 1.0),
+        ),
         elevation: 0,
       ),
       snackBarTheme: SnackBarThemeData(
         behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-        backgroundColor: darkCard,
-        contentTextStyle: GoogleFonts.outfit(color: Colors.white, fontSize: 14),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(DesignTokens.radiusMd)),
+        backgroundColor: DesignTokens.obsidianElevated,
+        contentTextStyle: GoogleFonts.plusJakartaSans(color: Colors.white, fontSize: 13.5),
       ),
       dividerTheme: DividerThemeData(
-        color: Colors.white.withOpacity(0.08),
+        color: Colors.white.withValues(alpha: 0.07),
         thickness: 0.8,
       ),
     );
@@ -201,60 +213,62 @@ class AppTheme {
 
   // ─── Text Theme ────────────────────────────────────────────────────────────
   static TextTheme _buildTextTheme({required bool isDark}) {
-    final color = isDark ? Colors.white : textPrimary;
-    final sub   = isDark ? Colors.white70 : textSecondary;
+    const color = textPrimary;
+    const sub   = textSecondary;
     return TextTheme(
-      displayLarge:  GoogleFonts.outfit(fontSize: 48, fontWeight: FontWeight.w800, color: color, letterSpacing: -1.5),
-      displayMedium: GoogleFonts.outfit(fontSize: 36, fontWeight: FontWeight.w700, color: color, letterSpacing: -1.0),
-      displaySmall:  GoogleFonts.outfit(fontSize: 28, fontWeight: FontWeight.w700, color: color, letterSpacing: -0.5),
-      headlineLarge: GoogleFonts.outfit(fontSize: 24, fontWeight: FontWeight.w700, color: color, letterSpacing: -0.3),
-      headlineMedium:GoogleFonts.outfit(fontSize: 20, fontWeight: FontWeight.w600, color: color),
-      headlineSmall: GoogleFonts.outfit(fontSize: 18, fontWeight: FontWeight.w600, color: color),
-      titleLarge:    GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.w600, color: color),
-      titleMedium:   GoogleFonts.outfit(fontSize: 14, fontWeight: FontWeight.w500, color: color),
-      bodyLarge:     GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.w400, color: sub, height: 1.6),
-      bodyMedium:    GoogleFonts.outfit(fontSize: 14, fontWeight: FontWeight.w400, color: sub, height: 1.5),
-      bodySmall:     GoogleFonts.outfit(fontSize: 12, fontWeight: FontWeight.w400, color: isDark ? Colors.white38 : textTertiary),
-      labelLarge:    GoogleFonts.outfit(fontSize: 14, fontWeight: FontWeight.w600, color: color, letterSpacing: 0.5),
+      displayLarge:  GoogleFonts.plusJakartaSans(fontSize: 44, fontWeight: FontWeight.w800, color: color, letterSpacing: -1.2),
+      displayMedium: GoogleFonts.plusJakartaSans(fontSize: 34, fontWeight: FontWeight.w800, color: color, letterSpacing: -0.8),
+      displaySmall:  GoogleFonts.plusJakartaSans(fontSize: 26, fontWeight: FontWeight.w700, color: color, letterSpacing: -0.5),
+      headlineLarge: GoogleFonts.plusJakartaSans(fontSize: 22, fontWeight: FontWeight.w700, color: color, letterSpacing: -0.3),
+      headlineMedium:GoogleFonts.plusJakartaSans(fontSize: 19, fontWeight: FontWeight.w600, color: color),
+      headlineSmall: GoogleFonts.plusJakartaSans(fontSize: 17, fontWeight: FontWeight.w600, color: color),
+      titleLarge:    GoogleFonts.plusJakartaSans(fontSize: 15.5, fontWeight: FontWeight.w600, color: color),
+      titleMedium:   GoogleFonts.plusJakartaSans(fontSize: 14, fontWeight: FontWeight.w500, color: color),
+      bodyLarge:     GoogleFonts.plusJakartaSans(fontSize: 15, fontWeight: FontWeight.w400, color: sub, height: 1.5),
+      bodyMedium:    GoogleFonts.plusJakartaSans(fontSize: 13.5, fontWeight: FontWeight.w400, color: sub, height: 1.45),
+      bodySmall:     GoogleFonts.plusJakartaSans(fontSize: 12, fontWeight: FontWeight.w400, color: textTertiary),
+      labelLarge:    GoogleFonts.plusJakartaSans(fontSize: 13.5, fontWeight: FontWeight.w700, color: color, letterSpacing: 0.3),
     );
   }
 
   // ─── Input Theme ───────────────────────────────────────────────────────────
-  static InputDecorationTheme _buildInputTheme({required bool isDark}) {
+  static InputDecorationTheme _buildInputTheme({required bool isDark, required Color primaryColor}) {
     return InputDecorationTheme(
       filled: true,
-      fillColor: isDark
-          ? Colors.white.withOpacity(0.06)
-          : Colors.white.withOpacity(0.82),
+      fillColor: Colors.white.withValues(alpha: 0.05),
       border: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(16),
-        borderSide: BorderSide.none,
+        borderRadius: BorderRadius.circular(DesignTokens.radiusMd),
+        borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.08), width: 1.0),
       ),
       enabledBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(DesignTokens.radiusMd),
         borderSide: BorderSide(
-          color: isDark ? Colors.white.withOpacity(0.1) : Colors.black.withOpacity(0.08),
+          color: Colors.white.withValues(alpha: 0.08),
           width: 1.0,
         ),
       ),
       focusedBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(16),
-        borderSide: BorderSide(color: primaryBlue, width: 1.8),
+        borderRadius: BorderRadius.circular(DesignTokens.radiusMd),
+        borderSide: BorderSide(color: primaryColor, width: 1.6),
       ),
-      contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
-      labelStyle: GoogleFonts.outfit(
-        fontSize: 14,
+      errorBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(DesignTokens.radiusMd),
+        borderSide: const BorderSide(color: error, width: 1.2),
+      ),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
+      labelStyle: GoogleFonts.plusJakartaSans(
+        fontSize: 13.5,
+        fontWeight: FontWeight.w500,
+        color: textSecondary,
+      ),
+      floatingLabelStyle: GoogleFonts.plusJakartaSans(
+        fontSize: 13.5,
         fontWeight: FontWeight.w600,
-        color: Colors.white,
+        color: primaryColor,
       ),
-      floatingLabelStyle: GoogleFonts.outfit(
-        fontSize: 14,
-        fontWeight: FontWeight.w600,
-        color: primaryBlue,
-      ),
-      hintStyle: GoogleFonts.outfit(
-        fontSize: 14,
-        color: Colors.white38,
+      hintStyle: GoogleFonts.plusJakartaSans(
+        fontSize: 13.5,
+        color: textTertiary,
       ),
     );
   }
@@ -265,42 +279,42 @@ class AppTheme {
       style: ElevatedButton.styleFrom(
         backgroundColor: primary ?? primaryPink,
         foregroundColor: Colors.white,
-        padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 16),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(50)),
+        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 15),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(DesignTokens.radiusFull)),
         elevation: 0,
-        textStyle: GoogleFonts.outfit(fontSize: 15, fontWeight: FontWeight.w700, letterSpacing: 0.2),
+        textStyle: GoogleFonts.plusJakartaSans(fontSize: 14.5, fontWeight: FontWeight.w700, letterSpacing: 0.2),
       ),
     );
   }
 
-  static OutlinedButtonThemeData _buildOutlinedButtonTheme() {
+  static OutlinedButtonThemeData _buildOutlinedButtonTheme([Color? primary]) {
     return OutlinedButtonThemeData(
       style: OutlinedButton.styleFrom(
-        padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 16),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(50)),
-        side: BorderSide(color: primaryBlue, width: 1.5),
-        textStyle: GoogleFonts.outfit(fontSize: 15, fontWeight: FontWeight.w600),
+        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 15),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(DesignTokens.radiusFull)),
+        side: BorderSide(color: primary ?? primaryBlue, width: 1.2),
+        textStyle: GoogleFonts.plusJakartaSans(fontSize: 14.5, fontWeight: FontWeight.w600),
       ),
     );
   }
 
   // ─── Navigation Bar Theme ──────────────────────────────────────────────────
-  static NavigationBarThemeData _buildNavBarTheme({required bool isDark}) {
+  static NavigationBarThemeData _buildNavBarTheme({required bool isDark, required Color primaryColor}) {
     return NavigationBarThemeData(
-      backgroundColor: isDark ? darkSurface : Colors.white,
-      indicatorColor: primaryBlue.withOpacity(0.15),
-      height: 68,
+      backgroundColor: darkSurface,
+      indicatorColor: primaryColor.withValues(alpha: 0.15),
+      height: 64,
       labelTextStyle: WidgetStateProperty.resolveWith((states) {
         if (states.contains(WidgetState.selected)) {
-          return GoogleFonts.outfit(fontSize: 11, fontWeight: FontWeight.w700, color: primaryBlue);
+          return GoogleFonts.plusJakartaSans(fontSize: 11, fontWeight: FontWeight.w700, color: primaryColor);
         }
-        return GoogleFonts.outfit(fontSize: 11, color: isDark ? Colors.white38 : textTertiary);
+        return GoogleFonts.plusJakartaSans(fontSize: 11, color: textTertiary);
       }),
       iconTheme: WidgetStateProperty.resolveWith((states) {
         if (states.contains(WidgetState.selected)) {
-          return IconThemeData(color: primaryBlue, size: 24);
+          return IconThemeData(color: primaryColor, size: 22);
         }
-        return IconThemeData(color: isDark ? Colors.white38 : textTertiary, size: 24);
+        return const IconThemeData(color: textTertiary, size: 22);
       }),
     );
   }

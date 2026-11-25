@@ -5,7 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/theme/app_palette.dart';
-
+import '../../core/theme/design_tokens.dart';
 import '../../features/boost/providers/boost_provider.dart';
 
 final currentIndexProvider = StateProvider<int>((ref) => 0);
@@ -16,25 +16,28 @@ class MainShell extends ConsumerWidget {
   const MainShell({super.key, required this.child});
 
   static const List<_NavItem> _items = [
-    _NavItem(icon: Icons.home_rounded,        activeIcon: Icons.home_rounded,         label: 'Home',        path: '/feed'),
-    _NavItem(icon: Icons.favorite_border,     activeIcon: Icons.favorite_rounded,     label: 'matches',     path: '/match'),
-    _NavItem(icon: Icons.chat_bubble_outline, activeIcon: Icons.chat_bubble_rounded,  label: 'Chat',        path: '/chats'),
-    _NavItem(icon: Icons.people_outline,      activeIcon: Icons.people_rounded,       label: 'People',      path: '/communities'),
+    _NavItem(icon: Icons.home_outlined,        activeIcon: Icons.home_rounded,         label: 'Home',     path: '/feed'),
+    _NavItem(icon: Icons.favorite_outline,     activeIcon: Icons.favorite_rounded,     label: 'Matches',  path: '/match'),
+    _NavItem(icon: Icons.chat_bubble_outline,  activeIcon: Icons.chat_bubble_rounded,  label: 'Chat',     path: '/chats'),
+    _NavItem(icon: Icons.group_outlined,       activeIcon: Icons.group_rounded,        label: 'People',   path: '/communities'),
   ];
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    // Watch background boost notification listener
     ref.watch(boostNotificationListenerProvider);
 
-    final isDark    = Theme.of(context).brightness == Brightness.dark;
-    final location  = GoRouterState.of(context).matchedLocation;
-    final palette   = ref.watch(appPaletteProvider);
+    final isDark   = Theme.of(context).brightness == Brightness.dark;
+    final location = GoRouterState.of(context).matchedLocation;
+    final palette  = ref.watch(appPaletteProvider);
 
     int currentIndex = 0;
-    if (location.startsWith('/match'))   currentIndex = 1;
-    else if (location.startsWith('/chats'))   currentIndex = 2;
-    else if (location.startsWith('/communities')) currentIndex = 3;
+    if (location.startsWith('/match')) {
+      currentIndex = 1;
+    } else if (location.startsWith('/chats')) {
+      currentIndex = 2;
+    } else if (location.startsWith('/communities')) {
+      currentIndex = 3;
+    }
 
     final safeBottom = MediaQuery.of(context).padding.bottom;
 
@@ -48,60 +51,60 @@ class MainShell extends ConsumerWidget {
       child: Scaffold(
         extendBody: true,
         body: child,
-      bottomNavigationBar: Padding(
-        padding: EdgeInsets.fromLTRB(20, 0, 20, 10 + safeBottom),
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(32),
-          child: BackdropFilter(
-            filter: ImageFilter.blur(sigmaX: 24, sigmaY: 24),
-            child: Container(
-              height: 62,
-              decoration: BoxDecoration(
-                color: isDark
-                    ? const Color(0xFF120A20).withValues(alpha: 0.92)
-                    : Colors.white.withValues(alpha: 0.92),
-                borderRadius: BorderRadius.circular(32),
-                border: Border.all(
+        bottomNavigationBar: Padding(
+          padding: EdgeInsets.fromLTRB(18, 0, 18, 10 + safeBottom),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(DesignTokens.radius2xl),
+            child: BackdropFilter(
+              filter: ImageFilter.blur(sigmaX: 28, sigmaY: 28),
+              child: Container(
+                height: 64,
+                decoration: BoxDecoration(
                   color: isDark
-                      ? palette.primary.withValues(alpha: 0.20)
-                      : Colors.black.withValues(alpha: 0.08),
-                  width: 1.2,
+                      ? DesignTokens.obsidianElevated.withValues(alpha: 0.94)
+                      : Colors.white.withValues(alpha: 0.94),
+                  borderRadius: BorderRadius.circular(DesignTokens.radius2xl),
+                  border: Border.all(
+                    color: isDark
+                        ? Colors.white.withValues(alpha: 0.12)
+                        : Colors.black.withValues(alpha: 0.08),
+                    width: 1.0,
+                  ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: isDark ? 0.45 : 0.12),
+                      blurRadius: 28,
+                      offset: const Offset(0, 8),
+                    ),
+                    BoxShadow(
+                      color: palette.primary.withValues(alpha: isDark ? 0.12 : 0.06),
+                      blurRadius: 20,
+                      offset: const Offset(0, 2),
+                    ),
+                  ],
                 ),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha: isDark ? 0.5 : 0.12),
-                    blurRadius: 30,
-                    offset: const Offset(0, 10),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 10),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceAround,
+                    children: List.generate(_items.length, (i) {
+                      return _NavBarItem(
+                        item: _items[i],
+                        isSelected: currentIndex == i,
+                        isDark: isDark,
+                        hasDot: i == 2, // chat alert dot
+                        palette: palette,
+                        onTap: () {
+                          HapticFeedback.selectionClick();
+                          context.go(_items[i].path);
+                        },
+                      );
+                    }),
                   ),
-                  BoxShadow(
-                    color: palette.primary.withValues(alpha: isDark ? 0.18 : 0.08),
-                    blurRadius: 24,
-                    offset: const Offset(0, 4),
-                  ),
-                ],
-              ),
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 8),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceAround,
-                  children: List.generate(_items.length, (i) {
-                    return _NavBarItem(
-                      item: _items[i],
-                      isSelected: currentIndex == i,
-                      isDark: isDark,
-                      hasDot: i == 2, // chat alert dot
-                      palette: palette,
-                      onTap: () {
-                        HapticFeedback.selectionClick();
-                        context.go(_items[i].path);
-                      },
-                    );
-                  }),
                 ),
               ),
             ),
           ),
-        ),
         ),
       ),
     );
@@ -148,10 +151,10 @@ class _NavBarItemState extends State<_NavBarItem>
     super.initState();
     _ctrl = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 140),
+      duration: DesignTokens.durationFast,
     );
-    _scale = Tween<double>(begin: 1.0, end: 0.88)
-        .animate(CurvedAnimation(parent: _ctrl, curve: Curves.easeInOut));
+    _scale = Tween<double>(begin: 1.0, end: 0.90)
+        .animate(CurvedAnimation(parent: _ctrl, curve: DesignTokens.curveSpring));
   }
 
   @override
@@ -178,20 +181,24 @@ class _NavBarItemState extends State<_NavBarItem>
           animation: _scale,
           builder: (_, child) => Transform.scale(scale: _scale.value, child: child),
           child: AnimatedContainer(
-            duration: const Duration(milliseconds: 260),
-            curve: Curves.easeOutBack,
-            padding: EdgeInsets.symmetric(horizontal: sel ? 15 : 10, vertical: 8),
+            duration: const Duration(milliseconds: 220),
+            curve: DesignTokens.curveSpring,
+            padding: EdgeInsets.symmetric(horizontal: sel ? 16 : 10, vertical: 8),
             decoration: BoxDecoration(
               gradient: sel ? widget.palette.navPillGradient : null,
-              color: sel ? null : (_isHovered ? Colors.white.withValues(alpha: 0.08) : Colors.transparent),
-              borderRadius: BorderRadius.circular(24),
-              boxShadow: sel ? [
-                BoxShadow(
-                  color: widget.palette.primary.withValues(alpha: 0.5),
-                  blurRadius: 16,
-                  offset: const Offset(0, 4),
-                ),
-              ] : [],
+              color: sel
+                  ? null
+                  : (_isHovered ? Colors.white.withValues(alpha: 0.08) : Colors.transparent),
+              borderRadius: BorderRadius.circular(DesignTokens.radiusFull),
+              boxShadow: sel
+                  ? [
+                      BoxShadow(
+                        color: widget.palette.primary.withValues(alpha: 0.45),
+                        blurRadius: 18,
+                        offset: const Offset(0, 4),
+                      ),
+                    ]
+                  : [],
             ),
             child: Row(
               mainAxisSize: MainAxisSize.min,
@@ -205,7 +212,9 @@ class _NavBarItemState extends State<_NavBarItem>
                       color: sel
                           ? Colors.white
                           : (widget.isDark
-                              ? (_isHovered ? Colors.white : Colors.white.withValues(alpha: 0.45))
+                              ? (_isHovered
+                                  ? Colors.white
+                                  : Colors.white.withValues(alpha: 0.45))
                               : AppTheme.textTertiary),
                     ),
                     if (widget.hasDot && !sel)
@@ -232,11 +241,9 @@ class _NavBarItemState extends State<_NavBarItem>
                 if (sel) ...[
                   const SizedBox(width: 7),
                   Text(
-                    widget.item.label.toLowerCase(),
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 13,
-                      fontWeight: FontWeight.w900,
+                    widget.item.label,
+                    style: DesignTokens.labelBold(color: Colors.white).copyWith(
+                      fontSize: 12.5,
                       letterSpacing: -0.2,
                     ),
                   ),

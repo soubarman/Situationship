@@ -1,0 +1,17 @@
+# ==============================================================================
+# Situationship Android Release Signing Configuration Template
+# ==============================================================================
+# DO NOT COMMIT key.properties TO VERSION CONTROL.
+# Copy this file to android/key.properties and replace with real production credentials.
+#
+# Alternatively, in CI/CD pipelines, configure the matching environment variables:
+#   - ANDROID_KEYSTORE_PATH     (e.g., /path/to/upload-keystore.jks)
+#   - ANDROID_KEYSTORE_PASSWORD
+#   - ANDROID_KEY_ALIAS
+#   - ANDROID_KEY_PASSWORD
+# ==============================================================================
+
+storePassword=YOUR_KEYSTORE_PASSWORD
+keyPassword=YOUR_KEY_PASSWORD
+keyAlias=YOUR_KEY_ALIAS
+storeFile=upload-keystore.jks

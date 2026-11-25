@@ -7,6 +7,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_core/firebase_core.dart';
 import '../../../core/models/user_model.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/theme/design_tokens.dart';
 import '../../../core/providers/app_state_provider.dart';
 import '../../../core/services/like_service.dart';
 import 'swipe_card.dart';
@@ -53,13 +54,13 @@ class _SwipeDeckState extends ConsumerState<SwipeDeck> with SingleTickerProvider
     super.initState();
     _swipeController = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 300),
+      duration: const Duration(milliseconds: 280),
     );
 
     _swipeController.addListener(() {
       if (!_isDragging && _swipeController.isAnimating) {
         setState(() {
-          final t = const Interval(0.0, 1.0, curve: Curves.easeOutBack).transform(_swipeController.value);
+          final t = const Interval(0.0, 1.0, curve: Curves.easeOutCubic).transform(_swipeController.value);
           _dragOffset = Offset.lerp(_swipeStartOffset, _swipeEndOffset, t)!;
           _rotationAngle = _swipeStartAngle + (_swipeEndAngle - _swipeStartAngle) * t;
         });
@@ -81,35 +82,13 @@ class _SwipeDeckState extends ConsumerState<SwipeDeck> with SingleTickerProvider
 
   void _finalizeSwipe(double dxOffset) {
     if (dxOffset.abs() > 100) {
-      // Completed swipe! Push current index to history, advance, and reset drag
       _history.add(_currentIndex);
       
       if (_currentIndex < widget.users.length) {
         final user = widget.users[_currentIndex];
         if (dxOffset > 0) {
-          // Swipe Right (Like)
           widget.onSwipeRight?.call(user);
-
-          // Trigger mock match screen 35% of the time!
-          if (_isSuperLikeActive || Random().nextDouble() < 0.35) {
-            _isSuperLikeActive = false; // Reset flag
-            final currentUserId = ref.read(currentUserProvider).id;
-            final canonicalChatId = LikeService.getCanonicalChatId(currentUserId, user.id);
-            Future.delayed(const Duration(milliseconds: 100), () {
-              if (mounted) {
-                context.push('/match/success', extra: {
-                  'matchedUser': {
-                    'id': user.id,
-                    'name': user.name,
-                    'avatarUrl': user.avatarUrl ?? 'https://i.pravatar.cc/400?u=${user.id}',
-                    'chatId': canonicalChatId,
-                  }
-                });
-              }
-            });
-          }
         } else {
-          // Swipe Left (Nope)
           widget.onSwipeLeft?.call(user);
         }
       }
@@ -124,7 +103,6 @@ class _SwipeDeckState extends ConsumerState<SwipeDeck> with SingleTickerProvider
         _swipeEndAngle = 0.0;
       });
     } else {
-      // Snapped back
       setState(() {
         _dragOffset = Offset.zero;
         _rotationAngle = 0.0;
@@ -141,9 +119,9 @@ class _SwipeDeckState extends ConsumerState<SwipeDeck> with SingleTickerProvider
     if (_currentIndex >= widget.users.length || _swipeController.isAnimating) return;
 
     _swipeStartOffset = Offset.zero;
-    _swipeEndOffset = Offset(isLike ? 450.0 : -450.0, 50.0);
+    _swipeEndOffset = Offset(isLike ? 450.0 : -450.0, 40.0);
     _swipeStartAngle = 0.0;
-    _swipeEndAngle = isLike ? 0.35 : -0.35;
+    _swipeEndAngle = isLike ? 0.30 : -0.30;
 
     _swipeController.reset();
     _swipeController.forward();
@@ -157,12 +135,12 @@ class _SwipeDeckState extends ConsumerState<SwipeDeck> with SingleTickerProvider
       _currentIndex = previousIndex;
       _isDragging = false;
       _dragOffset = const Offset(0, -400);
-      _rotationAngle = -0.2;
+      _rotationAngle = -0.15;
     });
 
     _swipeStartOffset = const Offset(0, -400);
     _swipeEndOffset = Offset.zero;
-    _swipeStartAngle = -0.2;
+    _swipeStartAngle = -0.15;
     _swipeEndAngle = 0.0;
 
     _swipeController.reset();
@@ -187,16 +165,14 @@ class _SwipeDeckState extends ConsumerState<SwipeDeck> with SingleTickerProvider
       nextCardUser = widget.users[_currentIndex + 1];
     }
 
-    // Drag calculations
     final double screenWidth = MediaQuery.of(context).size.width;
     final double rotationAngle = _rotationAngle;
 
     return LayoutBuilder(
       builder: (context, constraints) {
         final double maxH = constraints.maxHeight;
-        // Dynamically compute card height based on available screen space
-        final double cardH = (maxH - 100).clamp(280.0, 520.0);
-        final double cardW = (cardH * 0.72).clamp(240.0, 370.0);
+        final double cardH = (maxH - 110).clamp(280.0, 520.0);
+        final double cardW = (cardH * 0.72).clamp(240.0, 380.0);
 
         return Column(
           mainAxisAlignment: MainAxisAlignment.center,
@@ -210,13 +186,13 @@ class _SwipeDeckState extends ConsumerState<SwipeDeck> with SingleTickerProvider
                   child: Stack(
                     clipBehavior: Clip.none,
                     children: [
-                      // 1. Next card behind the active one (scaled & styled for 3D stack effect)
+                      // 1. Next card behind the active one
                       if (nextCardUser != null)
                         Positioned.fill(
                           child: Transform.scale(
-                            scale: 0.93,
+                            scale: 0.94,
                             child: Transform.translate(
-                              offset: const Offset(0, 14),
+                              offset: const Offset(0, 16),
                               child: SwipeCard(
                                 user: nextCardUser,
                                 isBackground: true,
@@ -239,7 +215,7 @@ class _SwipeDeckState extends ConsumerState<SwipeDeck> with SingleTickerProvider
                           onPanUpdate: (details) {
                             setState(() {
                               _dragOffset += details.delta;
-                              _rotationAngle = (_dragOffset.dx / screenWidth) * 0.45;
+                              _rotationAngle = (_dragOffset.dx / screenWidth) * 0.40;
                             });
                           },
                           onPanEnd: (details) {
@@ -247,8 +223,9 @@ class _SwipeDeckState extends ConsumerState<SwipeDeck> with SingleTickerProvider
                               _isDragging = false;
                             });
 
-                            // Trigger swipe if drag threshold is met (120px)
-                            if (_dragOffset.dx.abs() > 120) {
+                            if (_dragOffset.dy < -110 && _dragOffset.dx.abs() < 80) {
+                              _triggerSuperLike();
+                            } else if (_dragOffset.dx.abs() > 110) {
                               final double velocity = details.velocity.pixelsPerSecond.dx;
                               final double targetX = _dragOffset.dx > 0 
                                   ? max(450.0, _dragOffset.dx + velocity * 0.2)
@@ -257,12 +234,11 @@ class _SwipeDeckState extends ConsumerState<SwipeDeck> with SingleTickerProvider
                               _swipeStartOffset = _dragOffset;
                               _swipeEndOffset = Offset(targetX, _dragOffset.dy);
                               _swipeStartAngle = _rotationAngle;
-                              _swipeEndAngle = _dragOffset.dx > 0 ? 0.35 : -0.35;
+                              _swipeEndAngle = _dragOffset.dx > 0 ? 0.30 : -0.30;
 
                               _swipeController.reset();
                               _swipeController.forward();
                             } else {
-                              // Snap back
                               _swipeStartOffset = _dragOffset;
                               _swipeEndOffset = Offset.zero;
                               _swipeStartAngle = _rotationAngle;
@@ -286,28 +262,40 @@ class _SwipeDeckState extends ConsumerState<SwipeDeck> with SingleTickerProvider
                                     deviceLon: widget.deviceLon,
                                   ),
 
-                                  // Dynamic translucent swipe overlays
+                                  // Directional Overlay Badges
                                   if (_dragOffset.dx > 20)
                                     Positioned(
-                                      top: 40,
-                                      left: 30,
+                                      top: 36,
+                                      left: 24,
                                       child: Transform.rotate(
                                         angle: -0.15,
                                         child: _buildSwipeDirectionTag(
-                                          label: 'VIBE 💖',
-                                          color: AppTheme.success,
+                                          label: 'LIKE 💖',
+                                          color: AppTheme.primaryPink,
                                         ),
                                       ),
                                     ),
                                   if (_dragOffset.dx < -20)
                                     Positioned(
-                                      top: 40,
-                                      right: 30,
+                                      top: 36,
+                                      right: 24,
                                       child: Transform.rotate(
                                         angle: 0.15,
                                         child: _buildSwipeDirectionTag(
-                                          label: 'NOPE 💔',
-                                          color: AppTheme.error,
+                                          label: 'PASS ✕',
+                                          color: DesignTokens.error,
+                                        ),
+                                      ),
+                                    ),
+                                  if (_dragOffset.dy < -40 && _dragOffset.dx.abs() < 80)
+                                    Positioned(
+                                      top: 40,
+                                      left: 0,
+                                      right: 0,
+                                      child: Center(
+                                        child: _buildSwipeDirectionTag(
+                                          label: 'SUPER LIKE ★',
+                                          color: DesignTokens.purple,
                                         ),
                                       ),
                                     ),
@@ -323,64 +311,71 @@ class _SwipeDeckState extends ConsumerState<SwipeDeck> with SingleTickerProvider
               ),
             ),
 
-            const SizedBox(height: 10),
+            const SizedBox(height: 14),
 
-            // Flower Action Buttons Row (Inspired by reference art direction!)
+            // Precision Tactile Action Deck
             Padding(
-              padding: const EdgeInsets.only(bottom: 6),
+              padding: const EdgeInsets.only(bottom: 8),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.center,
+                crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
-                  // 1. Rewind Button (White Flower)
-                  _buildFlowerActionButton(
-                    icon: Icons.undo_rounded,
-                    backgroundColor: Colors.white.withValues(alpha: 0.9),
-                    iconColor: Colors.amber[800]!,
+                  // 1. Rewind Button
+                  _buildDeckButton(
+                    icon: Icons.replay_rounded,
+                    iconColor: Colors.amber,
+                    backgroundColor: DesignTokens.obsidianCard,
+                    borderColor: Colors.amber.withValues(alpha: 0.25),
                     size: 44,
                     onTap: _triggerRewind,
                     isEnabled: _history.isNotEmpty,
+                    badgeCount: _history.isNotEmpty ? _history.length : null,
                   ),
-                  const SizedBox(width: 10),
+                  const SizedBox(width: 14),
 
-                  // 2. NOPE Button (White Flower)
-                  _buildFlowerActionButton(
+                  // 2. NOPE (Pass) Button
+                  _buildDeckButton(
                     icon: Icons.close_rounded,
-                    backgroundColor: Colors.white,
-                    iconColor: const Color(0xFF0F172A),
+                    iconColor: DesignTokens.error,
+                    backgroundColor: DesignTokens.obsidianCard,
+                    borderColor: DesignTokens.error.withValues(alpha: 0.3),
                     size: 54,
                     onTap: () => _triggerSwipeButton(false),
                     isEnabled: true,
                   ),
-                  const SizedBox(width: 10),
+                  const SizedBox(width: 14),
 
-                  // 3. SUPER LIKE Button (Cyan Flower)
-                  _buildFlowerActionButton(
+                  // 3. SUPER LIKE Button
+                  _buildDeckButton(
                     icon: Icons.star_rounded,
-                    backgroundColor: AppTheme.primaryBlue,
-                    iconColor: Colors.white,
-                    size: 54,
+                    iconColor: DesignTokens.purple,
+                    backgroundColor: DesignTokens.obsidianCard,
+                    borderColor: DesignTokens.purple.withValues(alpha: 0.35),
+                    size: 50,
                     onTap: _triggerSuperLike,
                     isEnabled: true,
                   ),
-                  const SizedBox(width: 10),
+                  const SizedBox(width: 14),
 
-                  // 4. LIKE Button (Acid-Lime Flower - HERO BUTTON)
-                  _buildFlowerActionButton(
+                  // 4. LIKE Button (Hero Button with vibrant glow)
+                  _buildDeckButton(
                     icon: Icons.favorite_rounded,
-                    backgroundColor: const Color(0xFFE0FE10),
-                    iconColor: const Color(0xFF0F172A),
+                    iconColor: Colors.white,
+                    gradient: AppTheme.primaryGradient,
+                    glowColor: AppTheme.primaryPink,
                     size: 64,
                     onTap: () => _triggerSwipeButton(true),
                     isEnabled: true,
                   ),
-                  const SizedBox(width: 10),
+                  const SizedBox(width: 14),
 
-                  // 5. CONFESSION / CHAT Button (White Flower)
-                  _buildFlowerActionButton(
-                    icon: Icons.chat_bubble_rounded,
-                    backgroundColor: Colors.white,
-                    iconColor: const Color(0xFF0F172A),
-                    size: 54,
+                  // 5. CONFESSION / SECRET CHAT Button
+                  _buildDeckButton(
+                    icon: Icons.lock_outline_rounded,
+                    iconColor: AppTheme.primaryBlue,
+                    backgroundColor: DesignTokens.obsidianCard,
+                    borderColor: AppTheme.primaryBlue.withValues(alpha: 0.3),
+                    size: 50,
                     onTap: _showConfessionBottomSheet,
                     isEnabled: true,
                   ),
@@ -393,41 +388,82 @@ class _SwipeDeckState extends ConsumerState<SwipeDeck> with SingleTickerProvider
     );
   }
 
-  Widget _buildFlowerActionButton({
+  Widget _buildDeckButton({
     required IconData icon,
-    required Color backgroundColor,
     required Color iconColor,
+    Color? backgroundColor,
+    Color? borderColor,
+    Gradient? gradient,
+    Color? glowColor,
     required double size,
     required VoidCallback onTap,
     required bool isEnabled,
+    int? badgeCount,
   }) {
     return GestureDetector(
       onTap: isEnabled
           ? () {
-              HapticFeedback.mediumImpact();
+              HapticFeedback.lightImpact();
               onTap();
             }
           : null,
       child: AnimatedOpacity(
-        duration: const Duration(milliseconds: 200),
+        duration: const Duration(milliseconds: 180),
         opacity: isEnabled ? 1.0 : 0.35,
-        child: SizedBox(
-          width: size,
-          height: size,
-          child: Stack(
-            alignment: Alignment.center,
-            children: [
-              CustomPaint(
-                size: Size(size, size),
-                painter: FlowerPainter(color: backgroundColor),
+        child: Stack(
+          clipBehavior: Clip.none,
+          children: [
+            Container(
+              width: size,
+              height: size,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: gradient == null ? (backgroundColor ?? DesignTokens.obsidianCard) : null,
+                gradient: gradient,
+                border: borderColor != null ? Border.all(color: borderColor, width: 1.2) : null,
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.4),
+                    blurRadius: 14,
+                    offset: const Offset(0, 4),
+                  ),
+                  if (glowColor != null)
+                    BoxShadow(
+                      color: glowColor.withValues(alpha: 0.4),
+                      blurRadius: 20,
+                      offset: const Offset(0, 4),
+                    ),
+                ],
               ),
-              Icon(
-                icon,
-                color: iconColor,
-                size: size * 0.42,
+              child: Center(
+                child: Icon(
+                  icon,
+                  color: iconColor,
+                  size: size * 0.46,
+                ),
               ),
-            ],
-          ),
+            ),
+            if (badgeCount != null && badgeCount > 0)
+              Positioned(
+                top: -2,
+                right: -2,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: Colors.amber,
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Text(
+                    '$badgeCount',
+                    style: const TextStyle(
+                      color: Colors.black,
+                      fontSize: 9.5,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                ),
+              ),
+          ],
         ),
       ),
     );
@@ -438,11 +474,11 @@ class _SwipeDeckState extends ConsumerState<SwipeDeck> with SingleTickerProvider
     required Color color,
   }) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       decoration: BoxDecoration(
-        color: Colors.black.withValues(alpha: 0.75),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: color, width: 2.5),
+        color: DesignTokens.obsidianBase.withValues(alpha: 0.85),
+        borderRadius: BorderRadius.circular(DesignTokens.radiusMd),
+        border: Border.all(color: color, width: 2.0),
         boxShadow: [
           BoxShadow(
             color: color.withValues(alpha: 0.4),
@@ -454,9 +490,9 @@ class _SwipeDeckState extends ConsumerState<SwipeDeck> with SingleTickerProvider
         label,
         style: TextStyle(
           color: color,
-          fontSize: 22,
+          fontSize: 20,
           fontWeight: FontWeight.w900,
-          letterSpacing: 1,
+          letterSpacing: 0.5,
         ),
       ),
     );
@@ -464,23 +500,17 @@ class _SwipeDeckState extends ConsumerState<SwipeDeck> with SingleTickerProvider
 
   Widget _buildEmptyState(bool isDark) {
     return Container(
-      height: 520,
-      width: 350,
+      height: 480,
+      width: 340,
       padding: const EdgeInsets.all(28),
       decoration: BoxDecoration(
-        color: isDark ? AppTheme.darkCard : Colors.white,
-        borderRadius: BorderRadius.circular(32),
+        color: DesignTokens.obsidianCard,
+        borderRadius: BorderRadius.circular(DesignTokens.radius2xl),
         border: Border.all(
-          color: isDark ? Colors.white.withOpacity(0.08) : Colors.black.withOpacity(0.06),
-          width: 1.5,
+          color: Colors.white.withValues(alpha: 0.08),
+          width: 1.0,
         ),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.05),
-            blurRadius: 20,
-            offset: const Offset(0, 10),
-          ),
-        ],
+        boxShadow: DesignTokens.cardShadow(),
       ),
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
@@ -488,38 +518,31 @@ class _SwipeDeckState extends ConsumerState<SwipeDeck> with SingleTickerProvider
           Container(
             padding: const EdgeInsets.all(20),
             decoration: BoxDecoration(
-              color: AppTheme.primaryBlue.withOpacity(0.1),
+              color: AppTheme.primaryBlue.withValues(alpha: 0.12),
               shape: BoxShape.circle,
             ),
             child: Icon(
-              Icons.explore_rounded,
+              Icons.radar_rounded,
               color: AppTheme.primaryBlue,
-              size: 48,
+              size: 44,
             ),
           ),
-          const SizedBox(height: 24),
-          const Text(
-            'Radar Cleared! 💫',
-            style: TextStyle(
-              fontSize: 22,
-              fontWeight: FontWeight.w900,
-              letterSpacing: -0.5,
-            ),
-          ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 22),
           Text(
-            'No more souls in your radius. Expand your filter range or check back later!',
-            textAlign: TextAlign.center,
-            style: TextStyle(
-              color: isDark ? Colors.white70 : AppTheme.textSecondary,
-              fontSize: 14.5,
-              height: 1.5,
-            ),
+            'Radar Cleared! 💫',
+            style: DesignTokens.headingMedium(color: Colors.white),
           ),
-          const SizedBox(height: 32),
+          const SizedBox(height: 10),
+          Text(
+            'You\'ve seen everyone nearby. Expand your radius filter or check back later!',
+            textAlign: TextAlign.center,
+            style: DesignTokens.bodyMedium(color: DesignTokens.textSecondary),
+          ),
+          const SizedBox(height: 28),
           // Gradient reload button
           GestureDetector(
             onTap: () {
+              HapticFeedback.lightImpact();
               setState(() {
                 _currentIndex = 0;
                 _history.clear();
@@ -527,15 +550,15 @@ class _SwipeDeckState extends ConsumerState<SwipeDeck> with SingleTickerProvider
               ref.read(matchQueueProvider.notifier).reset();
             },
             child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
+              padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 13),
               decoration: BoxDecoration(
                 gradient: AppTheme.primaryGradient,
-                borderRadius: BorderRadius.circular(20),
+                borderRadius: BorderRadius.circular(DesignTokens.radiusFull),
                 boxShadow: [
                   BoxShadow(
-                    color: AppTheme.primaryBlue.withOpacity(0.35),
+                    color: AppTheme.primaryPink.withValues(alpha: 0.35),
                     blurRadius: 16,
-                    offset: const Offset(0, 6),
+                    offset: const Offset(0, 4),
                   ),
                 ],
               ),
@@ -545,10 +568,10 @@ class _SwipeDeckState extends ConsumerState<SwipeDeck> with SingleTickerProvider
                   Icon(Icons.refresh_rounded, color: Colors.white, size: 18),
                   SizedBox(width: 8),
                   Text(
-                    'Radar Scan 🚀',
+                    'Scan Again 🚀',
                     style: TextStyle(
                       color: Colors.white,
-                      fontWeight: FontWeight.w800,
+                      fontWeight: FontWeight.w700,
                       fontSize: 14,
                     ),
                   ),
@@ -560,6 +583,7 @@ class _SwipeDeckState extends ConsumerState<SwipeDeck> with SingleTickerProvider
       ),
     );
   }
+
   void _triggerSuperLike() {
     if (_currentIndex >= widget.users.length || _swipeController.isAnimating) return;
     HapticFeedback.heavyImpact();
@@ -581,10 +605,11 @@ class _SwipeDeckState extends ConsumerState<SwipeDeck> with SingleTickerProvider
       backgroundColor: Colors.transparent,
       isScrollControlled: true,
       builder: (sheetContext) => Container(
-        padding: EdgeInsets.fromLTRB(24, 24, 24, MediaQuery.of(sheetContext).viewInsets.bottom + 24),
+        padding: EdgeInsets.fromLTRB(24, 20, 24, MediaQuery.of(sheetContext).viewInsets.bottom + 24),
         decoration: BoxDecoration(
-          color: isDark ? AppTheme.darkSurface : Colors.white,
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(30)),
+          color: DesignTokens.obsidianElevated,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+          border: Border.all(color: Colors.white.withValues(alpha: 0.10)),
         ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -592,62 +617,63 @@ class _SwipeDeckState extends ConsumerState<SwipeDeck> with SingleTickerProvider
           children: [
             Center(
               child: Container(
-                width: 40, height: 5,
+                width: 36,
+                height: 4,
                 decoration: BoxDecoration(
-                  color: Colors.grey.withOpacity(0.3),
+                  color: Colors.white24,
                   borderRadius: BorderRadius.circular(10),
                 ),
               ),
             ),
-            const SizedBox(height: 24),
+            const SizedBox(height: 20),
             Row(
               children: [
-                Icon(Icons.lock_rounded, size: 20, color: AppTheme.accentPurple),
+                const Icon(Icons.lock_rounded, size: 20, color: DesignTokens.purple),
                 const SizedBox(width: 8),
                 Text(
-                  'Confess Anonymously to ${targetUser.name}',
-                  style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                  'Confess to ${targetUser.name}',
+                  style: DesignTokens.titleMedium(color: Colors.white),
                 ),
               ],
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 14),
             TextField(
               controller: controller,
               maxLines: 4,
               maxLength: 200,
               decoration: InputDecoration(
-                hintText: 'Type your secret confession here... ${targetUser.name} won\'t know who sent it! 🤫',
-                hintStyle: TextStyle(color: isDark ? Colors.white30 : Colors.black38, fontSize: 13),
+                hintText: 'Type your anonymous secret confession... ${targetUser.name} won\'t know who sent it! 🤫',
+                hintStyle: DesignTokens.bodyMedium(color: DesignTokens.textMuted),
                 filled: true,
-                fillColor: isDark ? Colors.white.withOpacity(0.05) : Colors.black.withOpacity(0.03),
+                fillColor: DesignTokens.obsidianInput,
                 contentPadding: const EdgeInsets.all(16),
                 border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(16),
-                  borderSide: BorderSide.none,
+                  borderRadius: BorderRadius.circular(DesignTokens.radiusMd),
+                  borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.08)),
                 ),
               ),
-              style: const TextStyle(fontSize: 14, height: 1.4),
+              style: DesignTokens.bodyMedium(color: Colors.white),
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 14),
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Row(
                   children: [
-                    const Text('Cost:', style: TextStyle(fontWeight: FontWeight.bold, color: AppTheme.textSecondary)),
+                    Text('Cost:', style: DesignTokens.bodyMedium(color: DesignTokens.textSecondary)),
                     const SizedBox(width: 6),
-                    const Text('🪙 10', style: TextStyle(fontWeight: FontWeight.w900, color: Colors.amber)),
+                    Text('🪙 10', style: DesignTokens.labelBold(color: Colors.amber)),
                   ],
                 ),
                 ElevatedButton.icon(
                   onPressed: () => _sendAnonymousConfession(controller.text, targetUser, sheetContext),
-                  icon: const Icon(Icons.check_circle_rounded, size: 18),
-                  label: const Text('Send Secret🔒', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                  icon: const Icon(Icons.check_circle_rounded, size: 16),
+                  label: const Text('Send Secret🔒'),
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: AppTheme.accentPurple,
+                    backgroundColor: DesignTokens.purple,
                     foregroundColor: Colors.white,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(DesignTokens.radiusFull)),
+                    padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
                   ),
                 ),
               ],
@@ -748,94 +774,48 @@ class _SwipeDeckState extends ConsumerState<SwipeDeck> with SingleTickerProvider
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        backgroundColor: Colors.transparent,
-        contentPadding: EdgeInsets.zero,
-        content: Container(
-          padding: const EdgeInsets.all(28),
-          decoration: BoxDecoration(
-            color: Theme.of(context).brightness == Brightness.dark ? AppTheme.darkSurface : Colors.white,
-            borderRadius: BorderRadius.circular(30),
-            border: Border.all(
-              color: AppTheme.accentPurple.withOpacity(0.2),
-              width: 1.5,
+        backgroundColor: DesignTokens.obsidianModal,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(DesignTokens.radiusXl)),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const SizedBox(height: 12),
+            Container(
+              width: 64,
+              height: 64,
+              decoration: BoxDecoration(
+                color: DesignTokens.purple.withValues(alpha: 0.15),
+                shape: BoxShape.circle,
+              ),
+              child: const Center(
+                child: Icon(Icons.lock_rounded, size: 32, color: DesignTokens.purple),
+              ),
             ),
-            boxShadow: [
-              BoxShadow(
-                color: AppTheme.accentPurple.withOpacity(0.15),
-                blurRadius: 24,
-                offset: const Offset(0, 10),
+            const SizedBox(height: 18),
+            Text(
+              'Confession Locked! 🤫',
+              style: DesignTokens.headingMedium(color: Colors.white),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Your confession has been delivered anonymously to $targetName\'s inbox!',
+              textAlign: TextAlign.center,
+              style: DesignTokens.bodyMedium(color: DesignTokens.textSecondary),
+            ),
+            const SizedBox(height: 24),
+            ElevatedButton(
+              onPressed: () => Navigator.pop(context),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: DesignTokens.purple,
+                foregroundColor: Colors.white,
+                minimumSize: const Size(double.infinity, 46),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(DesignTokens.radiusFull)),
               ),
-            ],
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Text('🤫 Confession Locked! 🤫', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 20)),
-              const SizedBox(height: 16),
-              Container(
-                width: 72,
-                height: 72,
-                decoration: BoxDecoration(
-                  color: AppTheme.accentPurple.withOpacity(0.1),
-                  shape: BoxShape.circle,
-                ),
-                child: Center(
-                  child: Icon(Icons.lock_rounded, size: 36, color: AppTheme.accentPurple),
-                ),
-              ),
-              const SizedBox(height: 16),
-              Text(
-                'Your confession has been delivered anonymously to $targetName\'s inbox!',
-                textAlign: TextAlign.center,
-                style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14, color: AppTheme.textSecondary),
-              ),
-              const SizedBox(height: 24),
-              ElevatedButton(
-                onPressed: () => Navigator.pop(context),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppTheme.accentPurple,
-                  foregroundColor: Colors.white,
-                  minimumSize: const Size(double.infinity, 44),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                ),
-                child: const Text('Got it', style: TextStyle(fontWeight: FontWeight.bold)),
-              ),
-            ],
-          ),
+              child: const Text('Got it'),
+            ),
+          ],
         ),
       ),
     );
   }
 }
-
-// ─── Custom Flower Painter for Reference-Style Petal Buttons ────────────────
-
-class FlowerPainter extends CustomPainter {
-  final Color color;
-
-  FlowerPainter({required this.color});
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final paint = Paint()
-      ..color = color
-      ..style = PaintingStyle.fill;
-
-    final w = size.width;
-    final h = size.height;
-    final cx = w / 2;
-    final cy = h / 2;
-    final r = w * 0.36;
-
-    // Draw 4 overlapping rounded petals at top, bottom, left, right + center circle
-    canvas.drawCircle(Offset(cx, cy), r * 0.96, paint);
-    canvas.drawCircle(Offset(cx - r * 0.44, cy - r * 0.44), r * 0.65, paint);
-    canvas.drawCircle(Offset(cx + r * 0.44, cy - r * 0.44), r * 0.65, paint);
-    canvas.drawCircle(Offset(cx - r * 0.44, cy + r * 0.44), r * 0.65, paint);
-    canvas.drawCircle(Offset(cx + r * 0.44, cy + r * 0.44), r * 0.65, paint);
-  }
-
-  @override
-  bool shouldRepaint(covariant FlowerPainter oldDelegate) => oldDelegate.color != color;
-}
-

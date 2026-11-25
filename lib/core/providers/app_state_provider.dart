@@ -37,7 +37,7 @@ final userDataStreamProvider = StreamProvider<UserModel?>((ref) {
       if (user == null) {
         return Stream.value(null);
       }
-      return db.collection('users').doc(user.uid).snapshots().map((doc) {
+      return db.collection('users').doc(user.uid).snapshots().asyncMap((doc) async {
         if (!doc.exists) {
           // If the document isn't in cache yet, just return a placeholder.
           // DO NOT overwrite the database with empty data, as the auth controller
@@ -55,7 +55,35 @@ final userDataStreamProvider = StreamProvider<UserModel?>((ref) {
             coins: 100,
           );
         }
-        return UserModel.fromMap(doc.data()!);
+        var userModel = UserModel.fromMap(doc.data()!);
+        try {
+          final privateDoc = await db.collection('users').doc(user.uid).collection('private').doc('profile').get();
+          if (privateDoc.exists) {
+            final pData = privateDoc.data()!;
+            userModel = userModel.copyWith(
+              email: pData['email'] as String? ?? user.email ?? userModel.email,
+              phoneNumber: pData['phoneNumber'] as String? ?? userModel.phoneNumber,
+            );
+          } else {
+            // Self-healing migration for existing accounts: save PII to private/profile
+            final legacyEmail = doc.data()!['email'] as String? ?? user.email ?? '';
+            final legacyPhone = doc.data()!['phoneNumber'] as String?;
+            if (legacyEmail.isNotEmpty || legacyPhone != null) {
+              await db.collection('users').doc(user.uid).collection('private').doc('profile').set({
+                'email': legacyEmail,
+                'phoneNumber': legacyPhone,
+                'migratedAt': FieldValue.serverTimestamp(),
+              }, SetOptions(merge: true));
+              userModel = userModel.copyWith(
+                email: legacyEmail,
+                phoneNumber: legacyPhone,
+              );
+            }
+          }
+        } catch (e) {
+          debugPrint('[UserDataStream] Private profile lookup: $e');
+        }
+        return userModel;
       }).handleError((err) {
         debugPrint('[UserDataStream] Stream error: $err');
         return UserModel(

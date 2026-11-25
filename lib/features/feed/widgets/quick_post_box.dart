@@ -200,7 +200,7 @@ class _QuickPostBoxState extends ConsumerState<QuickPostBox> {
 
       String? imageUrl;
       if (_imageFile != null) {
-        final storageRef = FirebaseStorage.instance.ref('posts/$postId.jpg');
+        final storageRef = FirebaseStorage.instance.ref('posts/${currentUser.id}/$postId.jpg');
         if (kIsWeb) {
           final bytes = await _imageFile!.readAsBytes();
           await storageRef.putData(bytes);
@@ -224,7 +224,7 @@ class _QuickPostBoxState extends ConsumerState<QuickPostBox> {
 
       String? voiceUrl;
       if (_attachedVoicePath != null) {
-        final storageRef = FirebaseStorage.instance.ref('voice_notes/$postId.m4a');
+        final storageRef = FirebaseStorage.instance.ref('voice_notes/${currentUser.id}/$postId.m4a');
         await storageRef.putFile(File(_attachedVoicePath!));
         voiceUrl = await storageRef.getDownloadURL();
       }

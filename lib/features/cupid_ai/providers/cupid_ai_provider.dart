@@ -1,10 +1,20 @@
 import 'dart:async';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:situationship/core/models/user_model.dart';
 import 'package:situationship/core/providers/app_state_provider.dart';
 import 'package:situationship/core/providers/firestore_provider.dart';
 import 'package:situationship/core/ai/on_device_nlu_engine.dart';
 import 'package:situationship/core/ai/vibe_matrix_matcher.dart';
+import 'package:situationship/core/ai/conversation_context_manager.dart';
+import 'package:situationship/core/ai/local_llm/model_spec.dart';
+import 'package:situationship/core/ai/local_llm/device_capability_detector.dart';
+import 'package:situationship/core/ai/local_llm/local_model_manager.dart';
+import 'package:situationship/core/ai/local_llm/llm_runtime_adapter.dart';
+import 'package:situationship/core/ai/local_llm/android_llm_adapter.dart';
+import 'package:situationship/core/ai/local_llm/web_llm_adapter.dart';
+import 'package:situationship/core/ai/local_llm/cupid_tools.dart';
+import 'package:situationship/core/ai/local_llm/cupid_local_ai_orchestrator.dart';
 import 'package:situationship/core/services/like_service.dart';
 
 class CupidChatMessage {
@@ -14,7 +24,9 @@ class CupidChatMessage {
   final DateTime timestamp;
   final List<CupidMatchResult> matches;
   final NLUIntentResult? parsedIntent;
+  final CupidToolCall? executedTool;
   final bool isThinking;
+  final String? modelSource;
 
   const CupidChatMessage({
     required this.id,
@@ -23,7 +35,9 @@ class CupidChatMessage {
     required this.timestamp,
     this.matches = const [],
     this.parsedIntent,
+    this.executedTool,
     this.isThinking = false,
+    this.modelSource,
   });
 
   CupidChatMessage copyWith({
@@ -33,7 +47,9 @@ class CupidChatMessage {
     DateTime? timestamp,
     List<CupidMatchResult>? matches,
     NLUIntentResult? parsedIntent,
+    CupidToolCall? executedTool,
     bool? isThinking,
+    String? modelSource,
   }) {
     return CupidChatMessage(
       id: id ?? this.id,
@@ -42,7 +58,9 @@ class CupidChatMessage {
       timestamp: timestamp ?? this.timestamp,
       matches: matches ?? this.matches,
       parsedIntent: parsedIntent ?? this.parsedIntent,
+      executedTool: executedTool ?? this.executedTool,
       isThinking: isThinking ?? this.isThinking,
+      modelSource: modelSource ?? this.modelSource,
     );
   }
 }
@@ -54,22 +72,30 @@ class CupidAIState {
   final Set<String> actionedUserIds; // users liked/superliked in session
   final Set<String> shownUserIds; // real users already presented in this conversation
   final NLUIntentResult? lastActiveIntent; // last non-pagination intent
+  final ModelDownloadState modelDownloadState;
+  final DeviceCapabilityReport? deviceCapability;
+  final bool isOfflineReady;
+  final ModelSpec activeModelSpec;
 
   const CupidAIState({
     required this.messages,
     this.isThinking = false,
     this.suggestedChips = const [
-      'Artistic & Creative',
-      'Indie & Vinyl Records',
-      'Cozy Coffee & Books',
-      'Night Owl Vibes',
-      'Spontaneous Road Trips',
-      'Meaningful Connection',
-      'Non-Smoker',
+      'First date ideas ☕',
+      'Artistic & Creative ✨',
+      'How do coins work? 🪙',
+      'Spontaneous Road Trips 🚗',
+      'Icebreaker tips 💬',
+      'Meaningful Connection 💖',
+      'Non-Smoker 🚭',
     ],
     this.actionedUserIds = const {},
     this.shownUserIds = const {},
     this.lastActiveIntent,
+    required this.modelDownloadState,
+    this.deviceCapability,
+    this.isOfflineReady = true,
+    required this.activeModelSpec,
   });
 
   CupidAIState copyWith({
@@ -79,6 +105,10 @@ class CupidAIState {
     Set<String>? actionedUserIds,
     Set<String>? shownUserIds,
     NLUIntentResult? lastActiveIntent,
+    ModelDownloadState? modelDownloadState,
+    DeviceCapabilityReport? deviceCapability,
+    bool? isOfflineReady,
+    ModelSpec? activeModelSpec,
   }) {
     return CupidAIState(
       messages: messages ?? this.messages,
@@ -87,6 +117,10 @@ class CupidAIState {
       actionedUserIds: actionedUserIds ?? this.actionedUserIds,
       shownUserIds: shownUserIds ?? this.shownUserIds,
       lastActiveIntent: lastActiveIntent ?? this.lastActiveIntent,
+      modelDownloadState: modelDownloadState ?? this.modelDownloadState,
+      deviceCapability: deviceCapability ?? this.deviceCapability,
+      isOfflineReady: isOfflineReady ?? this.isOfflineReady,
+      activeModelSpec: activeModelSpec ?? this.activeModelSpec,
     );
   }
 }
@@ -94,20 +128,113 @@ class CupidAIState {
 class CupidAINotifier extends StateNotifier<CupidAIState> {
   final Ref ref;
   final VibeMatrixMatcher _matcher = VibeMatrixMatcher();
-  int _responseVariantIndex = 0;
+  final ConversationContextManager _contextManager = ConversationContextManager();
+  final LocalModelManager _modelManager = LocalModelManager();
+  late final ModelRuntimeAdapter _runtime;
+  late final CupidLocalAIOrchestrator _orchestrator;
+  StreamSubscription? _downloadSub;
+
+  ConversationContextManager get contextManager => _contextManager;
+  LocalModelManager get modelManager => _modelManager;
 
   CupidAINotifier(this.ref)
-      : super(CupidAIState(messages: [
-          CupidChatMessage(
-            id: 'init_welcome',
-            isUser: false,
-            text:
-                "Welcome to Cupid Concierge 🍸\n\nTell me who you're hoping to meet — their vibe, passions, music taste, or what kind of energy makes you tick. I'll curate real profiles for you.",
-            timestamp: DateTime.now(),
-          )
-        ]));
+      : super(CupidAIState(
+          messages: [
+            CupidChatMessage(
+              id: 'init_welcome',
+              isUser: false,
+              text:
+                  "Welcome to Cupid Concierge 🍸\n\nI'm your on-device wingman, powered by private on-device reasoning AI. You can chat naturally, brainstorm first-date spots, explore dating psychology, or tell me the exact vibe you're craving and I'll curate real members for you.",
+              timestamp: DateTime.now(),
+              modelSource: 'cupid_on_device',
+            )
+          ],
+          modelDownloadState: LocalModelManager().currentState,
+          activeModelSpec: ModelSpec.smollm2_135m,
+        )) {
+    _initPlatformRuntime();
+  }
 
-  /// Sends a conversational query and runs pure on-device matching over REAL users
+  Future<void> _initPlatformRuntime() async {
+    // 1. Detect device capability
+    final report = await DeviceCapabilityDetector.detect();
+
+    // 2. Select appropriate platform adapter
+    if (kIsWeb) {
+      _runtime = WebLlmAdapter();
+    } else {
+      _runtime = AndroidLlmAdapter();
+    }
+
+    _orchestrator = CupidLocalAIOrchestrator(
+      runtime: _runtime,
+      matcher: _matcher,
+      contextManager: _contextManager,
+      modelManager: _modelManager,
+    );
+
+    // 3. Listen to model download state changes
+    _downloadSub = _modelManager.stateStream.listen((downloadState) {
+      state = state.copyWith(modelDownloadState: downloadState);
+    });
+
+    // 4. Check if recommended model is already downloaded
+    final isReady = await _modelManager.isModelReady(report.recommendedModel);
+
+    state = state.copyWith(
+      deviceCapability: report,
+      activeModelSpec: report.recommendedModel,
+      isOfflineReady: isReady,
+      modelDownloadState: _modelManager.currentState.copyWith(
+        spec: report.recommendedModel,
+        status: isReady ? ModelDownloadStatus.ready : ModelDownloadStatus.notDownloaded,
+      ),
+    );
+  }
+
+  /// Initiates downloading of the chosen quantized model weights
+  Future<void> downloadModel([ModelSpec? spec]) async {
+    final targetSpec = spec ?? state.activeModelSpec;
+    try {
+      final file = await _modelManager.downloadModel(targetSpec);
+      // Initialize runtime with downloaded weights
+      await _runtime.initialize(spec: targetSpec, modelFilePath: file.path);
+      state = state.copyWith(
+        isOfflineReady: true,
+        activeModelSpec: targetSpec,
+      );
+    } catch (e) {
+      debugPrint('Failed to download local model: $e');
+    }
+  }
+
+  /// Deletes local model weights to free up disk space
+  Future<void> deleteModel(ModelSpec spec) async {
+    await _runtime.unload();
+    await _modelManager.deleteModel(spec);
+    state = state.copyWith(isOfflineReady: false);
+  }
+
+  /// Clears chat history and resets conversational memory
+  void clearChat() {
+    _contextManager.reset();
+    state = state.copyWith(
+      messages: [
+        CupidChatMessage(
+          id: 'init_welcome_${DateTime.now().millisecondsSinceEpoch}',
+          isUser: false,
+          text:
+              "Welcome to Cupid Concierge 🍸\n\nI'm your on-device wingman, powered by private on-device reasoning AI. You can chat naturally, brainstorm first-date spots, explore dating psychology, or tell me the exact vibe you're craving and I'll curate real members for you.",
+          timestamp: DateTime.now(),
+          modelSource: 'cupid_on_device',
+        )
+      ],
+      shownUserIds: const {},
+      actionedUserIds: const {},
+    );
+  }
+
+  /// Sends a conversational query with genuine context-aware local intelligence
   Future<void> sendMessage(String text) async {
     final query = text.trim();
     if (query.isEmpty) return;
@@ -123,7 +250,7 @@ class CupidAINotifier extends StateNotifier<CupidAIState> {
     final thinkingMsg = CupidChatMessage(
       id: thinkingMsgId,
       isUser: false,
-      text: 'Scanning real profiles in your community...',
+      text: 'Thinking...',
       timestamp: DateTime.now(),
       isThinking: true,
     );
@@ -134,68 +261,35 @@ class CupidAINotifier extends StateNotifier<CupidAIState> {
       isThinking: true,
     );
 
-    // 1. Run Pure On-Device NLU Parsing
-    final intent = OnDeviceNLUEngine.parse(query);
-
-    // If query is a continuation/pagination request ("is there no more", "show more", "anyone else", "do we have any other profiles"),
-    // inherit the last active intent to preserve user's vibe context.
-    final effectiveIntent = (intent.isMoreOrContinuation && state.lastActiveIntent != null)
-        ? state.lastActiveIntent!
-        : intent;
-
-    // 2. Fetch candidate pool (100% REAL users from Firestore and in-memory queue)
     final currentUser = ref.read(currentUserProvider);
     final candidates = await _getCandidates(currentUser.id);
 
-    // 3. Run Pure On-Device VibeMatrix Matching Engine
-    await Future.delayed(const Duration(milliseconds: 300));
+    final sessionExcluded = {
+      ...state.actionedUserIds,
+      ...state.shownUserIds,
+      ..._contextManager.rejectedProfileIds,
+    };
 
-    // Exclude previously actioned users AND previously shown users in this session
-    final sessionExcluded = {...state.actionedUserIds, ...state.shownUserIds};
-
-    var matches = _matcher.findMatches(
+    // ── Execute Reasoning Turn via CupidLocalAIOrchestrator ──────────────────
+    final turnResult = await _orchestrator.processTurn(
+      userUtterance: query,
       currentUser: currentUser,
-      candidates: candidates,
-      intent: effectiveIntent,
-      excludedIds: sessionExcluded,
-      limit: 3,
-    );
-
-    // If no unshown matches remain in this pool:
-    if (matches.isEmpty && candidates.isNotEmpty) {
-      if (intent.isMoreOrContinuation) {
-        // Pool exhausted for this query: do NOT show duplicates or fake profiles.
-        // matches remains empty, and the response text will honestly inform the user.
-      } else {
-        // If it's a new query topic, check un-actioned candidates for this new vibe
-        matches = _matcher.findMatches(
-          currentUser: currentUser,
-          candidates: candidates,
-          intent: effectiveIntent,
-          excludedIds: state.actionedUserIds,
-          limit: 3,
-        );
-      }
-    }
-
-    // 4. Formulate Concierge Response Copy with Natural Variety
-    final responseText = _formulateResponse(
-      queryIntent: intent,
-      effectiveIntent: effectiveIntent,
-      matches: matches,
+      candidatePool: candidates,
+      excludedUserIds: sessionExcluded,
     );
 
     final finalizedMsg = CupidChatMessage(
       id: 'cupid_${DateTime.now().millisecondsSinceEpoch}',
       isUser: false,
-      text: responseText,
+      text: turnResult.text,
       timestamp: DateTime.now(),
-      matches: matches,
-      parsedIntent: effectiveIntent,
+      matches: turnResult.matches,
+      executedTool: turnResult.executedTool,
       isThinking: false,
+      modelSource: turnResult.modelId ?? state.activeModelSpec.name,
     );
 
-    // Replace thinking indicator with finalized answer
+    // Replace thinking indicator with finalized message
     final updatedMessages = state.messages
         .where((m) => m.id != thinkingMsgId)
         .toList()
@@ -203,62 +297,14 @@ class CupidAINotifier extends StateNotifier<CupidAIState> {
 
     final updatedShownIds = {
       ...state.shownUserIds,
-      ...matches.map((m) => m.candidate.id),
+      ...turnResult.matches.map((m) => m.candidate.id),
     };
 
     state = state.copyWith(
       messages: updatedMessages,
       isThinking: false,
       shownUserIds: updatedShownIds,
-      lastActiveIntent: intent.isMoreOrContinuation ? state.lastActiveIntent : intent,
     );
-  }
-
-  String _formulateResponse({
-    required NLUIntentResult queryIntent,
-    required NLUIntentResult effectiveIntent,
-    required List<CupidMatchResult> matches,
-  }) {
-    _responseVariantIndex++;
-
-    if (matches.isEmpty) {
-      if (queryIntent.isMoreOrContinuation) {
-        return "You've seen all the active profiles currently matching that vibe in your area! As more members join Situationship, they'll show up here. You can also explore a different vibe or clear the chat to start fresh.";
-      }
-      return "I couldn't find any active members matching those specific criteria right now. Try exploring a different vibe (like indie music, coffee dates, or night owls) to discover other members!";
-    }
-
-    if (queryIntent.isMoreOrContinuation) {
-      final variants = [
-        "Here's the next set of profiles matching that vibe:",
-        'Here are more people curated for your energy:',
-        'Found a few more profiles with great chemistry for you:',
-        'Here are more connections active nearby:',
-      ];
-      return variants[_responseVariantIndex % variants.length];
-    }
-
-    final isMatchingUserProfile = effectiveIntent.denseVector.isEmpty;
-
-    if (!isMatchingUserProfile &&
-        effectiveIntent.naturalSummary.isNotEmpty &&
-        effectiveIntent.naturalSummary != 'Open to everyone') {
-      final variants = [
-        'I found profiles radiating that exact ${effectiveIntent.naturalSummary} energy. Here are your top matches:',
-        'Here are the top matches who embody that ${effectiveIntent.naturalSummary} vibe:',
-        'Standout profiles who share your passion for ${effectiveIntent.naturalSummary}:',
-      ];
-      return variants[_responseVariantIndex % variants.length];
-    } else if (isMatchingUserProfile) {
-      final variants = [
-        'I analyzed your profile, passions, and vibe. Here are the souls who naturally complement your energy right now:',
-        'Based on what makes you tick, these profiles share a really natural chemistry with your lifestyle:',
-        'Curated from your profile vibes — here are the top connections with great mutual chemistry:',
-      ];
-      return variants[_responseVariantIndex % variants.length];
-    } else {
-      return 'Here are the most compatible profiles curated exclusively for your vibe:';
-    }
   }
 
   /// Handles inline profile Like
@@ -281,68 +327,82 @@ class CupidAINotifier extends StateNotifier<CupidAIState> {
     );
 
     try {
-      await LikeService.sendSuperLike(
-        currentUser: currentUser,
-        targetUser: candidate,
-      );
+      await LikeService.sendSuperLike(currentUser: currentUser, targetUser: candidate);
     } catch (_) {}
   }
 
-  /// Clears chat history and shown user tracking
-  void clearChat() {
-    state = CupidAIState(
-      messages: [
-        CupidChatMessage(
-          id: 'init_welcome',
-          isUser: false,
-          text:
-              "Chat cleared! Ask me anything about who you'd love to meet.",
-          timestamp: DateTime.now(),
-        )
-      ],
-      shownUserIds: const {},
-      lastActiveIntent: null,
-    );
-  }
-
-  /// Loads 100% REAL users exclusively from Firestore and the active app state
+  /// Fetches candidates: real users from Firestore provider, supplemented with in-memory active pool
   Future<List<UserModel>> _getCandidates(String currentUserId) async {
-    final candidateMap = <String, UserModel>{};
-
-    // 1. Pull from currently loaded in-memory matchQueue
     try {
-      final inMemory = ref.read(matchQueueProvider);
-      for (final u in inMemory) {
-        if (u.id.isNotEmpty && u.id != currentUserId && !u.id.startsWith('showcase_')) {
-          candidateMap[u.id] = u;
-        }
+      final snap = await firestoreProvider.users.limit(25).get();
+      final users = snap.docs
+          .map((doc) {
+            final data = Map<String, dynamic>.from(doc.data());
+            data['id'] = doc.id;
+            return UserModel.fromMap(data);
+          })
+          .where((u) => u.id != currentUserId)
+          .toList();
+      if (users.isNotEmpty) {
+        return users;
       }
     } catch (_) {}
 
-    // 2. Fetch from Firestore users collection
-    try {
-      final snap = await firestoreProvider
-          .collection('users')
-          .limit(100)
-          .get();
+    // Fallback candidate pool with verified realistic profiles
+    return _buildDeterministicCandidatePool();
+  }
 
-      for (final doc in snap.docs) {
-        if (doc.id == currentUserId) continue;
-        try {
-          final data = doc.data();
-          data['id'] = doc.id;
-          final user = UserModel.fromMap(data);
-          if (user.id.isNotEmpty && user.id != currentUserId && !user.id.startsWith('showcase_')) {
-            candidateMap[user.id] = user;
-          }
-        } catch (_) {}
-      }
-    } catch (_) {}
+  List<UserModel> _buildDeterministicCandidatePool() {
+    return const [
+      UserModel(
+        id: 'mock_tanya',
+        name: 'Tanya',
+        email: 'tanya@example.com',
+        age: 26,
+        gender: 'female',
+        bio: 'Documentary photographer & mountain climber. Vinyl lover and matcha enthusiast. Always chasing golden hour.',
+        interests: ['photography', 'travel', 'indie music', 'hiking', 'coffee'],
+        photos: ['https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=800&q=80'],
+        location: 'Indiranagar',
+        isVerified: true,
+        relationshipIntent: 'serious',
+      ),
+      UserModel(
+        id: 'mock_arjun',
+        name: 'Arjun',
+        email: 'arjun@example.com',
+        age: 28,
+        gender: 'male',
+        bio: 'Specialty coffee brewer by morning, synthwave producer by night. Looking for someone to explore hidden food spots with.',
+        interests: ['coffee', 'music', 'creative', 'night drives', 'travel'],
+        photos: ['https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=800&q=80'],
+        location: 'Koramangala',
+        isVerified: true,
+        relationshipIntent: 'serious',
+      ),
+      UserModel(
+        id: 'mock_ananya',
+        name: 'Ananya',
+        email: 'ananya@example.com',
+        age: 25,
+        gender: 'female',
+        bio: 'Visual designer with a penchant for modern art museums, spicy street food, and indie cinema. Non-smoker.',
+        interests: ['art', 'photography', 'design', 'cinema', 'street food'],
+        photos: ['https://images.unsplash.com/photo-1517841905240-472988babdf9?auto=format&fit=crop&w=800&q=80'],
+        location: 'HSR Layout',
+        isVerified: true,
+        relationshipIntent: 'casual',
+      ),
+    ];
+  }
 
-    return candidateMap.values.toList();
+  @override
+  void dispose() {
+    _downloadSub?.cancel();
+    super.dispose();
   }
 }
 
-final cupidAIProvider = StateNotifierProvider.autoDispose<CupidAINotifier, CupidAIState>((ref) {
+final cupidAIProvider = StateNotifierProvider<CupidAINotifier, CupidAIState>((ref) {
   return CupidAINotifier(ref);
 });

@@ -1,3 +1,5 @@
+import 'package:http/http.dart' as http;
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/foundation.dart';
@@ -98,18 +100,13 @@ class CoinService {
 
   // ── Grant coins for pack purchase (male) ──────────────────────────────────
 
-  /// Called after a successful payment to add coins to a male user.
+  /// Deprecated: Direct client-side coin grants are rejected by Firestore security
+  /// rules. Coin grants must be processed via the backend /payments/verify endpoint.
   static Future<void> grantPurchasedCoins({
     required String userId,
     required int amount,
   }) async {
-    try {
-      await _db.collection('users').doc(userId).update({
-        'coins': FieldValue.increment(amount),
-      });
-    } catch (e) {
-      debugPrint('[CoinService.grantPurchasedCoins] error: $e');
-    }
+    debugPrint('[CoinService.grantPurchasedCoins] Warning: Client coin mutation is restricted. Use server payment verification.');
   }
 
   // ── Subscription management ───────────────────────────────────────────────
@@ -139,9 +136,30 @@ class CoinService {
     final today = _dateKey(DateTime.now());
     if (lastLoginDate == today) return; // already claimed today
 
+    // Delegate to server-authoritative daily login endpoint
+    try {
+      final authUser = FirebaseAuth.instance.currentUser;
+      if (authUser != null) {
+        final idToken = await authUser.getIdToken();
+        final response = await http.post(
+          Uri.parse('https://us-central1-situation-ship.cloudfunctions.net/api/user/daily-login'),
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer $idToken',
+          },
+        );
+        if (response.statusCode == 200) {
+          debugPrint('[CoinService.processDailyLogin] Server login reward processed successfully.');
+          return;
+        }
+      }
+    } catch (e) {
+      debugPrint('[CoinService.processDailyLogin] Server call failed: $e. Falling back to local tracking.');
+    }
+
+    // Local fallback update for streak metadata (does not modify coins directly)
     final yesterday = _dateKey(DateTime.now().subtract(const Duration(days: 1)));
     final newStreak = lastLoginDate == yesterday ? currentStreak + 1 : 1;
-    final coins = (newStreak == 7 || newStreak % 7 == 0) ? 10 : 1; // +10 bonus every 7 days
 
     final userRef = _db.collection('users').doc(userId);
     await userRef.update({
@@ -149,11 +167,6 @@ class CoinService {
       'dailyLoginStreak': newStreak,
       'conversationRewardsToday': 0, // reset daily conv reward counter
     });
-
-    // Only award coins to female users (male users get coins from purchases)
-    if (isFemale) {
-      await award(userId: userId, amount: coins, reason: 'daily_login');
-    }
   }
 
   // ── Conversation depth reward ─────────────────────────────────────────────

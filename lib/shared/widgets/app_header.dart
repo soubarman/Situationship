@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../../core/models/user_model.dart';
 import '../../core/providers/app_state_provider.dart';
 import '../../core/theme/app_palette.dart';
+import '../../core/theme/design_tokens.dart';
 import 'notifications_sheet.dart';
 import 'situationship_logo.dart';
 import 'app_3d_icons.dart';
@@ -67,10 +68,7 @@ class SituationshipHeaderBar extends ConsumerWidget {
     } else {
       leftWidget = Text(
         titleText ?? '',
-        style: TextStyle(
-          fontSize: 26,
-          fontWeight: FontWeight.w900,
-          letterSpacing: -0.5,
+        style: DesignTokens.headingLarge(
           color: isDark ? Colors.white : const Color(0xFF0F172A),
         ),
       );
@@ -86,7 +84,7 @@ class SituationshipHeaderBar extends ConsumerWidget {
 
     // 2. Filter Button (if onFilterTap is passed, it comes before Bell as in Matches tab)
     if (onFilterTap != null) {
-      if (actions.isNotEmpty) actions.add(const SizedBox(width: 7));
+      if (actions.isNotEmpty) actions.add(const SizedBox(width: 8));
       actions.add(_buildHeaderIconButton(
         context: context,
         icon: Icons.tune_rounded,
@@ -97,13 +95,13 @@ class SituationshipHeaderBar extends ConsumerWidget {
 
     // 3. Notification Bell
     if (showNotifications) {
-      if (actions.isNotEmpty) actions.add(const SizedBox(width: 7));
+      if (actions.isNotEmpty) actions.add(const SizedBox(width: 8));
       actions.add(_buildNotificationBell(context, currentUser, ref, isDark, palette));
     }
 
     // 4. Search Button (if showSearch is true and not in filter mode)
     if (showSearch && onFilterTap == null) {
-      if (actions.isNotEmpty) actions.add(const SizedBox(width: 7));
+      if (actions.isNotEmpty) actions.add(const SizedBox(width: 8));
       actions.add(_buildHeaderIconButton(
         context: context,
         icon: Icons.search_rounded,
@@ -114,14 +112,14 @@ class SituationshipHeaderBar extends ConsumerWidget {
 
     // 5. User Profile Avatar
     if (showProfileAvatar) {
-      if (actions.isNotEmpty) actions.add(const SizedBox(width: 7));
+      if (actions.isNotEmpty) actions.add(const SizedBox(width: 8));
       actions.add(_buildProfileAvatar(context, currentUser, isDark, palette));
     }
 
     return Padding(
       padding: padding,
       child: SizedBox(
-        height: 48,
+        height: 50,
         child: Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           crossAxisAlignment: CrossAxisAlignment.center,
@@ -157,19 +155,19 @@ class SituationshipHeaderBar extends ConsumerWidget {
         context.push('/wallet');
       },
       child: Container(
-        height: 32,
-        padding: const EdgeInsets.symmetric(horizontal: 10),
+        height: 34,
+        padding: const EdgeInsets.symmetric(horizontal: 11),
         decoration: BoxDecoration(
-          color: isDark ? const Color(0xFF1B150A) : const Color(0xFFFFFBEB),
-          borderRadius: BorderRadius.circular(16),
+          color: isDark ? const Color(0xFF1B160C) : const Color(0xFFFFFBEB),
+          borderRadius: BorderRadius.circular(DesignTokens.radiusFull),
           border: Border.all(
-            color: const Color(0xFFFFB800),
-            width: 1.2,
+            color: DesignTokens.gold.withValues(alpha: 0.5),
+            width: 1.0,
           ),
           boxShadow: [
             BoxShadow(
-              color: const Color(0xFFFFB800).withValues(alpha: 0.15),
-              blurRadius: 6,
+              color: DesignTokens.gold.withValues(alpha: 0.12),
+              blurRadius: 8,
               offset: const Offset(0, 1),
             ),
           ],
@@ -178,16 +176,13 @@ class SituationshipHeaderBar extends ConsumerWidget {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.center,
           children: [
-            const Coin3dIcon(size: 14),
+            const Coin3dIcon(size: 15),
             const SizedBox(width: 5),
             Text(
               '$coins',
-              style: const TextStyle(
-                fontSize: 12.5,
-                fontWeight: FontWeight.w900,
-                color: Color(0xFFFFD54F),
-                letterSpacing: -0.2,
-              ),
+              style: DesignTokens.labelBold(
+                color: const Color(0xFFFFD54F),
+              ).copyWith(fontSize: 13),
             ),
           ],
         ),
@@ -224,22 +219,22 @@ class SituationshipHeaderBar extends ConsumerWidget {
         ),
         if (hasUnread)
           Positioned(
-            top: -2,
-            right: -2,
+            top: -1,
+            right: -1,
             child: Container(
-              padding: const EdgeInsets.all(2),
-              constraints: const BoxConstraints(minWidth: 15, minHeight: 15),
+              padding: const EdgeInsets.all(2.5),
+              constraints: const BoxConstraints(minWidth: 16, minHeight: 16),
               decoration: BoxDecoration(
                 color: palette.primary,
                 shape: BoxShape.circle,
                 border: Border.all(
-                  color: isDark ? const Color(0xFF090C15) : Colors.white,
+                  color: isDark ? DesignTokens.obsidianBase : Colors.white,
                   width: 1.5,
                 ),
                 boxShadow: [
                   BoxShadow(
                     color: palette.primary.withValues(alpha: 0.6),
-                    blurRadius: 5,
+                    blurRadius: 6,
                   ),
                 ],
               ),
@@ -248,7 +243,7 @@ class SituationshipHeaderBar extends ConsumerWidget {
                   displayCount,
                   style: const TextStyle(
                     color: Colors.white,
-                    fontSize: 8,
+                    fontSize: 8.5,
                     fontWeight: FontWeight.w900,
                     height: 1.0,
                   ),
@@ -272,21 +267,25 @@ class SituationshipHeaderBar extends ConsumerWidget {
       color: Colors.transparent,
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(17),
+        borderRadius: BorderRadius.circular(18),
         child: Container(
-          width: 34,
-          height: 34,
+          width: 36,
+          height: 36,
           decoration: BoxDecoration(
             shape: BoxShape.circle,
-            color: isDark ? const Color(0xFF161026).withValues(alpha: 0.85) : Colors.black.withValues(alpha: 0.04),
+            color: isDark
+                ? DesignTokens.obsidianCard
+                : Colors.black.withValues(alpha: 0.04),
             border: Border.all(
-              color: isDark ? Colors.white.withValues(alpha: 0.14) : Colors.black.withValues(alpha: 0.08),
+              color: isDark
+                  ? Colors.white.withValues(alpha: 0.12)
+                  : Colors.black.withValues(alpha: 0.08),
               width: 1.0,
             ),
           ),
           child: Icon(
             icon,
-            size: 17,
+            size: 18,
             color: isDark ? Colors.white.withValues(alpha: 0.9) : const Color(0xFF334155),
           ),
         ),
@@ -309,37 +308,38 @@ class SituationshipHeaderBar extends ConsumerWidget {
         context.push('/profile');
       },
       child: Container(
-        width: 34,
-        height: 34,
+        width: 36,
+        height: 36,
         decoration: BoxDecoration(
           shape: BoxShape.circle,
           gradient: palette.primaryGradient,
           boxShadow: [
             BoxShadow(
               color: palette.primary.withValues(alpha: 0.35),
-              blurRadius: 6,
+              blurRadius: 8,
+              offset: const Offset(0, 2),
             ),
           ],
         ),
         padding: const EdgeInsets.all(1.5),
         child: ClipOval(
           child: Container(
-            color: isDark ? const Color(0xFF161026) : Colors.white,
+            color: isDark ? DesignTokens.obsidianCard : Colors.white,
             child: avatarUrl != null && avatarUrl.isNotEmpty
                 ? Image.network(
                     avatarUrl,
                     fit: BoxFit.cover,
-                    width: 31,
-                    height: 31,
+                    width: 33,
+                    height: 33,
                     errorBuilder: (_, __, ___) => Icon(
                       Icons.person_rounded,
-                      size: 17,
+                      size: 18,
                       color: isDark ? Colors.white70 : Colors.black87,
                     ),
                   )
                 : Icon(
                     Icons.person_rounded,
-                    size: 17,
+                    size: 18,
                     color: isDark ? Colors.white70 : Colors.black87,
                   ),
           ),

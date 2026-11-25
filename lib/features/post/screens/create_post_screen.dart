@@ -8,10 +8,10 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import '../../../core/theme/app_theme.dart';
+import '../../../core/theme/design_tokens.dart';
 import '../../../core/providers/app_state_provider.dart';
 import '../../../core/models/post_model.dart';
 import '../../wallet/widgets/coin_gate_sheet.dart';
-import '../../../core/providers/access_provider.dart';
 
 final _db = FirebaseFirestore.instanceFor(app: Firebase.app(), databaseId: 'default');
 
@@ -74,7 +74,7 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
 
       // Upload image
       final storageRef =
-          FirebaseStorage.instance.ref('posts/$postId.jpg');
+          FirebaseStorage.instance.ref('posts/${currentUser.id}/$postId.jpg');
       if (kIsWeb) {
         final bytes = await _imageFile!.readAsBytes();
         await storageRef.putData(bytes);
@@ -185,17 +185,17 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
                 width: double.infinity,
                 height: 320,
                 decoration: BoxDecoration(
-                  color: isDark ? AppTheme.darkCard : Colors.white,
-                  borderRadius: BorderRadius.circular(24),
+                  color: isDark ? DesignTokens.obsidianElevated : Colors.white,
+                  borderRadius: BorderRadius.circular(DesignTokens.radius24),
                   border: Border.all(
                     color: _imageFile != null
-                        ? AppTheme.primaryBlue.withOpacity(0.4)
-                        : (isDark ? AppTheme.darkBorder : Colors.black12),
-                    width: 2,
+                        ? AppTheme.primaryBlue.withValues(alpha: 0.5)
+                        : (isDark ? DesignTokens.hairline : Colors.black12),
+                    width: 1.5,
                   ),
                   boxShadow: [
                     BoxShadow(
-                      color: Colors.black.withOpacity(isDark ? 0.2 : 0.06),
+                      color: Colors.black.withValues(alpha: isDark ? 0.3 : 0.06),
                       blurRadius: 20,
                       offset: const Offset(0, 8),
                     )

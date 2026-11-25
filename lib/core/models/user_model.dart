@@ -419,6 +419,23 @@ class UserModel {
     };
   }
 
+  /// Returns only public profile fields (PII such as email and phoneNumber are strictly excluded)
+  Map<String, dynamic> toPublicMap() {
+    final map = toMap();
+    map.remove('email');
+    map.remove('phoneNumber');
+    return map;
+  }
+
+  /// Returns private profile fields (intended strictly for users/{userId}/private/profile)
+  Map<String, dynamic> toPrivateProfileMap() {
+    return {
+      'email': email,
+      'phoneNumber': phoneNumber,
+      'updatedAt': DateTime.now().millisecondsSinceEpoch,
+    };
+  }
+
   UserModel copyWith({
     String? id,
     String? name,

@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/theme/design_tokens.dart';
 import '../../../core/theme/app_palette.dart';
 import '../../../core/models/comment_model.dart';
 import '../../../core/models/user_model.dart';
@@ -162,15 +163,15 @@ class _CommentsSheetState extends ConsumerState<CommentsSheet> {
     return Container(
       height: MediaQuery.of(context).size.height * 0.82,
       decoration: BoxDecoration(
-        color: isDark ? const Color(0xFF13101E) : Colors.white,
+        color: isDark ? DesignTokens.obsidianModal : Colors.white,
         borderRadius: const BorderRadius.vertical(top: Radius.circular(32)),
         border: Border.all(
-          color: isDark ? palette.primary.withOpacity(0.20) : const Color(0xFFEAE6F4),
-          width: 1.2,
+          color: isDark ? DesignTokens.hairline : const Color(0xFFEAE6F4),
+          width: 1.0,
         ),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.4),
+            color: Colors.black.withValues(alpha: 0.5),
             blurRadius: 32,
             offset: const Offset(0, -6),
           ),

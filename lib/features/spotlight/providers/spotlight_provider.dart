@@ -1,6 +1,9 @@
+import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:http/http.dart' as http;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/spotlight_model.dart';
 import 'location_provider.dart';
@@ -183,99 +186,45 @@ class SpotlightNotifier {
     }
 
     final resolvedSessionId = _sessionId ?? sessionId;
-    final now = DateTime.now();
-    final currentSlotId = getCurrentSlotId(now);
-    final slotStart = getCurrentSlotStartTime(now);
-    final slotEnd = getCurrentSlotEndTime(now);
-
-    final db = FirebaseFirestore.instanceFor(app: Firebase.app(), databaseId: 'default');
-    final sessionRef = db.collection('spotlight_sessions').doc(resolvedSessionId);
-    final bidRef = sessionRef.collection('bids').doc(user.id);
-    final userRef = db.collection('users').doc(user.id);
 
     try {
-      // 1. First fetch outside transaction to avoid cross-document concurrency limits on Web
-      final userSnap = await userRef.get();
-      if (!userSnap.exists) {
-        throw Exception('User account profile not found');
+      final authUser = FirebaseAuth.instance.currentUser;
+      if (authUser == null) {
+        throw Exception('Please sign in to place a spotlight bid.');
+      }
+      final idToken = await authUser.getIdToken();
+      final response = await http.post(
+        Uri.parse('https://us-central1-situation-ship.cloudfunctions.net/api/user/spotlight-bid'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $idToken',
+        },
+        body: jsonEncode({
+          'bidAmount': amount,
+          'sessionId': resolvedSessionId,
+          'tier': 'gold',
+          'targetGender': 'all',
+          'targetCategory': 'dating',
+          'durationMinutes': 60,
+        }),
+      );
+
+      if (response.statusCode == 402 || response.body.contains('Insufficient coins')) {
+        throw Exception('Insufficient coins. Please add more coins to your wallet.');
       }
 
-      final userData = userSnap.data() ?? {};
-      final currentCoins = (userData['coins'] as num?)?.toInt() ?? 0;
-
-      final bidSnap = await bidRef.get();
-      int previousBid = 0;
-      if (bidSnap.exists) {
-        final existingSlotId = bidSnap.data()?['slotId'] as String? ?? '';
-        final existingTs = (bidSnap.data()?['timestamp'] as Timestamp?)?.toDate();
-        final isCurrentSlot = existingSlotId == currentSlotId || 
-            (existingSlotId.isEmpty && existingTs != null && existingTs.isAfter(slotStart));
-        if (isCurrentSlot) {
-          previousBid = ((bidSnap.data()?['amount'] as num?)?.toInt() ?? 0);
+      if (response.statusCode != 200) {
+        try {
+          final err = jsonDecode(response.body);
+          throw Exception(err['detail'] ?? 'Failed to place spotlight bid');
+        } catch (_) {
+          throw Exception('Failed to place spotlight bid: ${response.body}');
         }
       }
-
-      final delta = amount - previousBid;
-      if (delta > 0 && currentCoins < delta) {
-        throw Exception('Insufficient coins. You need ${delta} more coins to raise your bid to ${amount}.');
-      }
-
-      // 2. Perform write via WriteBatch (supported everywhere, never fails with Web SDK transaction locks)
-      final batch = db.batch();
-
-      // Deduct or refund incremental delta
-      if (delta != 0) {
-        batch.update(userRef, {
-          'coins': FieldValue.increment(-delta),
-        });
-      }
-
-      // Place or update bid
-      batch.set(bidRef, {
-        'sessionId': resolvedSessionId,
-        'userId': user.id,
-        'username': user.name,
-        'profileImageUrl': user.avatarUrl ?? '',
-        'isVerified': user.isVerified,
-        'amount': amount,
-        'timestamp': FieldValue.serverTimestamp(),
-        'rank': 999,
-        'slotId': currentSlotId,
-      });
-
-      // Update session document
-      final sessionSnap = await sessionRef.get();
-      final existingEnd = (sessionSnap.data()?['endTime'] as Timestamp?)?.toDate();
-      final isNewHour = !sessionSnap.exists || existingEnd == null || now.isAfter(existingEnd);
-
-      final Map<String, dynamic> sessionUpdates = {
-        'isActive': true,
-        'minStartingBid': 100,
-        'sessionId': resolvedSessionId,
-        'startTime': Timestamp.fromDate(slotStart),
-        'endTime': Timestamp.fromDate(slotEnd),
-        'slotId': currentSlotId,
-      };
-
-      if (isNewHour) {
-        sessionUpdates['prizePool'] = amount;
-        sessionUpdates['activeBidders'] = 1;
-      } else {
-        sessionUpdates['prizePool'] = FieldValue.increment(delta);
-        if (previousBid == 0) {
-          sessionUpdates['activeBidders'] = FieldValue.increment(1);
-        }
-      }
-
-      batch.set(sessionRef, sessionUpdates, SetOptions(merge: true));
-      await batch.commit();
-
     } catch (e, stack) {
       debugPrint('[Spotlight] placeBid error: $e\n$stack');
       final errorMsg = e.toString();
-      if (errorMsg.contains('permission-denied') || errorMsg.contains('PERMISSION_DENIED')) {
-        throw Exception('Permission denied by server. Please check your login credentials.');
-      } else if (errorMsg.contains('Insufficient coins')) {
+      if (errorMsg.contains('Insufficient coins')) {
         rethrow;
       } else {
         throw Exception(errorMsg.replaceAll('Exception: ', ''));

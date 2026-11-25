@@ -127,7 +127,7 @@ class _CreateCommunityScreenState extends ConsumerState<CreateCommunityScreen> {
           'https://images.unsplash.com/photo-1521737604893-d14cc237f11d?q=80&w=800&auto=format&fit=crop';
 
       if (_imageFile != null) {
-        final storageRef = FirebaseStorage.instance.ref('communities/$communityId.jpg');
+        final storageRef = FirebaseStorage.instance.ref('communities/$communityId/cover.jpg');
         if (kIsWeb) {
           final bytes = await _imageFile!.readAsBytes();
           await storageRef.putData(bytes);

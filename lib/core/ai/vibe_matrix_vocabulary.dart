@@ -254,7 +254,7 @@ class VibeMatrixVocabulary {
       canonicalName: 'Traveler & Explorer',
       category: 'lifestyle',
       synonyms: [
-        'travel', 'traveling', 'traveler', 'mountains', 'beach', 'hiking',
+        'travel', 'traveling', 'travelling', 'traveler', 'traveller', 'travels', 'mountains', 'beach', 'hiking',
         'trekking', 'camping', 'backpacking', 'flights', 'places'
       ],
       defaultWeight: 1.1,

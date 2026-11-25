@@ -9,12 +9,44 @@ plugins {
     id "dev.flutter.flutter-gradle-plugin"
 }
 
+// ── Secure Release Signing Configuration ────────────────────────────────────
+// Reads credentials from key.properties if present, or CI/CD environment variables.
 def keystoreProperties = new Properties()
 def keystorePropertiesFile = rootProject.file("key.properties")
 
 if (keystorePropertiesFile.exists()) {
     keystoreProperties.load(new FileInputStream(keystorePropertiesFile))
 }
+
+def envStoreFile = System.getenv("ANDROID_KEYSTORE_PATH")
+def envStorePass = System.getenv("ANDROID_KEYSTORE_PASSWORD")
+def envKeyAlias  = System.getenv("ANDROID_KEY_ALIAS")
+def envKeyPass   = System.getenv("ANDROID_KEY_PASSWORD")
+
+def releaseStoreFile = keystoreProperties['storeFile'] ?: envStoreFile
+def releaseStorePass = keystoreProperties['storePassword'] ?: envStorePass
+def releaseKeyAlias  = keystoreProperties['keyAlias'] ?: envKeyAlias
+def releaseKeyPass   = keystoreProperties['keyPassword'] ?: envKeyPass
+
+File resolvedKeystore = null
+if (releaseStoreFile) {
+    def f = file(releaseStoreFile)
+    if (f.exists()) {
+        resolvedKeystore = f
+    } else if (file("${projectDir}/${releaseStoreFile}").exists()) {
+        resolvedKeystore = file("${projectDir}/${releaseStoreFile}")
+    } else if (file("${rootDir}/${releaseStoreFile}").exists()) {
+        resolvedKeystore = file("${rootDir}/${releaseStoreFile}")
+    }
+}
+
+boolean hasValidReleaseSigning = (
+    resolvedKeystore != null &&
+    resolvedKeystore.exists() &&
+    releaseStorePass &&
+    releaseKeyAlias &&
+    releaseKeyPass
+)
 
 android {
     namespace = "com.example.situationship"
@@ -36,21 +68,81 @@ android {
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName
+
+        ndk {
+            abiFilters 'arm64-v8a', 'armeabi-v7a', 'x86_64'
+        }
+        externalNativeBuild {
+            cmake {
+                cppFlags "-std=c++17 -O3 -fexceptions -frtti"
+                arguments "-DANDROID_STL=c++_shared"
+            }
+        }
+    }
+
+    externalNativeBuild {
+        cmake {
+            path "src/main/cpp/CMakeLists.txt"
+            version "3.22.1"
+        }
     }
 
     signingConfigs {
-        release {
-            keyAlias keystoreProperties['keyAlias']
-            keyPassword keystoreProperties['keyPassword']
-            storeFile file(keystoreProperties['storeFile'])
-            storePassword keystoreProperties['storePassword']
+        debug {
+            // Android SDK default debug keystore
+        }
+        if (hasValidReleaseSigning) {
+            release {
+                keyAlias releaseKeyAlias
+                keyPassword releaseKeyPass
+                storeFile resolvedKeystore
+                storePassword releaseStorePass
+            }
         }
     }
 
     buildTypes {
-        release {
-            signingConfig signingConfigs.release
+        debug {
+            signingConfig signingConfigs.debug
         }
+        release {
+            if (hasValidReleaseSigning) {
+                signingConfig signingConfigs.release
+            } else {
+                // Strict fail-safe: NEVER fall back to debug signing for release builds
+                signingConfig null
+            }
+            minifyEnabled true
+            shrinkResources true
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+        }
+    }
+}
+
+// Fail-closed enforcement: if a release build is invoked without valid signing, fail the build immediately.
+gradle.taskGraph.whenReady { taskGraph ->
+    boolean isReleaseBuild = taskGraph.allTasks.any { task ->
+        task.name.equalsIgnoreCase("assembleRelease") ||
+        task.name.equalsIgnoreCase("bundleRelease") ||
+        task.name.equalsIgnoreCase("packageRelease")
+    }
+    if (isReleaseBuild && !hasValidReleaseSigning) {
+        throw new GradleException(
+            "\n" +
+            "================================================================================\n" +
+            "BUILD FAILED: Production Release Signing Credentials Missing\n" +
+            "================================================================================\n" +
+            "A release build was requested, but valid release signing credentials are not configured.\n" +
+            "Situationship strictly forbids falling back to debug signing for release builds.\n\n" +
+            "To resolve this, provide valid signing credentials via EITHER:\n" +
+            "  1. File: android/key.properties (see android/key.properties.example)\n" +
+            "  2. CI/CD Environment Variables:\n" +
+            "     - ANDROID_KEYSTORE_PATH\n" +
+            "     - ANDROID_KEYSTORE_PASSWORD\n" +
+            "     - ANDROID_KEY_ALIAS\n" +
+            "     - ANDROID_KEY_PASSWORD\n" +
+            "================================================================================\n"
+        )
     }
 }
 

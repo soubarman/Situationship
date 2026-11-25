@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/theme/design_tokens.dart';
 import '../../../core/providers/app_state_provider.dart';
 
 class SuspendedScreen extends ConsumerWidget {
@@ -16,7 +17,7 @@ class SuspendedScreen extends ConsumerWidget {
     final suspendedUntil = userAsync.asData?.value?.suspendedUntil;
 
     return Scaffold(
-      backgroundColor: isDark ? AppTheme.darkBg : const Color(0xFFF5F5F7),
+      backgroundColor: DesignTokens.obsidianBase,
       body: SafeArea(
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 28),
@@ -25,49 +26,40 @@ class SuspendedScreen extends ConsumerWidget {
             children: [
               // Icon
               Container(
-                width: 100,
-                height: 100,
+                width: 88,
+                height: 88,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  gradient: LinearGradient(
-                    colors: [Colors.redAccent.shade700, const Color(0xFFD32F2F)],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
+                  color: DesignTokens.error.withValues(alpha: 0.14),
+                  border: Border.all(
+                    color: DesignTokens.error.withValues(alpha: 0.35),
+                    width: 1.5,
                   ),
                   boxShadow: [
                     BoxShadow(
-                      color: Colors.red.withOpacity(0.35),
-                      blurRadius: 32,
-                      offset: const Offset(0, 8),
+                      color: DesignTokens.error.withValues(alpha: 0.25),
+                      blurRadius: 28,
+                      offset: const Offset(0, 6),
                     ),
                   ],
                 ),
-                child: const Icon(Icons.lock_rounded, color: Colors.white, size: 48),
+                child: const Icon(Icons.shield_outlined, color: DesignTokens.error, size: 40),
               ),
-              const SizedBox(height: 32),
+              const SizedBox(height: 28),
 
               // Title
               Text(
                 'Account Suspended',
                 textAlign: TextAlign.center,
-                style: TextStyle(
-                  fontSize: 28,
-                  fontWeight: FontWeight.w800,
-                  color: isDark ? Colors.white : const Color(0xFF1A1A2E),
-                  letterSpacing: -0.5,
-                ),
+                style: DesignTokens.headingLarge(color: Colors.white).copyWith(fontSize: 26),
               ),
-              const SizedBox(height: 12),
+              const SizedBox(height: 10),
 
               // Subtitle
               Text(
-                'Your account has been suspended by the Situationship team due to a violation of our community guidelines.',
+                'Your account has been restricted by the Situationship team due to a violation of our community safety guidelines.',
                 textAlign: TextAlign.center,
-                style: TextStyle(
-                  fontSize: 15,
-                  color: isDark ? Colors.white54 : Colors.black54,
-                  height: 1.6,
-                ),
+                style: DesignTokens.bodyLarge(color: DesignTokens.textSecondary),
               ),
 
               // Reason card
@@ -76,23 +68,19 @@ class SuspendedScreen extends ConsumerWidget {
                 Container(
                   padding: const EdgeInsets.all(16),
                   decoration: BoxDecoration(
-                    color: Colors.redAccent.withOpacity(0.10),
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: Colors.redAccent.withOpacity(0.25)),
+                    color: DesignTokens.error.withValues(alpha: 0.10),
+                    borderRadius: BorderRadius.circular(DesignTokens.radiusMd),
+                    border: Border.all(color: DesignTokens.error.withValues(alpha: 0.25)),
                   ),
                   child: Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Icon(Icons.info_outline_rounded, color: Colors.redAccent, size: 20),
+                      const Icon(Icons.info_outline_rounded, color: DesignTokens.error, size: 18),
                       const SizedBox(width: 10),
                       Expanded(
                         child: Text(
                           suspensionReason,
-                          style: const TextStyle(
-                            color: Colors.redAccent,
-                            fontSize: 14,
-                            fontWeight: FontWeight.w500,
-                          ),
+                          style: DesignTokens.bodyMedium(color: DesignTokens.error),
                         ),
                       ),
                     ],
@@ -102,78 +90,59 @@ class SuspendedScreen extends ConsumerWidget {
 
               // Duration
               if (suspendedUntil != null) ...[
-                const SizedBox(height: 12),
+                const SizedBox(height: 14),
                 Text(
                   'Suspension ends: ${_formatDate(suspendedUntil)}',
-                  style: TextStyle(
-                    fontSize: 13,
-                    color: isDark ? Colors.white38 : Colors.black38,
-                    fontWeight: FontWeight.w500,
-                  ),
+                  style: DesignTokens.bodyMedium(color: DesignTokens.textMuted),
                 ),
               ] else ...[
-                const SizedBox(height: 12),
+                const SizedBox(height: 14),
                 Text(
                   'This suspension is permanent.',
-                  style: TextStyle(
-                    fontSize: 13,
-                    color: isDark ? Colors.white38 : Colors.black38,
-                  ),
+                  style: DesignTokens.bodyMedium(color: DesignTokens.textMuted),
                 ),
               ],
 
-              const SizedBox(height: 40),
+              const SizedBox(height: 36),
 
               // Contact support
               Container(
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
-                  color: isDark ? Colors.white.withOpacity(0.06) : Colors.white,
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(
-                    color: isDark ? Colors.white12 : Colors.black12,
-                  ),
+                  color: DesignTokens.obsidianCard,
+                  borderRadius: BorderRadius.circular(DesignTokens.radiusMd),
+                  border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
                 ),
                 child: Row(
                   children: [
-                    Icon(Icons.mail_outline_rounded,
-                        color: isDark ? Colors.white54 : Colors.black45, size: 20),
+                    const Icon(Icons.mail_outline_rounded, color: DesignTokens.textSecondary, size: 20),
                     const SizedBox(width: 12),
                     Expanded(
                       child: Text(
                         'If you believe this is a mistake, contact us at\nsupport@situationship.app',
-                        style: TextStyle(
-                          fontSize: 13,
-                          color: isDark ? Colors.white54 : Colors.black54,
-                          height: 1.5,
-                        ),
+                        style: DesignTokens.bodyMedium(color: DesignTokens.textSecondary),
                       ),
                     ),
                   ],
                 ),
               ),
 
-              const SizedBox(height: 28),
+              const SizedBox(height: 24),
 
               // Sign out button
               SizedBox(
                 width: double.infinity,
-                child: TextButton(
+                child: OutlinedButton(
                   onPressed: () async {
                     await FirebaseAuth.instance.signOut();
                   },
-                  style: TextButton.styleFrom(
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: Colors.white70,
+                    side: BorderSide(color: Colors.white.withValues(alpha: 0.15)),
                     padding: const EdgeInsets.symmetric(vertical: 14),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(DesignTokens.radiusFull)),
                   ),
-                  child: Text(
-                    'Sign Out',
-                    style: TextStyle(
-                      fontSize: 15,
-                      fontWeight: FontWeight.w600,
-                      color: isDark ? Colors.white38 : Colors.black38,
-                    ),
-                  ),
+                  child: const Text('Sign Out'),
                 ),
               ),
             ],

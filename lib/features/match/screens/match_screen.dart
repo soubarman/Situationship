@@ -7,6 +7,8 @@ import 'package:geolocator/geolocator.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../../core/models/user_model.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/theme/design_tokens.dart';
+import '../../../core/theme/app_palette.dart';
 import '../../../core/providers/app_state_provider.dart';
 import '../../../core/providers/firestore_provider.dart';
 import '../../../core/providers/firebase_auth_provider.dart';
@@ -386,6 +388,7 @@ class _MatchScreenState extends ConsumerState<MatchScreen>
     ];
 
     final likesCount = currentUser.likedBy.length;
+    final palette = ref.watch(appPaletteProvider);
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Scaffold(
@@ -405,7 +408,7 @@ class _MatchScreenState extends ConsumerState<MatchScreen>
                     children: [
                       _buildHeader(currentUser, isDark),
                       const SizedBox(height: 8),
-                      _buildTabBar(likesCount, isDark),
+                      _buildTabBar(likesCount, isDark, palette),
                       const SizedBox(height: 10),
                       Expanded(
                         child: TabBarView(
@@ -488,34 +491,32 @@ class _MatchScreenState extends ConsumerState<MatchScreen>
               child: Container(
                 padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8.5),
                 decoration: BoxDecoration(
-                  gradient: const LinearGradient(
-                    colors: [Color(0xFFFF5277), Color(0xFFFF3366)],
-                  ),
-                  borderRadius: BorderRadius.circular(24),
+                  color: DesignTokens.obsidianElevated.withValues(alpha: 0.9),
+                  borderRadius: BorderRadius.circular(DesignTokens.radiusFull),
                   boxShadow: [
                     BoxShadow(
-                      color: const Color(0xFFFF5277).withValues(alpha: 0.45),
+                      color: const Color(0xFFFF5277).withValues(alpha: 0.25),
                       blurRadius: 14,
                       offset: const Offset(0, 4),
                     ),
                   ],
                   border: Border.all(
-                    color: Colors.white.withValues(alpha: 0.35),
+                    color: const Color(0xFFFF5277).withValues(alpha: 0.4),
                     width: 1,
                   ),
                 ),
                 child: const Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Icon(Icons.favorite_rounded, color: Colors.white, size: 15),
+                    Icon(Icons.auto_awesome_rounded, color: Color(0xFFFF5277), size: 15),
                     SizedBox(width: 6),
                     Text(
-                      'Cupid Concierge',
+                      'Cupid AI',
                       style: TextStyle(
                         color: Colors.white,
                         fontSize: 12,
-                        fontWeight: FontWeight.w900,
-                        letterSpacing: 0.2,
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: 0.3,
                       ),
                     ),
                   ],
@@ -557,33 +558,33 @@ class _MatchScreenState extends ConsumerState<MatchScreen>
 
   // ── 4-Tab Segmented Pill Bar ───────────────────────────────────────────────
 
-  Widget _buildTabBar(int likesCount, bool isDark) {
+  Widget _buildTabBar(int likesCount, bool isDark, AppPalette palette) {
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 16),
       padding: const EdgeInsets.all(3.5),
       decoration: BoxDecoration(
-        color: const Color(0xFF11141C),
-        borderRadius: BorderRadius.circular(22),
+        color: DesignTokens.obsidianElevated,
+        borderRadius: BorderRadius.circular(DesignTokens.radiusFull),
         border: Border.all(
-          color: Colors.white.withValues(alpha: 0.08),
+          color: DesignTokens.hairline,
           width: 1.0,
         ),
       ),
       child: Row(
         children: [
-          Expanded(child: _buildTabPill(0, 'Discover', isDark)),
+          Expanded(child: _buildTabPill(0, 'Discover', isDark, palette)),
           const SizedBox(width: 3),
-          Expanded(child: _buildTabPill(1, 'Soul Mode', isDark)),
+          Expanded(child: _buildTabPill(1, 'Soul Mode', isDark, palette)),
           const SizedBox(width: 3),
-          Expanded(child: _buildLikesPill(likesCount, isDark)),
+          Expanded(child: _buildLikesPill(likesCount, isDark, palette)),
           const SizedBox(width: 3),
-          Expanded(child: _buildTabPill(3, 'Nearly Souls', isDark)),
+          Expanded(child: _buildTabPill(3, 'Nearly Souls', isDark, palette)),
         ],
       ),
     );
   }
 
-  Widget _buildTabPill(int index, String label, bool isDark) {
+  Widget _buildTabPill(int index, String label, bool isDark, AppPalette palette) {
     final active = _tabController.index == index;
     return GestureDetector(
       onTap: () {
@@ -591,29 +592,25 @@ class _MatchScreenState extends ConsumerState<MatchScreen>
         _tabController.index = index;
       },
       child: AnimatedContainer(
-        duration: const Duration(milliseconds: 200),
-        curve: Curves.easeOutCubic,
-        padding: const EdgeInsets.symmetric(vertical: 6.5),
+        duration: DesignTokens.durationFast,
+        curve: DesignTokens.curveDecelerate,
+        padding: const EdgeInsets.symmetric(vertical: 7),
         decoration: BoxDecoration(
-          gradient: active
-              ? LinearGradient(
-                  colors: [AppTheme.primaryBlue, AppTheme.accentPurple],
-                )
-              : null,
+          gradient: active ? palette.primaryGradient : null,
           color: active ? null : Colors.transparent,
-          borderRadius: BorderRadius.circular(18),
+          borderRadius: BorderRadius.circular(DesignTokens.radiusFull),
         ),
         child: Center(
           child: FittedBox(
             fit: BoxFit.scaleDown,
             child: AnimatedDefaultTextStyle(
-              duration: const Duration(milliseconds: 200),
+              duration: DesignTokens.durationFast,
               style: TextStyle(
                 fontSize: 11.5,
-                fontWeight: active ? FontWeight.w900 : FontWeight.w600,
+                fontWeight: active ? FontWeight.w800 : FontWeight.w600,
                 color: active
                     ? Colors.white
-                    : Colors.white.withValues(alpha: 0.65),
+                    : DesignTokens.textSecondary,
               ),
               child: Text(
                 label,
@@ -626,7 +623,7 @@ class _MatchScreenState extends ConsumerState<MatchScreen>
     );
   }
 
-  Widget _buildLikesPill(int count, bool isDark) {
+  Widget _buildLikesPill(int count, bool isDark, AppPalette palette) {
     final active = _tabController.index == 2;
     return GestureDetector(
       onTap: () {
@@ -634,17 +631,13 @@ class _MatchScreenState extends ConsumerState<MatchScreen>
         _tabController.index = 2;
       },
       child: AnimatedContainer(
-        duration: const Duration(milliseconds: 200),
-        curve: Curves.easeOutCubic,
-        padding: const EdgeInsets.symmetric(vertical: 6.5),
+        duration: DesignTokens.durationFast,
+        curve: DesignTokens.curveDecelerate,
+        padding: const EdgeInsets.symmetric(vertical: 7),
         decoration: BoxDecoration(
-          gradient: active
-              ? LinearGradient(
-                  colors: [AppTheme.primaryBlue, AppTheme.accentPurple],
-                )
-              : null,
+          gradient: active ? palette.primaryGradient : null,
           color: active ? null : Colors.transparent,
-          borderRadius: BorderRadius.circular(18),
+          borderRadius: BorderRadius.circular(DesignTokens.radiusFull),
         ),
         child: Center(
           child: Row(
@@ -652,13 +645,13 @@ class _MatchScreenState extends ConsumerState<MatchScreen>
             mainAxisSize: MainAxisSize.min,
             children: [
               AnimatedDefaultTextStyle(
-                duration: const Duration(milliseconds: 200),
+                duration: DesignTokens.durationFast,
                 style: TextStyle(
                   fontSize: 12,
-                  fontWeight: active ? FontWeight.w900 : FontWeight.w600,
+                  fontWeight: active ? FontWeight.w800 : FontWeight.w600,
                   color: active
                       ? Colors.white
-                      : Colors.white.withValues(alpha: 0.65),
+                      : DesignTokens.textSecondary,
                 ),
                 child: const Text('Likes'),
               ),
@@ -666,18 +659,18 @@ class _MatchScreenState extends ConsumerState<MatchScreen>
                 const SizedBox(width: 4),
                 Container(
                   padding:
-                      const EdgeInsets.symmetric(horizontal: 4, vertical: 0.5),
+                      const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
                   decoration: BoxDecoration(
                     color: active
                         ? Colors.white.withValues(alpha: 0.25)
-                        : AppTheme.accentPurple.withValues(alpha: 0.25),
-                    borderRadius: BorderRadius.circular(8),
+                        : palette.primary.withValues(alpha: 0.25),
+                    borderRadius: BorderRadius.circular(DesignTokens.radiusFull),
                   ),
                   child: Text(
                     count > 99 ? '99+' : '$count',
                     style: const TextStyle(
                       fontSize: 9,
-                      fontWeight: FontWeight.w900,
+                      fontWeight: FontWeight.w800,
                       color: Colors.white,
                     ),
                   ),
