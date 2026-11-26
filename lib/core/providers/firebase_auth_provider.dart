@@ -143,25 +143,25 @@ class AuthController extends StateNotifier<AsyncValue<User?>> {
         }
       }
 
-      final String? photoUrl = uploadedPhotoUrls.isNotEmpty ? uploadedPhotoUrls.first : null;
-      if (photoUrl != null) {
-        try {
-          await user.updatePhotoURL(photoUrl);
-        } catch (_) {}
-      }
+      final String photoUrl = uploadedPhotoUrls.isNotEmpty
+          ? uploadedPhotoUrls.first
+          : 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=500';
+      try {
+        await user.updatePhotoURL(photoUrl);
+      } catch (_) {}
 
       try {
         // 1. Create public profile document (PII excluded, strict security rules compliant)
         final publicProfile = buildInitialUserProfileMap(
           uid: user.uid,
-          name: name,
-          bio: bio,
+          name: name.trim().isNotEmpty ? name.trim() : 'User',
+          bio: bio.trim().isNotEmpty ? bio.trim() : 'Hey there! I am using Situationship ✨',
           age: age,
-          location: location,
+          location: location.trim().isNotEmpty ? location.trim() : 'Earth 🌍',
           gender: gender,
           avatarUrl: photoUrl,
           interests: interests,
-          photos: uploadedPhotoUrls,
+          photos: uploadedPhotoUrls.isNotEmpty ? uploadedPhotoUrls : [photoUrl],
         );
         await _db.collection('users').doc(user.uid).set(publicProfile);
 
@@ -226,14 +226,15 @@ class AuthController extends StateNotifier<AsyncValue<User?>> {
         final userDoc = await _db.collection('users').doc(user.uid).get();
 
         if (!userDoc.exists) {
+          final defaultPhoto = 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=500';
           final initialProfile = buildInitialUserProfileMap(
             uid: user.uid,
             name: user.displayName ?? 'User',
             bio: 'New to Situationship! ✨',
             age: 21,
             location: 'Earth 🌍',
-            avatarUrl: user.photoURL,
-            photos: user.photoURL != null ? [user.photoURL!] : [],
+            avatarUrl: user.photoURL ?? defaultPhoto,
+            photos: user.photoURL != null ? [user.photoURL!] : [defaultPhoto],
           );
           await _db.collection('users').doc(user.uid).set(initialProfile);
           await _db.collection('users').doc(user.uid).collection('private').doc('profile').set({
@@ -272,14 +273,15 @@ class AuthController extends StateNotifier<AsyncValue<User?>> {
         final userDoc = await _db.collection('users').doc(user.uid).get();
 
         if (!userDoc.exists) {
+          final defaultPhoto = 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=500';
           final initialProfile = buildInitialUserProfileMap(
             uid: user.uid,
             name: user.displayName ?? 'User',
             bio: 'New to Situationship! ✨',
             age: 21,
             location: 'Earth 🌍',
-            avatarUrl: user.photoURL,
-            photos: user.photoURL != null ? [user.photoURL!] : [],
+            avatarUrl: user.photoURL ?? defaultPhoto,
+            photos: user.photoURL != null ? [user.photoURL!] : [defaultPhoto],
           );
           await _db.collection('users').doc(user.uid).set(initialProfile);
           await _db.collection('users').doc(user.uid).collection('private').doc('profile').set({
