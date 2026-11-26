@@ -121,6 +121,16 @@ class ConversationalDialogueEngine {
       return _handleEmotionalContext(interpretation.emotionalTone, contextManager);
     }
 
+    // App Features FAQ
+    if (interpretation.topic == ConversationTopic.appFeatures) {
+      return _handleAppFeaturesDirect(interpretation.originalUtterance);
+    }
+
+    // Out of domain
+    if (interpretation.topic == ConversationTopic.outOfDomain) {
+      return "I'm designed exclusively as your wingman for dating and social connections on Situationship, so I can't help with coding, homework, or general trivia! But if you want to find people who share your passions, I'm right here.";
+    }
+
     // F. Answering Outstanding Assistant Question
     if (interpretation.isAnswerToLastQuestion) {
       return _handleAnswerToQuestion(interpretation, contextManager);
@@ -149,6 +159,15 @@ class ConversationalDialogueEngine {
   ) {
     final expected = contextManager.expectedAnswerType;
     final q = interpretation.originalUtterance.toLowerCase();
+
+    if (interpretation.referencesToPreviousTurns.contains('both')) {
+      contextManager.setAssistantQuestion(
+        "Want me to find people who share that passion?",
+        ExpectedAnswerType.confirmation,
+        topic: interpretation.topic,
+      );
+      return "Love that it's both a personal hobby and something you want in a partner! Sharing that creative spark makes connecting so much easier. Would you like me to look for members nearby with that energy?";
+    }
 
     if (expected == ExpectedAnswerType.humourStyle ||
         expected == ExpectedAnswerType.partnerTrait ||
@@ -306,6 +325,14 @@ class ConversationalDialogueEngine {
     contextManager.structuredState.currentTopic = ConversationTopic.emotionalSupport;
 
     switch (tone) {
+      case 'work_stress':
+        contextManager.setAssistantQuestion(
+          "One of those days where you just want to switch everything off?",
+          ExpectedAnswerType.none,
+          topic: ConversationTopic.emotionalSupport,
+        );
+        return "That sounds exhausting. One of those days where you just want to switch everything off and decompress?";
+
       case 'boredom':
         contextManager.setAssistantQuestion(
           "What kind of conversations usually pull you out of a rut?",
@@ -350,6 +377,18 @@ class ConversationalDialogueEngine {
     ConversationContextManager contextManager,
   ) {
     final q = interpretation.originalUtterance.toLowerCase().trim();
+
+    // Natural empathetic response without interrogation
+    if (contextManager.structuredState.currentTopic == ConversationTopic.emotionalSupport) {
+      if (q.contains('yeah') || q.contains('yes') || q.contains('exact') || q.contains('pretty much') || q.contains('true') || q.contains('totally')) {
+        contextManager.setAssistantQuestion(
+          "",
+          ExpectedAnswerType.none,
+          topic: ConversationTopic.emotionalSupport,
+        );
+        return "Honestly, I get that. Sometimes a little peace and someone who listens is all you need. Take it easy tonight.";
+      }
+    }
 
     if (q.contains('interesting')) {
       contextManager.setAssistantQuestion(
@@ -408,6 +447,23 @@ class ConversationalDialogueEngine {
       default:
         return 'Authenticity beats perfection every time. The most attractive thing you can bring to dating is curiosity about the other person and confidence in your own passions.';
     }
+  }
+
+  static String _handleAppFeaturesDirect(String query) {
+    final clean = query.toLowerCase();
+    if (clean.contains('vibe') || clean.contains('algorithm') || clean.contains('rank')) {
+      return "The VibeMatrix matching algorithm evaluates mutual compatibility across passions, personality traits, dealbreakers, and reciprocal gender preferences to surface genuine matches without superficial swiping.";
+    }
+    if (clean.contains('private') || clean.contains('privacy') || clean.contains('stored')) {
+      return "Your privacy is paramount on Situationship. All conversational understanding and model inferences run locally on your device, and private details are never exposed to other members.";
+    }
+    if (clean.contains('coin') || clean.contains('earn') || clean.contains('reward')) {
+      return "You can earn free coins through daily login streaks and genuine community interactions, or purchase coin packs in your Wallet to unlock Super Likes and Spotlight boosts.";
+    }
+    if (clean.contains('verif') || clean.contains('badge')) {
+      return "The Verified S-Badge confirms that a member is 100% authentic and matches their photos. You can complete verification in your profile by recording a quick gesture challenge.";
+    }
+    return "Situationship is designed for genuine chemistry without traditional dating app friction. We feature pure on-device matching, video/photo verification, anonymous confessions, and privacy-first connections.";
   }
 
   static String _handleAppFeatures(IntentClassificationResult res) {

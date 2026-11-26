@@ -98,20 +98,21 @@ class CupidLocalAIOrchestrator {
       );
     }
 
-    // 4. Strip private thinking/scratchpad tokens (never expose internal reasoning)
+    // Strip private thinking/scratchpad tokens (never expose internal reasoning)
     final sanitizedOutput = _stripScratchpadTokens(rawOutput);
 
-    // 5. Parse for structured tool call
+    // Contextual semantic interpretation of the turn
+    final interpretation = ContextAwareSpeechActInterpreter.interpret(
+      query,
+      contextManager: contextManager,
+    );
+
+    // Parse for structured tool call
     final toolCall = CupidTools.parseToolCall(sanitizedOutput);
 
     if (toolCall != null) {
       // Strict Decision Gate for Tool Calling:
       // Verify discoverProfiles is ONLY permitted if user explicitly requested discovery
-      final interpretation = ContextAwareSpeechActInterpreter.interpret(
-        query,
-        contextManager: contextManager,
-      );
-
       if (toolCall.type == CupidToolType.discoverProfiles && !interpretation.isExplicitDiscoveryRequest) {
         debugPrint('[DecisionGate] Premature discover_profiles tool call blocked; user did not request search.');
         return _runSemanticFallback(
@@ -132,11 +133,24 @@ class CupidLocalAIOrchestrator {
       );
     }
 
-    // 6. Direct conversational response (casual banter, empathy, advice without tool)
+    // Direct conversational response (casual banter, empathy, advice without tool)
     final cleanReply = CupidTools.cleanToolCallMarkup(sanitizedOutput);
     final finalReply = cleanReply.isNotEmpty
         ? cleanReply
         : "I hear you! Tell me what kind of energy or connection you're hoping to discover today.";
+
+    // Apply interpretation preferences to conversational memory
+    if (interpretation.isCorrection) {
+      for (final p in interpretation.extractedPreferences) {
+        contextManager.correctStructuredPreference(p);
+      }
+    } else {
+      for (final p in interpretation.extractedPreferences) {
+        if (p.scope == PreferenceScope.datingRequirement) {
+          contextManager.addStructuredPreference(p);
+        }
+      }
+    }
 
     // Record turn in context memory
     contextManager.recordTurn(
@@ -148,6 +162,7 @@ class CupidLocalAIOrchestrator {
         originalQuery: query,
       ),
       assistantReply: finalReply,
+      interpretation: interpretation,
     );
 
     return CupidTurnResult(
@@ -409,6 +424,22 @@ class CupidLocalAIOrchestrator {
     required Set<String> excludedUserIds,
   }) {
     // 1. Run contextual interpretation considering surrounding turns and questions
+    final cleanUtterance = userUtterance.toLowerCase();
+    if (cleanUtterance.contains('reset') ||
+        cleanUtterance.contains('start over') ||
+        cleanUtterance.contains('clear chat') ||
+        cleanUtterance.contains('clear criteria') ||
+        cleanUtterance.contains('forget everything')) {
+      contextManager.reset();
+      return const CupidTurnResult(
+        text: "I've reset our conversation context! Tell me fresh: what kind of person or vibe are you in the mood to discover?",
+        matches: [],
+        executedTool: null,
+        isOfflineReady: true,
+        modelId: 'semantic_fast_engine',
+      );
+    }
+
     final interpretation = ContextAwareSpeechActInterpreter.interpret(
       userUtterance,
       contextManager: contextManager,
