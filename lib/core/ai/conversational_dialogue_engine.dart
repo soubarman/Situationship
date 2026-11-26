@@ -1,4 +1,3 @@
-import 'dart:math' as math;
 import 'package:situationship/core/models/user_model.dart';
 import 'conversational_intent.dart';
 import 'conversation_context_manager.dart';
@@ -8,8 +7,6 @@ import 'structured_conversation_state.dart';
 /// Pure on-device context-aware conversational response generator.
 /// Synthesizes contextual, emotionally intelligent dialogue without rigid templates or cloud LLM calls.
 class ConversationalDialogueEngine {
-  static final math.Random _rng = math.Random();
-
   /// Generates a natural conversational response tailored to intent, interpretation, and dialogue context
   static String generateResponse({
     required IntentClassificationResult classification,
@@ -131,6 +128,26 @@ class ConversationalDialogueEngine {
       return "I'm designed exclusively as your wingman for dating and social connections on Situationship, so I can't help with coding, homework, or general trivia! But if you want to find people who share your passions, I'm right here.";
     }
 
+    // Dating Advice Inquiry
+    if (interpretation.speechAct == SpeechAct.askingQuestion && interpretation.topic == ConversationTopic.dating) {
+      final clean = interpretation.originalUtterance.toLowerCase();
+      String sub = 'general';
+      if (clean.contains('first date') || clean.contains('spot') || clean.contains('idea') || clean.contains('place')) {
+        sub = 'first_date';
+      } else if (clean.contains('opener') || clean.contains('icebreaker') || clean.contains('start a conversation') || clean.contains('what to say')) {
+        sub = 'icebreaker';
+      } else if (clean.contains('red flag') || clean.contains('green flag') || clean.contains('flag')) {
+        sub = 'flags';
+      }
+      return _handleDatingAdvice(IntentClassificationResult(
+        intent: ConversationalIntent.datingAdvice,
+        confidence: 0.95,
+        entities: const ExtractedEntities(),
+        originalQuery: interpretation.originalUtterance,
+        subCategory: sub,
+      ));
+    }
+
     // F. Answering Outstanding Assistant Question
     if (interpretation.isAnswerToLastQuestion) {
       return _handleAnswerToQuestion(interpretation, contextManager);
@@ -230,7 +247,13 @@ class ConversationalDialogueEngine {
       return "That sounds like a wonderful quality. Having shared passions for $prefValues makes connecting so much easier. Would you like me to look for members with that vibe?";
     }
 
-    return "I hear you! What other qualities do you value most in someone?";
+    final generalResponses = [
+      "I hear you! What else makes someone feel truly aligned with your vibe?",
+      "That makes total sense. Tell me a bit more about what you enjoy sharing with someone.",
+      "Got it! What other quirks or qualities stand out to you?",
+    ];
+    final idx = contextManager.turnHistory.length % generalResponses.length;
+    return generalResponses[idx];
   }
 
   static String _handleStatedPreference(
@@ -333,6 +356,9 @@ class ConversationalDialogueEngine {
         );
         return "That sounds exhausting. One of those days where you just want to switch everything off and decompress?";
 
+      case 'need_peace':
+        return "Take all the silence and peace you need tonight. Put on some soothing sounds, get comfortable, and take it easy. You've earned that quiet.";
+
       case 'boredom':
         contextManager.setAssistantQuestion(
           "What kind of conversations usually pull you out of a rut?",
@@ -378,7 +404,7 @@ class ConversationalDialogueEngine {
   ) {
     final q = interpretation.originalUtterance.toLowerCase().trim();
 
-    // Natural empathetic response without interrogation
+    // 1. Natural empathetic response without interrogation
     if (contextManager.structuredState.currentTopic == ConversationTopic.emotionalSupport) {
       if (q.contains('yeah') || q.contains('yes') || q.contains('exact') || q.contains('pretty much') || q.contains('true') || q.contains('totally')) {
         contextManager.setAssistantQuestion(
@@ -390,6 +416,68 @@ class ConversationalDialogueEngine {
       }
     }
 
+    // 2. Humour & Jokes
+    if (q.contains('joke') || q.contains('funny') || q.contains('laugh') || q.contains('make me laugh')) {
+      return "Here's a relatable one: My friend said they're looking for someone who loves spontaneous 5 AM hikes, sourdough baking, and speaks fluent French. I told them: 'You don't need a date, you need a golden retriever in Paris.' What's the funniest bio you've ever seen?";
+    }
+
+    // 3. Indian English & Hinglish colloquialisms
+    if (q.contains('scene kya') || q.contains('kya scene') || q.contains('kya chal raha')) {
+      return "Bas chal raha hai! Just chilling here, ready to chat or brainstorm good vibes. What's the scene at your end?";
+    }
+    if (q.contains('timepass')) {
+      return "Haha fair enough! Low-pressure is the best way to roll. No checklists or expectations, just good vibes.";
+    }
+    if (q.contains('chai') || q.contains('tea')) {
+      return "Honestly, a cozy chai meetup beats a stiff fancy dinner every time. Much easier to just be yourself.";
+    }
+    if (q.contains('jugaad')) {
+      return "Jugaad is an art form! Finding clever solutions to whatever life throws your way is top-tier energy.";
+    }
+
+    // 4. Admitting Uncertainty honestly
+    if (q.contains('who likes me') || q.contains('who viewed my profile') || q.contains('who is looking')) {
+      return "I can't see live profile views from our chat, but you can check your 'Liked You' tab in the app to see who's swiped right on you!";
+    }
+    if (q.contains('will i find') || q.contains('will i meet') || q.contains('will i get married') || q.contains('am i going to be single')) {
+      return "I don't have a crystal ball for the future, but I know this: staying curious, keeping expectations grounded, and embracing your real quirks gives you the best chance of finding genuine chemistry.";
+    }
+
+    // 5. Daily Life & Hobbies
+    if (q.contains('movie') || q.contains('film') || q.contains('series') || q.contains('watch')) {
+      return "A good movie or series is the ultimate way to unwind. What have you been watching lately — anything you'd recommend?";
+    }
+    if (q.contains('food') || q.contains('dinner') || q.contains('lunch') || q.contains('eating') || q.contains('cook')) {
+      return "Good food makes everything better! Are you cooking something yourself, or ordering your favorite comfort food?";
+    }
+    if (q.contains('weekend') || q.contains('friday') || q.contains('saturday') || q.contains('sunday')) {
+      return "Weekends are sacred! Are you planning to take it easy and recharge, or heading out to explore something fun?";
+    }
+
+    // 6. Profile Inquiries & Candidate Context
+    if (contextManager.hasActiveProfileContext &&
+        (q.contains('tell me more about') || q.contains('who is') || q.contains('what does') || q.contains('about tanya') || q.contains('about arjun') || q.contains('about ananya'))) {
+      for (final m in contextManager.lastRecommendedMatches) {
+        if (q.contains(m.candidate.name.toLowerCase())) {
+          final c = m.candidate;
+          return "${c.name} (${c.age}) stood out with shared passions. Here is their vibe: '${c.bio ?? 'Genuine energy and great compatibility.'}' Would you like to connect with them?";
+        }
+      }
+    }
+
+    // 7. Conversational Identity & Status
+    if (q.contains('how are you') || q.contains('how r u')) {
+      return "I'm doing well, thank you! More importantly, how is your day going? Ready to explore new connections, or just relaxing?";
+    }
+
+    if (q.contains('sleep') || q.contains('24 7') || q.contains('24/7') || q.contains('judging my bio') || q.contains('are you real') || q.contains('are you an ai')) {
+      return "I'm your on-device AI wingman for Situationship, so I don't sleep! I'm here 24/7 whenever you want to chat, brainstorm date ideas, or discover people who match your energy.";
+    }
+
+    if (q.contains('who are you') || q.contains('what are you')) {
+      return "I'm Cupid Concierge — your on-device wingman for Situationship. I'm here to chat, brainstorm ideas, and help you find people who match your energy.";
+    }
+
     if (q.contains('interesting')) {
       contextManager.setAssistantQuestion(
         "What does 'interesting' look like for you?",
@@ -399,16 +487,16 @@ class ConversationalDialogueEngine {
       return "'Interesting' can mean so many different things—creative artists, spontaneous travelers, or deep thinkers. What does 'interesting' look like for you?";
     }
 
-    if (q.contains('how are you') || q.contains('how r u')) {
-      return "I'm doing well, thank you! More importantly, how is your day going? Ready to explore new connections, or just relaxing?";
-    }
-
-    if (q.contains('who are you') || q.contains('what are you')) {
-      return "I'm Cupid Concierge — your on-device wingman for Situationship. I'm here to chat, brainstorm ideas, and help you find people who match your energy.";
-    }
-
-    if (contextManager.turnHistory.isNotEmpty) {
-      return "I'm listening! Tell me what kind of person or energy would make your day a little brighter.";
+    // 7. Contextual turn variety (non-repetitive multi-turn casual conversation)
+    final turnCount = contextManager.turnHistory.length;
+    if (turnCount > 0) {
+      final variedResponses = [
+        "I'm with you. What else has been keeping you busy or curious lately?",
+        "Makes sense! Tell me more — I love hearing what sparks your interest.",
+        "Totally hear that. We can chat about whatever's on your mind — music, everyday life, or discovering new people.",
+        "I hear you! What's been the highlight of your day so far?",
+      ];
+      return variedResponses[turnCount % variedResponses.length];
     }
 
     contextManager.setAssistantQuestion(
@@ -459,6 +547,12 @@ class ConversationalDialogueEngine {
     }
     if (clean.contains('coin') || clean.contains('earn') || clean.contains('reward')) {
       return "You can earn free coins through daily login streaks and genuine community interactions, or purchase coin packs in your Wallet to unlock Super Likes and Spotlight boosts.";
+    }
+    if (clean.contains('spotlight')) {
+      return "Spotlight is your local visibility booster. When activated, your profile is prioritized at the very top of the Discovery radar for everyone nearby in your city.";
+    }
+    if (clean.contains('confession')) {
+      return "Anonymous Confessions allow you to post unfiltered thoughts or crush notes in your community. Members can interact with your confession without seeing your profile unless you choose to reveal yourself.";
     }
     if (clean.contains('verif') || clean.contains('badge')) {
       return "The Verified S-Badge confirms that a member is 100% authentic and matches their photos. You can complete verification in your profile by recording a quick gesture challenge.";

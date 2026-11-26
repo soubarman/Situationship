@@ -1,6 +1,5 @@
 import 'structured_conversation_state.dart';
 import 'conversation_context_manager.dart';
-import 'conversational_intent.dart';
 
 /// Context-aware semantic speech act and intent interpreter.
 /// Interprets utterances in the context of the surrounding dialogue rather than in isolation.
@@ -64,7 +63,7 @@ class ContextAwareSpeechActInterpreter {
     }
 
     // ── 5. Check for Emotional Expression ──────────────────────────────────────
-    final emotionalTone = _detectEmotionalTone(clean);
+    final emotionalTone = _detectEmotionalTone(clean, contextManager: contextManager);
     if (emotionalTone != null) {
       return ConversationInterpretation(
         originalUtterance: utterance,
@@ -72,6 +71,38 @@ class ContextAwareSpeechActInterpreter {
         topic: ConversationTopic.emotionalSupport,
         emotionalTone: emotionalTone,
         confidence: 0.94,
+      );
+    }
+
+    // ── 5B. Check for Joke / Humour Requests ───────────────────────────────────
+    if (clean.startsWith('tell me a joke') ||
+        clean.contains('tell me a funny') ||
+        clean.contains('make me laugh') ||
+        clean.contains('got any jokes') ||
+        clean.contains('got any good dad jokes') ||
+        clean.contains('dad joke')) {
+      return ConversationInterpretation(
+        originalUtterance: utterance,
+        speechAct: SpeechAct.casualBanter,
+        topic: ConversationTopic.humour,
+        confidence: 0.95,
+      );
+    }
+
+    // ── 5C. Check for Concierge Identity / AI Nature Inquiries ────────────────
+    if (clean.contains('sleep') ||
+        clean.contains('24 7') ||
+        clean.contains('247') ||
+        clean.contains('judging my bio') ||
+        clean.contains('are you real') ||
+        clean.contains('are you an ai') ||
+        clean.contains('who are you') ||
+        clean.contains('what are you')) {
+      return ConversationInterpretation(
+        originalUtterance: utterance,
+        speechAct: SpeechAct.askingQuestion,
+        topic: ConversationTopic.general,
+        confidence: 0.95,
       );
     }
 
@@ -129,6 +160,22 @@ class ContextAwareSpeechActInterpreter {
         speechAct: SpeechAct.askingQuestion,
         topic: ConversationTopic.dating,
         confidence: 0.90,
+      );
+    }
+
+    // ── 9B. Check for Uncertainty & Prediction Queries ─────────────────────────
+    if (clean.contains('will i find') ||
+        clean.contains('will i meet') ||
+        clean.contains('will i get married') ||
+        clean.contains('am i going to be single') ||
+        clean.contains('who viewed my profile') ||
+        clean.contains('who likes me') ||
+        clean.contains('who is looking')) {
+      return ConversationInterpretation(
+        originalUtterance: utterance,
+        speechAct: SpeechAct.askingQuestion,
+        topic: ConversationTopic.general,
+        confidence: 0.95,
       );
     }
 
@@ -222,6 +269,8 @@ class ContextAwareSpeechActInterpreter {
     return clean.startsWith('actually') ||
         clean.contains('actually change that') ||
         clean.contains('wait i made') ||
+        clean.contains('wait i meant') ||
+        clean.contains('i meant') ||
         clean.contains('not too') ||
         clean.contains('no i mean') ||
         clean.contains('no, i mean') ||
@@ -229,11 +278,19 @@ class ContextAwareSpeechActInterpreter {
         clean.contains('change that to') ||
         clean.contains('maybe not') ||
         clean.contains('on second thought') ||
-        clean.contains('scratch that');
+        clean.contains('scratch that') ||
+        clean.contains('looking for women') ||
+        clean.contains('looking for men') ||
+        clean.contains('not what i meant') ||
+        clean.contains('never mind') ||
+        clean.contains('nevermind');
   }
 
   static List<UserDatingPreference> _extractPreferencesFromCorrection(String clean, int turn) {
     final prefs = <UserDatingPreference>[];
+    if (clean.contains('not what i meant') || clean.contains('scratch that') || clean.contains('never mind')) {
+      return prefs; // Ambivalent or removal-only correction
+    }
     if (clean.contains('not extremely outgoing') || clean.contains('not too outgoing') || (clean.contains('outgoing') && clean.contains('maybe not'))) {
       prefs.add(UserDatingPreference(
         category: 'personality',
@@ -250,6 +307,30 @@ class ContextAwareSpeechActInterpreter {
         sourceTurn: turn,
       ));
       return prefs;
+    } else if (clean.contains('hiking') && clean.contains('clubbing')) {
+      prefs.add(UserDatingPreference(
+        category: 'lifestyle',
+        value: 'hiking',
+        polarity: PreferencePolarity.positive,
+        sourceTurn: turn,
+      ));
+      return prefs;
+    } else if (clean.contains('looking for women') || (clean.contains('women') && clean.contains('not men'))) {
+      prefs.add(UserDatingPreference(
+        category: 'gender',
+        value: 'female',
+        polarity: PreferencePolarity.positive,
+        sourceTurn: turn,
+      ));
+      return prefs;
+    } else if (clean.contains('looking for men') || (clean.contains('men') && clean.contains('not women'))) {
+      prefs.add(UserDatingPreference(
+        category: 'gender',
+        value: 'male',
+        polarity: PreferencePolarity.positive,
+        sourceTurn: turn,
+      ));
+      return prefs;
     }
     final general = _extractPreferences(clean, turn);
     if (general.isNotEmpty) return general;
@@ -258,22 +339,47 @@ class ContextAwareSpeechActInterpreter {
 
   static bool _isRejection(String clean) {
     return _matchesAny(clean, [
-      'not interested', 'not feeling these', 'dont like', "don't like",
-      'not like this', 'different people', 'none of these', 'skip', 'pass'
+      'not interested', 'not feeling these', 'dont like', "don't like", 'don t like',
+      'not like this', 'different people', 'none of these', 'skip', 'pass', 'not feeling'
     ]);
   }
 
-  static String? _detectEmotionalTone(String clean) {
-    if (clean.contains('terrible day') || clean.contains('rough day') || clean.contains('day at work') || clean.contains('bad day') || clean.contains('exhausted') || clean.contains('exhausting') || clean.contains('awful day')) return 'work_stress';
+  static String? _detectEmotionalTone(String clean, {ConversationContextManager? contextManager}) {
+    if (clean.contains('terrible day') ||
+        clean.contains('rough day') ||
+        clean.contains('day at work') ||
+        clean.contains('bad day') ||
+        clean.contains('exhausted') ||
+        clean.contains('exhausting') ||
+        clean.contains('awful day') ||
+        clean.contains('drained') ||
+        clean.contains('overwhelming')) {
+      return 'work_stress';
+    }
     if (clean.contains('bored') || clean.contains('boring')) return 'boredom';
     if (clean.contains('lonel')) return 'loneliness';
     if (clean.contains('ghost')) return 'ghosting';
-    if (clean.contains('exhaust') || clean.contains('tired of dating') || clean.contains('dating fatigue')) return 'dating_fatigue';
+    if (clean.contains('exhaust') ||
+        clean.contains('tired of dating') ||
+        clean.contains('dating fatigue') ||
+        clean.contains('not good enough') ||
+        clean.contains('inadequa') ||
+        clean.contains('dating apps make me feel')) {
+      return 'dating_fatigue';
+    }
     if (clean.contains('nervous') || clean.contains('anxious')) return 'dating_anxiety';
+    if (contextManager != null &&
+        contextManager.structuredState.currentTopic == ConversationTopic.emotionalSupport &&
+        (clean.contains('silence') || clean.contains('quiet') || clean.contains('just want peace'))) {
+      return 'need_peace';
+    }
     return null;
   }
 
   static bool _isExplicitDiscoveryRequest(String clean) {
+    if (clean.contains('unmatch me') || clean.contains('dont match me') || clean.contains("don't match me")) {
+      return false;
+    }
     return _matchesAny(clean, [
       'find someone', 'find me', 'show me profiles', 'recommend someone',
       'match me', 'find someone like that', 'can you find someone',
@@ -480,12 +586,15 @@ class ContextAwareSpeechActInterpreter {
   }
 
   static bool _isDatingAdvice(String clean) {
+    if (clean.contains('chai pe charcha')) return false;
     return clean.contains('first date') ||
         clean.contains('opener') ||
         clean.contains('icebreaker') ||
         clean.contains('red flag') ||
         clean.contains('green flag') ||
-        clean.contains('profile advice');
+        clean.contains('profile advice') ||
+        clean.contains('start a conversation') ||
+        clean.contains('what to say');
   }
 
   static List<UserDatingPreference> _extractPreferences(String clean, int turn) {
@@ -503,7 +612,7 @@ class ContextAwareSpeechActInterpreter {
     if (!isTravelNegated && (clean.contains('travel') || clean.contains('travelling') || clean.contains('traveler'))) {
       prefs.add(UserDatingPreference(
         category: 'travel',
-        value: 'travelling',
+        value: 'travel',
         sourceTurn: turn,
       ));
     }
@@ -521,10 +630,17 @@ class ContextAwareSpeechActInterpreter {
         sourceTurn: turn,
       ));
     }
-    if (clean.contains('creative') || clean.contains('art') || clean.contains('design') || clean.contains('artist')) {
+    if (clean.contains('creative')) {
       prefs.add(UserDatingPreference(
         category: 'personality',
         value: 'creative',
+        sourceTurn: turn,
+      ));
+    }
+    if (clean.contains('art') || clean.contains('artist') || clean.contains('gallery') || clean.contains('museum')) {
+      prefs.add(UserDatingPreference(
+        category: 'lifestyle',
+        value: 'art',
         sourceTurn: turn,
       ));
     }
@@ -606,10 +722,54 @@ class ContextAwareSpeechActInterpreter {
     if (hasNoSmoking) {
       prefs.add(UserDatingPreference(
         category: 'dealbreaker',
-        value: 'smoking',
+        value: 'smoker',
         polarity: PreferencePolarity.negative,
         sourceTurn: turn,
       ));
+    }
+
+    if (clean.contains('coffee') || clean.contains('cafe')) {
+      prefs.add(UserDatingPreference(
+        category: 'lifestyle',
+        value: 'coffee',
+        sourceTurn: turn,
+      ));
+    }
+
+    if (clean.contains('food') || clean.contains('street food') || clean.contains('cooking') || clean.contains('cook') || clean.contains('culinary')) {
+      prefs.add(UserDatingPreference(
+        category: 'lifestyle',
+        value: 'food',
+        sourceTurn: turn,
+      ));
+    }
+
+    if (clean.contains('looking for men') || clean.contains('looking for guys') || clean.contains('only men') || clean.contains('into guys') || clean.contains('into men')) {
+      prefs.add(UserDatingPreference(
+        category: 'gender',
+        value: 'male',
+        sourceTurn: turn,
+      ));
+    } else if (clean.contains('looking for women') || clean.contains('looking for girls') || clean.contains('only women') || clean.contains('into women') || clean.contains('into girls')) {
+      prefs.add(UserDatingPreference(
+        category: 'gender',
+        value: 'female',
+        sourceTurn: turn,
+      ));
+    }
+
+    final ageRegex = RegExp(r'(?:around|between|from|aged?|meant|age)?\s*(\d{2})\s*(?:to|and|-)\s*(\d{2})');
+    final ageMatch = ageRegex.firstMatch(clean);
+    if (ageMatch != null) {
+      final min = int.tryParse(ageMatch.group(1)!);
+      final max = int.tryParse(ageMatch.group(2)!);
+      if (min != null && max != null) {
+        prefs.add(UserDatingPreference(
+          category: 'demographic',
+          value: '$min-$max',
+          sourceTurn: turn,
+        ));
+      }
     }
 
     final isDrinkingAcceptable = clean.contains("drinking isn't a problem") ||
@@ -626,12 +786,40 @@ class ContextAwareSpeechActInterpreter {
         sourceTurn: turn,
       ));
     }
-    if (clean.contains('timepass') || clean.contains('serious vibe') || clean.contains('serious relationship') || clean.contains('not looking for any timepass')) {
+    if (clean.contains('not looking for any timepass') || clean.contains('no timepass') || clean.contains('serious relationship') || clean.contains('serious vibe') || clean.contains('long term')) {
       prefs.add(UserDatingPreference(
         category: 'intent',
         value: 'serious',
         sourceTurn: turn,
       ));
+    } else if (clean.contains('casual dating') || clean.contains('casual vibe')) {
+      prefs.add(UserDatingPreference(
+        category: 'intent',
+        value: 'casual',
+        sourceTurn: turn,
+      ));
+    }
+
+    // Dynamic extraction for unlisted interests following "into", "loves", "likes"
+    final dynamicRegex = RegExp(r'(?:into|loves?|likes?|passion for|fans? of)\s+([a-z0-9\s]+)', caseSensitive: false);
+    final dynMatch = dynamicRegex.firstMatch(clean);
+    if (dynMatch != null &&
+        !clean.contains('true love') &&
+        !clean.contains('will i') &&
+        !clean.contains('sounds like') &&
+        !clean.contains('looks like') &&
+        !clean.contains('feels like')) {
+      final raw = dynMatch.group(1)?.trim();
+      if (raw != null && raw.isNotEmpty && raw.length > 2) {
+        final stopWords = {'someone', 'people', 'anyone', 'a person', 'somebody', 'that', 'this', 'her', 'him', 'this month'};
+        if (!stopWords.contains(raw) && !prefs.any((p) => raw.contains(p.value))) {
+          prefs.add(UserDatingPreference(
+            category: 'lifestyle',
+            value: raw,
+            sourceTurn: turn,
+          ));
+        }
+      }
     }
 
     return prefs;

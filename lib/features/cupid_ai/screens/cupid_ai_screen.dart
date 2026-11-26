@@ -13,24 +13,12 @@ class CupidAIScreen extends ConsumerStatefulWidget {
   ConsumerState<CupidAIScreen> createState() => _CupidAIScreenState();
 }
 
-class _CupidAIScreenState extends ConsumerState<CupidAIScreen>
-    with SingleTickerProviderStateMixin {
+class _CupidAIScreenState extends ConsumerState<CupidAIScreen> {
   final TextEditingController _textController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
-  late AnimationController _pulseController;
-
-  @override
-  void initState() {
-    super.initState();
-    _pulseController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 2200),
-    )..repeat(reverse: true);
-  }
 
   @override
   void dispose() {
-    _pulseController.dispose();
     _textController.dispose();
     _scrollController.dispose();
     super.dispose();
@@ -41,7 +29,7 @@ class _CupidAIScreenState extends ConsumerState<CupidAIScreen>
       if (_scrollController.hasClients) {
         _scrollController.animateTo(
           _scrollController.position.maxScrollExtent,
-          duration: const Duration(milliseconds: 320),
+          duration: const Duration(milliseconds: 280),
           curve: Curves.easeOutCubic,
         );
       }
@@ -81,51 +69,83 @@ class _CupidAIScreenState extends ConsumerState<CupidAIScreen>
     final state = ref.watch(cupidAIProvider);
     final palette = ref.watch(appPaletteProvider);
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final screenWidth = MediaQuery.of(context).size.width;
+    final isWide = screenWidth > 768;
 
     ref.listen(cupidAIProvider, (_, __) => _scrollToBottom());
 
-    return Scaffold(
-      backgroundColor: isDark ? const Color(0xFF0C0F17) : const Color(0xFFF8F7FC),
-      body: SafeArea(
-        child: Column(
-          children: [
-            // ── 1. Top Header ──────────────────────────────────────────────
-            _buildHeader(isDark, palette, state),
+    final bgColor = isDark ? const Color(0xFF0C0F17) : const Color(0xFFF8F7FC);
+    final surfaceColor = isDark ? const Color(0xFF10131E) : Colors.white;
+    final borderColor = isDark ? const Color(0xFF1F2638) : Colors.black.withValues(alpha: 0.06);
 
-            // ── 2. Chat Stream ─────────────────────────────────────────────
-            Expanded(
-              child: ListView.builder(
-                controller: _scrollController,
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                itemCount: state.messages.length,
-                itemBuilder: (context, index) {
-                  final msg = state.messages[index];
-                  return _buildMessageItem(msg, isDark, palette);
-                },
+    return Scaffold(
+      backgroundColor: bgColor,
+      body: SafeArea(
+        child: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 768),
+            child: Container(
+              decoration: isWide
+                  ? BoxDecoration(
+                      color: surfaceColor,
+                      border: Border.symmetric(
+                        vertical: BorderSide(color: borderColor, width: 1),
+                      ),
+                    )
+                  : null,
+              child: Column(
+                children: [
+                  // ── 1. Top Header (Unified Mobile & Web) ───────────────────
+                  _buildHeader(isDark, palette, state, surfaceColor, borderColor),
+
+                  // ── 2. Chat Stream (Optimized 60 FPS ListView) ────────────
+                  Expanded(
+                    child: ListView.builder(
+                      controller: _scrollController,
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                      itemCount: state.messages.length,
+                      addAutomaticKeepAlives: true,
+                      addRepaintBoundaries: true,
+                      cacheExtent: 600,
+                      itemBuilder: (context, index) {
+                        final msg = state.messages[index];
+                        return RepaintBoundary(
+                          child: _buildMessageItem(msg, isDark, palette, isWide, screenWidth),
+                        );
+                      },
+                    ),
+                  ),
+
+                  // ── 3. Quick Suggestion Chips (Minimalist Vector Pills) ────
+                  if (!state.isThinking)
+                    RepaintBoundary(
+                      child: _buildQuickChips(state.suggestedChips, isDark, palette),
+                    ),
+
+                  // ── 4. Unified Input Capsule ───────────────────────────────
+                  _buildInputBar(isDark, palette, surfaceColor, borderColor),
+                ],
               ),
             ),
-
-            // ── 3. Quick Suggestion Chips (Minimalist Vector Pills) ────────
-            if (!state.isThinking) _buildQuickChips(state.suggestedChips, isDark, palette),
-
-            // ── 4. Unified Input Capsule ───────────────────────────────────
-            _buildInputBar(isDark, palette),
-          ],
+          ),
         ),
       ),
     );
   }
 
-  Widget _buildHeader(bool isDark, AppPalette palette, CupidAIState state) {
+  Widget _buildHeader(
+    bool isDark,
+    AppPalette palette,
+    CupidAIState state,
+    Color surfaceColor,
+    Color borderColor,
+  ) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
       decoration: BoxDecoration(
-        color: isDark ? const Color(0xFF10131E) : Colors.white,
+        color: surfaceColor,
         border: Border(
-          bottom: BorderSide(
-            color: isDark ? const Color(0xFF1F2638) : Colors.black.withValues(alpha: 0.06),
-            width: 1,
-          ),
+          bottom: BorderSide(color: borderColor, width: 1),
         ),
       ),
       child: Row(
@@ -140,45 +160,8 @@ class _CupidAIScreenState extends ConsumerState<CupidAIScreen>
           ),
           const SizedBox(width: 4),
 
-          // Luxury Medallion Avatar with Soft Aura
-          AnimatedBuilder(
-            animation: _pulseController,
-            builder: (context, _) {
-              final glowAlpha = 0.25 + (_pulseController.value * 0.25);
-              return Container(
-                width: 40,
-                height: 40,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  gradient: LinearGradient(
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                    colors: isDark
-                        ? [const Color(0xFF2E1934), const Color(0xFF171124)]
-                        : [const Color(0xFFFFEEF3), const Color(0xFFF3E8FF)],
-                  ),
-                  border: Border.all(
-                    color: palette.primary.withValues(alpha: 0.5),
-                    width: 1.5,
-                  ),
-                  boxShadow: [
-                    BoxShadow(
-                      color: palette.primary.withValues(alpha: glowAlpha),
-                      blurRadius: 12,
-                      spreadRadius: 1,
-                    ),
-                  ],
-                ),
-                child: Center(
-                  child: Icon(
-                    Icons.favorite_rounded,
-                    color: palette.primary,
-                    size: 20,
-                  ),
-                ),
-              );
-            },
-          ),
+          // Isolated Animated Medallion (Ticks never repaint the header or chat)
+          _IsolatedMedallionAvatar(isDark: isDark, palette: palette),
           const SizedBox(width: 12),
 
           // Title & Live Concierge Status
@@ -239,36 +222,46 @@ class _CupidAIScreenState extends ConsumerState<CupidAIScreen>
     );
   }
 
-  Widget _buildMessageItem(CupidChatMessage msg, bool isDark, AppPalette palette) {
+  Widget _buildMessageItem(
+    CupidChatMessage msg,
+    bool isDark,
+    AppPalette palette,
+    bool isWide,
+    double screenWidth,
+  ) {
     if (msg.isUser) {
+      final maxUserWidth = isWide ? 520.0 : (screenWidth * 0.76).clamp(240.0, 520.0);
       return Align(
         alignment: Alignment.centerRight,
-        child: Container(
-          margin: const EdgeInsets.only(top: 8, bottom: 8, left: 60),
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-          decoration: BoxDecoration(
-            gradient: palette.primaryGradient,
-            borderRadius: const BorderRadius.only(
-              topLeft: Radius.circular(18),
-              topRight: Radius.circular(18),
-              bottomLeft: Radius.circular(18),
-              bottomRight: Radius.circular(4),
-            ),
-            boxShadow: [
-              BoxShadow(
-                color: palette.primary.withValues(alpha: 0.3),
-                blurRadius: 10,
-                offset: const Offset(0, 3),
+        child: ConstrainedBox(
+          constraints: BoxConstraints(maxWidth: maxUserWidth),
+          child: Container(
+            margin: const EdgeInsets.only(top: 8, bottom: 8),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            decoration: BoxDecoration(
+              gradient: palette.primaryGradient,
+              borderRadius: const BorderRadius.only(
+                topLeft: Radius.circular(18),
+                topRight: Radius.circular(18),
+                bottomLeft: Radius.circular(18),
+                bottomRight: Radius.circular(4),
               ),
-            ],
-          ),
-          child: Text(
-            msg.text,
-            style: const TextStyle(
-              color: Colors.white,
-              fontSize: 14,
-              fontWeight: FontWeight.w600,
-              height: 1.35,
+              boxShadow: [
+                BoxShadow(
+                  color: palette.primary.withValues(alpha: 0.28),
+                  blurRadius: 10,
+                  offset: const Offset(0, 3),
+                ),
+              ],
+            ),
+            child: Text(
+              msg.text,
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+                height: 1.35,
+              ),
             ),
           ),
         ),
@@ -276,95 +269,106 @@ class _CupidAIScreenState extends ConsumerState<CupidAIScreen>
     }
 
     // Cupid Concierge Response Card
-    return Container(
-      margin: const EdgeInsets.only(top: 8, bottom: 8, right: 30),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-            decoration: BoxDecoration(
-              color: isDark ? const Color(0xFF151926) : Colors.white,
-              borderRadius: const BorderRadius.only(
-                topLeft: Radius.circular(4),
-                topRight: Radius.circular(20),
-                bottomLeft: Radius.circular(20),
-                bottomRight: Radius.circular(20),
-              ),
-              border: Border.all(
-                color: isDark ? const Color(0xFF242C3F) : Colors.black.withValues(alpha: 0.08),
-                width: 1,
-              ),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withValues(alpha: isDark ? 0.35 : 0.05),
-                  blurRadius: 12,
-                  offset: const Offset(0, 3),
-                ),
-              ],
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // Subtle Concierge Signature Row
-                Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(
-                      Icons.favorite_rounded,
-                      size: 11,
-                      color: palette.primary,
-                    ),
-                    const SizedBox(width: 5),
-                    Text(
-                      'CUPID CONCIERGE',
-                      style: TextStyle(
-                        fontSize: 9.5,
-                        fontWeight: FontWeight.w800,
-                        letterSpacing: 0.8,
-                        color: palette.primary,
-                      ),
+    final maxConciergeWidth = isWide ? 620.0 : (screenWidth * 0.88).clamp(260.0, 620.0);
+    return Align(
+      alignment: Alignment.centerLeft,
+      child: ConstrainedBox(
+        constraints: BoxConstraints(maxWidth: maxConciergeWidth),
+        child: Container(
+          margin: const EdgeInsets.only(top: 8, bottom: 8),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                decoration: BoxDecoration(
+                  color: isDark ? const Color(0xFF151926) : Colors.white,
+                  borderRadius: const BorderRadius.only(
+                    topLeft: Radius.circular(4),
+                    topRight: Radius.circular(20),
+                    bottomLeft: Radius.circular(20),
+                    bottomRight: Radius.circular(20),
+                  ),
+                  border: Border.all(
+                    color: isDark ? const Color(0xFF242C3F) : Colors.black.withValues(alpha: 0.08),
+                    width: 1,
+                  ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: isDark ? 0.35 : 0.05),
+                      blurRadius: 12,
+                      offset: const Offset(0, 3),
                     ),
                   ],
                 ),
-                const SizedBox(height: 8),
-
-                // Message Text or Thinking Indicator
-                msg.isThinking
-                    ? _buildThinkingIndicator(isDark, palette)
-                    : Text(
-                        msg.text,
-                        style: TextStyle(
-                          color: isDark ? Colors.white.withValues(alpha: 0.94) : Colors.black87,
-                          fontSize: 13.5,
-                          height: 1.45,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Subtle Concierge Signature Row
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          Icons.favorite_rounded,
+                          size: 11,
+                          color: palette.primary,
                         ),
-                      ),
-              ],
-            ),
-          ),
+                        const SizedBox(width: 5),
+                        Text(
+                          'CUPID CONCIERGE',
+                          style: TextStyle(
+                            fontSize: 9.5,
+                            fontWeight: FontWeight.w800,
+                            letterSpacing: 0.8,
+                            color: palette.primary,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
 
-          // If matches exist, embed horizontal profile cards carousel
-          if (msg.matches.isNotEmpty) ...[
-            const SizedBox(height: 14),
-            SizedBox(
-              height: 420,
-              child: ListView.builder(
-                scrollDirection: Axis.horizontal,
-                padding: const EdgeInsets.only(left: 4),
-                itemCount: msg.matches.length,
-                itemBuilder: (context, idx) {
-                  final match = msg.matches[idx];
-                  return CupidProfileCard(
-                    match: match,
-                    onLike: (user) => ref.read(cupidAIProvider.notifier).handleLike(user),
-                    onSuperLike: (user) => ref.read(cupidAIProvider.notifier).handleSuperLike(user),
-                  );
-                },
+                    // Message Text or Thinking Indicator
+                    msg.isThinking
+                        ? _buildThinkingIndicator(isDark, palette)
+                        : Text(
+                            msg.text,
+                            style: TextStyle(
+                              color: isDark ? Colors.white.withValues(alpha: 0.94) : Colors.black87,
+                              fontSize: 13.5,
+                              height: 1.45,
+                            ),
+                          ),
+                  ],
+                ),
               ),
-            ),
-          ],
-        ],
+
+              // If matches exist, embed horizontal profile cards carousel with RepaintBoundary
+              if (msg.matches.isNotEmpty) ...[
+                const SizedBox(height: 14),
+                SizedBox(
+                  height: 420,
+                  child: ListView.builder(
+                    scrollDirection: Axis.horizontal,
+                    padding: const EdgeInsets.only(left: 4),
+                    itemCount: msg.matches.length,
+                    addAutomaticKeepAlives: true,
+                    addRepaintBoundaries: true,
+                    itemBuilder: (context, idx) {
+                      final match = msg.matches[idx];
+                      return RepaintBoundary(
+                        child: CupidProfileCard(
+                          match: match,
+                          onLike: (user) => ref.read(cupidAIProvider.notifier).handleLike(user),
+                          onSuperLike: (user) => ref.read(cupidAIProvider.notifier).handleSuperLike(user),
+                        ),
+                      );
+                    },
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -402,6 +406,8 @@ class _CupidAIScreenState extends ConsumerState<CupidAIScreen>
         scrollDirection: Axis.horizontal,
         padding: const EdgeInsets.symmetric(horizontal: 16),
         itemCount: chips.length,
+        addAutomaticKeepAlives: true,
+        addRepaintBoundaries: true,
         itemBuilder: (context, index) {
           final chip = chips[index];
           final icon = _iconForChip(chip);
@@ -441,16 +447,18 @@ class _CupidAIScreenState extends ConsumerState<CupidAIScreen>
     );
   }
 
-  Widget _buildInputBar(bool isDark, AppPalette palette) {
+  Widget _buildInputBar(
+    bool isDark,
+    AppPalette palette,
+    Color surfaceColor,
+    Color borderColor,
+  ) {
     return Container(
       padding: const EdgeInsets.fromLTRB(16, 6, 16, 12),
       decoration: BoxDecoration(
-        color: isDark ? const Color(0xFF10131E) : Colors.white,
+        color: surfaceColor,
         border: Border(
-          top: BorderSide(
-            color: isDark ? const Color(0xFF1F2638) : Colors.black.withValues(alpha: 0.06),
-            width: 1,
-          ),
+          top: BorderSide(color: borderColor, width: 1),
         ),
       ),
       child: Container(
@@ -517,6 +525,84 @@ class _CupidAIScreenState extends ConsumerState<CupidAIScreen>
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+/// Dedicated Isolated Medallion with internal animation ticks so the parent screen is never repainted
+class _IsolatedMedallionAvatar extends StatefulWidget {
+  final bool isDark;
+  final AppPalette palette;
+
+  const _IsolatedMedallionAvatar({
+    required this.isDark,
+    required this.palette,
+  });
+
+  @override
+  State<_IsolatedMedallionAvatar> createState() => _IsolatedMedallionAvatarState();
+}
+
+class _IsolatedMedallionAvatarState extends State<_IsolatedMedallionAvatar>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _pulseController;
+
+  @override
+  void initState() {
+    super.initState();
+    _pulseController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 2200),
+    )..repeat(reverse: true);
+  }
+
+  @override
+  void dispose() {
+    _pulseController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return RepaintBoundary(
+      child: AnimatedBuilder(
+        animation: _pulseController,
+        builder: (context, _) {
+          final glowAlpha = 0.20 + (_pulseController.value * 0.20);
+          return Container(
+            width: 40,
+            height: 40,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: widget.isDark
+                    ? [const Color(0xFF2E1934), const Color(0xFF171124)]
+                    : [const Color(0xFFFFEEF3), const Color(0xFFF3E8FF)],
+              ),
+              border: Border.all(
+                color: widget.palette.primary.withValues(alpha: 0.5),
+                width: 1.5,
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: widget.palette.primary.withValues(alpha: glowAlpha),
+                  blurRadius: 10,
+                  spreadRadius: 0.5,
+                ),
+              ],
+            ),
+            child: Center(
+              child: Icon(
+                Icons.favorite_rounded,
+                color: widget.palette.primary,
+                size: 20,
+              ),
+            ),
+          );
+        },
       ),
     );
   }

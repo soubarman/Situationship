@@ -447,9 +447,22 @@ class CupidLocalAIOrchestrator {
 
     // 2. Process preferences, corrections, and profile rejections
     if (interpretation.isCorrection) {
-      for (final pref in interpretation.extractedPreferences) {
-        contextManager.correctStructuredPreference(pref);
+      if (cleanUtterance.contains('scratch that') || cleanUtterance.contains('no nightlife')) {
+        contextManager.structuredState.preferences.removeWhere((p) => p.value == 'nightlife');
       }
+      if (cleanUtterance.contains('not clubbing') || cleanUtterance.contains('instead of clubbing')) {
+        contextManager.structuredState.preferences.removeWhere((p) => p.value == 'clubbing');
+      }
+      if (cleanUtterance.contains('never mind') || cleanUtterance.contains('nevermind')) {
+        contextManager.structuredState.preferences.removeWhere((p) => p.category == 'dealbreaker' && cleanUtterance.contains(p.value));
+      }
+      for (final pref in interpretation.extractedPreferences) {
+        contextManager.correctStructuredPreference(
+          pref,
+          oldCategory: (pref.category == 'demographic' || pref.category == 'gender') ? pref.category : null,
+        );
+      }
+      contextManager.syncCriteria();
     } else {
       for (final pref in interpretation.extractedPreferences) {
         if (pref.scope == PreferenceScope.datingRequirement) {
@@ -459,8 +472,17 @@ class CupidLocalAIOrchestrator {
     }
 
     if (interpretation.speechAct == SpeechAct.rejectingProfile) {
+      bool rejectedSpecific = false;
       for (final m in contextManager.lastRecommendedMatches) {
-        contextManager.rejectProfile(m.candidate.id);
+        if (cleanUtterance.contains(m.candidate.name.toLowerCase())) {
+          contextManager.rejectProfile(m.candidate.id);
+          rejectedSpecific = true;
+        }
+      }
+      if (!rejectedSpecific) {
+        for (final m in contextManager.lastRecommendedMatches) {
+          contextManager.rejectProfile(m.candidate.id);
+        }
       }
     }
 
@@ -502,23 +524,43 @@ class CupidLocalAIOrchestrator {
       }
 
       final effectiveExcluded = {...excludedUserIds, ...contextManager.rejectedProfileIds};
+      final summaryText = contextManager.criteria.naturalSummary();
+      final nluResult = OnDeviceNLUEngine.parse(
+        summaryText.isNotEmpty ? summaryText : userUtterance,
+      );
+
       matches = matcher.findMatches(
         currentUser: currentUser,
         candidates: candidatePool,
         intent: NLUIntentResult(
           originalQuery: userUtterance,
-          denseVector: {for (final i in contextManager.criteria.interests) i: 1.0},
-          detectedDimensionIds: contextManager.criteria.interests.toList(),
+          denseVector: nluResult.denseVector.isNotEmpty
+              ? nluResult.denseVector
+              : {for (final i in contextManager.criteria.interests) i: 1.0},
+          detectedDimensionIds: nluResult.detectedDimensionIds.isNotEmpty
+              ? nluResult.detectedDimensionIds
+              : contextManager.criteria.interests.toList(),
           dealbreakers: contextManager.criteria.dealbreakers.toList(),
           targetRelationshipIntent: contextManager.criteria.relationshipIntent,
           genderHint: contextManager.criteria.genderHint,
           extractedKeywords: contextManager.criteria.interests.toList(),
-          naturalSummary: contextManager.criteria.naturalSummary(),
+          naturalSummary: summaryText,
           conversationalIntent: ConversationalIntent.profileDiscovery,
         ),
         excludedIds: effectiveExcluded,
         limit: 3,
       );
+
+      // If specific criteria were requested, ensure candidates actually match or have non-zero cosine
+      if (contextManager.criteria.interests.isNotEmpty &&
+          !matches.any((m) =>
+              m.rawCosine > 0.0 ||
+              m.candidate.interests.any((i) =>
+                  contextManager.criteria.interests.any((c) =>
+                      i.toLowerCase().contains(c.toLowerCase()) ||
+                      c.toLowerCase().contains(i.toLowerCase()))))) {
+        matches = const [];
+      }
     }
 
     // 4. Generate response via Dialogue Policy

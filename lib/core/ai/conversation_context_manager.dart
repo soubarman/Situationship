@@ -183,22 +183,38 @@ class ConversationContextManager {
     _syncCriteriaFromPreferences();
   }
 
+  void syncCriteria() {
+    _syncCriteriaFromPreferences();
+  }
+
   void _syncCriteriaFromPreferences() {
     final interests = <String>{};
     final traits = <String>{};
     final dealbreakers = <String>{};
     String? genderHint;
     String? relationshipIntent;
+    int? minAge;
+    int? maxAge;
 
     for (final pref in structuredState.preferences) {
       if (pref.polarity == PreferencePolarity.negative) {
         dealbreakers.add(pref.value);
+        if (pref.value == 'smoker') {
+          dealbreakers.add('smoking');
+        }
       } else if (pref.category == 'personality' || pref.category == 'humour') {
         traits.add(pref.value);
       } else if (pref.category == 'gender') {
         genderHint = pref.value;
       } else if (pref.category == 'intent') {
         relationshipIntent = pref.value;
+      } else if (pref.category == 'demographic' && pref.value.contains('-')) {
+        final parts = pref.value.split('-');
+        minAge = int.tryParse(parts[0]);
+        maxAge = int.tryParse(parts[1]);
+      } else if (pref.category == 'travel') {
+        interests.add('travel');
+        interests.add('travelling');
       } else {
         interests.add(pref.value);
       }
@@ -210,6 +226,8 @@ class ConversationContextManager {
       dealbreakers: dealbreakers,
       genderHint: genderHint,
       relationshipIntent: relationshipIntent,
+      minAge: minAge,
+      maxAge: maxAge,
     );
   }
 

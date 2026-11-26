@@ -66,6 +66,7 @@ jobs:
           flutter test test/multi_turn_conversational_simulation_test.dart
           flutter test test/adversarial_conversational_evaluation_test.dart
           flutter test test/comprehensive_semantic_evaluation_suite_test.dart
+          flutter test test/adversarial_100_conversations_evaluation_test.dart
 
       - name: Configure Android Build Keystore
         env:

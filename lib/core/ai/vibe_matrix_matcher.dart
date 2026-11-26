@@ -115,7 +115,14 @@ class VibeMatrixMatcher {
     // (e.g. "Can you find me a profile that matches me", "recommend someone"),
     // use the current user's own profile vector as the target preference!
     Map<String, double> effectiveQueryVector = intent.denseVector;
-    final isMatchingUserProfile = effectiveQueryVector.isEmpty;
+    final isGenericDiscovery = intent.denseVector.isEmpty &&
+        intent.extractedKeywords.isEmpty &&
+        intent.detectedDimensionIds.isEmpty &&
+        !intent.originalQuery.toLowerCase().contains('into ') &&
+        !intent.originalQuery.toLowerCase().contains('who loves') &&
+        !intent.originalQuery.toLowerCase().contains('who likes');
+
+    final isMatchingUserProfile = isGenericDiscovery;
     if (isMatchingUserProfile) {
       effectiveQueryVector = vectorizeProfile(currentUser);
     }
